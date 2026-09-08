@@ -1,0 +1,52 @@
+from __future__ import annotations
+
+import zipfile
+from pathlib import Path, PurePosixPath
+
+
+class UploadValidationError(ValueError):
+    pass
+
+
+def validate_pptx_package(
+    path: Path,
+    *,
+    max_entries: int,
+    max_uncompressed_bytes: int,
+) -> None:
+    """Validate basic PPTX/ZIP structure without trusting MIME type or filename alone."""
+    if path.suffix.lower() != ".pptx":
+        raise UploadValidationError("Only .pptx files are accepted.")
+
+    if not zipfile.is_zipfile(path):
+        raise UploadValidationError("The uploaded file is not a valid PPTX package.")
+
+    required = {"[Content_Types].xml", "_rels/.rels", "ppt/presentation.xml"}
+    total_uncompressed = 0
+
+    with zipfile.ZipFile(path) as archive:
+        infos = archive.infolist()
+        if len(infos) > max_entries:
+            raise UploadValidationError("PPTX contains too many package entries.")
+
+        names = {info.filename for info in infos}
+        if not required.issubset(names):
+            raise UploadValidationError("PPTX package is missing required Office Open XML parts.")
+
+        for info in infos:
+            posix = PurePosixPath(info.filename)
+            if posix.is_absolute() or ".." in posix.parts:
+                raise UploadValidationError("Unsafe path found inside PPTX package.")
+
+            if info.filename.lower().endswith("vbaproject.bin"):
+                raise UploadValidationError("Macro-enabled content is not accepted in this MVP.")
+
+            total_uncompressed += info.file_size
+            if total_uncompressed > max_uncompressed_bytes:
+                raise UploadValidationError("PPTX expands beyond the configured safety limit.")
+
+            # Basic decompression-bomb guard. Ignore tiny files where ratios are noisy.
+            if info.file_size > 5 * 1024 * 1024 and info.compress_size > 0:
+                ratio = info.file_size / info.compress_size
+                if ratio > 250:
+                    raise UploadValidationError("Suspicious compression ratio detected in PPTX.")

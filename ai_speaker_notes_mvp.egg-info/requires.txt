@@ -1,0 +1,17 @@
+fastapi==0.128.2
+uvicorn[standard]==0.48.0
+python-multipart==0.0.29
+python-pptx==1.0.2
+pydantic==2.13.4
+pydantic-settings==2.14.1
+jinja2==3.1.6
+openai<4,>=3.8
+PyMuPDF<2,>=1.26
+
+[:platform_system == "Windows"]
+pywin32>=312
+
+[dev]
+pytest==9.0.2
+httpx==0.28.1
+ruff<1.0,>=0.12

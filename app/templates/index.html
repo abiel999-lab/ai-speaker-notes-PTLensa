@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">MVP · AI injection phase · v{{ version }}</p>
+      <h1>PowerPoint Speaker Notes</h1>
+      <p class="lede">Upload PPTX, pilih generator, lindungi notes yang sudah ada, validasi integritas paket, lalu unduh file hasil.</p>
+    </section>
+
+    <section class="capabilities" aria-label="Runtime capabilities">
+      <div><span>Core</span><strong>Ready</strong><small>Package-preserving write-back</small></div>
+      <div><span>OpenAI</span><strong>{{ 'Ready' if openai_configured else 'Not configured' }}</strong><small>{{ openai_model }}</small></div>
+      <div><span>Vision</span><strong>{{ 'Ready' if (openai_use_vision and renderer_available) else ('Disabled' if not openai_use_vision else 'Renderer missing') }}</strong><small>{{ (renderer_name ~ ' renderer') if renderer_available else 'Text-only still available' }}</small></div>
+    </section>
+
+    <section class="panel">
+      <form id="job-form" enctype="multipart/form-data">
+        <label class="drop" for="file">
+          <strong>Pilih PowerPoint (.pptx)</strong>
+          <span>Maksimum {{ max_upload_mb }} MB. File asli tidak dimodifikasi.</span>
+          <input id="file" name="file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+        </label>
+
+        <div class="grid four">
+          <label>Generator
+            <select id="engine" name="engine">
+              <option value="dummy" selected>MVP test (tanpa biaya AI)</option>
+              <option value="openai" {% if not openai_configured %}disabled{% endif %}>OpenAI — {{ openai_model }}</option>
+            </select>
+          </label>
+          <label>Bahasa
+            <select name="language">
+              <option>Bahasa Indonesia</option>
+              <option>English</option>
+            </select>
+          </label>
+          <label>Audiens
+            <select name="audience">
+              <option>Umum</option>
+              <option>Manajemen</option>
+              <option>Teknis</option>
+              <option>Regulator</option>
+            </select>
+          </label>
+          <label>Kedalaman
+            <select name="depth">
+              <option>Ringkas</option>
+              <option selected>Standar</option>
+              <option>Mendalam</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="mode-field">Mode analisis AI
+          <select id="use-vision" name="use_vision">
+            <option value="false" selected>Text-only — paling hemat</option>
+            <option value="true" {% if not (openai_use_vision and renderer_available) %}disabled{% endif %}>Vision — teks + screenshot slide</option>
+          </select>
+          <span class="help">Vision membantu membaca diagram, chart, matrix, posisi objek, dan hubungan visual. Gunakan text-only untuk slide dominan teks.</span>
+        </label>
+
+        {% if not openai_configured %}
+        <div class="info" role="status">
+          OpenAI belum dikonfigurasi. Mode MVP test tetap bisa dipakai. Untuk AI, isi <code>OPENAI_API_KEY</code> di file <code>.env</code> lalu restart server.
+        </div>
+        {% elif openai_use_vision and not renderer_available %}
+        <div class="warning" role="alert">
+          OpenAI tersedia. Vision belum siap karena renderer belum ditemukan. Di Windows, aplikasi akan mencoba Microsoft PowerPoint terlebih dahulu lalu LibreOffice. Text-only tetap bisa digunakan.
+        </div>
+        {% elif not openai_use_vision %}
+        <div class="info" role="status">
+          Vision dinonaktifkan di konfigurasi server. Text-only tetap tersedia. Aktifkan <code>OPENAI_USE_VISION=true</code> untuk mengizinkan mode Vision.
+        </div>
+        {% endif %}
+
+        <label class="mode-field">Perlakuan speaker notes yang sudah ada
+          <select id="notes-mode" name="notes_mode">
+            <option value="missing_only" selected>Hanya isi slide tanpa notes — paling aman</option>
+            <option value="append">Tambahkan notes baru ke notes yang sudah ada</option>
+            <option value="replace_all">Ganti semua speaker notes yang sudah ada</option>
+          </select>
+          <span class="help">Default tidak menimpa speaker notes lama. Pilih “Ganti semua” hanya jika memang ingin menggantinya.</span>
+        </label>
+
+        <div id="replace-warning" class="warning hidden" role="alert">
+          Mode ini akan mengganti seluruh speaker notes pada file hasil. File upload asli tetap tidak disentuh.
+        </div>
+
+        <button id="submit" type="submit">Process presentation</button>
+      </form>
+
+      <div id="status" class="status hidden" aria-live="polite">
+        <div class="status-row"><strong id="status-title">Processing</strong><span id="status-count"></span></div>
+        <div class="progress"><div id="progress-bar"></div></div>
+        <p id="status-message"></p>
+        <div id="result-summary" class="result-summary hidden"></div>
+        <div id="usage-summary" class="result-summary hidden"></div>
+        <a id="download" class="download hidden" href="#">Download result PPTX</a>
+        <button id="retry" type="button" class="hidden">Retry failed job</button>
+      </div>
+    </section>
+
+    <section class="facts">
+      <div><span>01</span><strong>Safe copy</strong><p>Uploaded original stays untouched.</p></div>
+      <div><span>02</span><strong>Full-deck context</strong><p>AI receives deck structure plus nearby-slide context to reduce repetition.</p></div>
+      <div><span>03</span><strong>Integrity gate</strong><p>Visible content and protected OOXML parts are checked before download.</p></div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
