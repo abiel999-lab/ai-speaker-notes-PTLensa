@@ -447,3 +447,120 @@ def test_checkpoint_is_not_reused_when_output_language_changes(tmp_path: Path):
 
     assert result.resumed_slide_count == 0
     assert len(second_client.responses.calls) == 2  # new brief + new batch
+
+
+def test_openai_generator_applies_word_count_audience_and_custom_instructions(tmp_path: Path):
+    from app.domain.models import Audience, NoteLength
+
+    deck = PresentationDeck(
+        slide_count=1,
+        slides=[SlideContent(number=1, title="Research", texts=["Method", "Finding"])],
+    )
+    client = FakeClient()
+    generator = OpenAINotesGenerator(
+        api_key="test-key",
+        model="gpt-5.6-luna",
+        use_vision=False,
+        client=client,
+    )
+    options = GenerationOptions(
+        audience=Audience.academic,
+        note_length=NoteLength.custom,
+        custom_word_limit=180,
+        custom_instructions="Gunakan istilah metodologi penelitian secara konsisten.",
+    )
+
+    generator.generate(deck, options, full_deck=deck, artifact_dir=tmp_path)
+
+    brief_call = client.responses.calls[0]
+    batch_call = client.responses.calls[1]
+    assert "Target audience: Akademisi" in brief_call["input"]
+    assert "do not exceed 180 words per slide" in batch_call["instructions"]
+    assert "Gunakan istilah metodologi penelitian" in batch_call["instructions"]
+    batch_text = batch_call["input"][0]["content"][0]["text"]
+    assert "Audience: Akademisi" in batch_text
+    assert "Word-count target:" in batch_text
+
+
+def test_openai_max_output_tokens_scale_with_note_length():
+    from app.domain.models import NoteLength
+
+    short = OpenAINotesGenerator._max_output_tokens(
+        GenerationOptions(note_length=NoteLength.under_100), 4
+    )
+    long = OpenAINotesGenerator._max_output_tokens(
+        GenerationOptions(note_length=NoteLength.words_250_500), 4
+    )
+    custom = OpenAINotesGenerator._max_output_tokens(
+        GenerationOptions(note_length=NoteLength.custom, custom_word_limit=500), 4
+    )
+    assert short < long <= custom
+
+
+def test_openai_generator_uses_selected_reasoning_level():
+    from app.domain.models import Depth
+
+    deck = PresentationDeck(
+        slide_count=1,
+        slides=[SlideContent(number=1, title="Reasoning", texts=["Test"])],
+    )
+    client = FakeClient()
+    generator = OpenAINotesGenerator(
+        api_key="test-key",
+        model="gpt-5.6-luna",
+        reasoning_effort="low",
+        use_vision=False,
+        client=client,
+    )
+
+    generator.generate(
+        deck,
+        GenerationOptions(depth=Depth.high),
+        full_deck=deck,
+    )
+
+    assert client.responses.calls[0]["reasoning"] == {"effort": "high"}
+    assert client.responses.calls[1]["reasoning"] == {"effort": "high"}
+
+
+def test_openai_generator_keeps_partial_vision_when_one_slide_image_is_missing(tmp_path: Path):
+    deck = PresentationDeck(
+        slide_count=2,
+        slides=[
+            SlideContent(number=1, title="Visual", image_count=1),
+            SlideContent(number=2, title="Text", texts=["Bullet"]),
+        ],
+    )
+    client = FakeClient()
+    generator = OpenAINotesGenerator(
+        api_key="test-key",
+        model="gpt-5.6-luna",
+        batch_size=4,
+        use_vision=True,
+        client=client,
+    )
+    image = tmp_path / "slide-001.png"
+    image.write_bytes(b"fake-png")
+
+    result = generator.generate(
+        deck,
+        GenerationOptions(use_vision=True),
+        full_deck=deck,
+        rendered_slides={1: image},
+        artifact_dir=tmp_path,
+    )
+
+    assert result.used_vision is True
+    assert any("slide(s): 2" in warning for warning in result.warnings)
+    content = client.responses.calls[1]["input"][0]["content"]
+    assert len([item for item in content if item["type"] == "input_image"]) == 1
+
+
+def test_visual_structure_contradiction_is_detected():
+    slide = SlideContent(number=10, image_count=1)
+    assert OpenAINotesGenerator._note_contradicts_structure(
+        slide, "Slide ini tidak memuat teks atau visual yang dapat diidentifikasi."
+    ) is True
+    assert OpenAINotesGenerator._note_contradicts_structure(
+        slide, "Slide ini menampilkan grafik radiance terhadap wavelength."
+    ) is False

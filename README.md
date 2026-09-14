@@ -1,225 +1,114 @@
-# AI Speaker Notes MVP v0.2.4
+# AI Speaker Notes PT Lensa — Complete Source v0.2.8
 
-Recoverable feasibility MVP for generating PowerPoint speaker notes with GPT-5.6 Luna, optional slide Vision, package-preserving OOXML write-back, and defensive cost/recovery guardrails.
+Bundle ini sengaja dipisah jelas agar tidak membingungkan saat deployment.
 
-## Current milestone
-
-The core and AI paths have been proven independently:
-
-- secure `.pptx` upload and package validation,
-- full-deck parsing,
-- existing-notes protection,
-- package-preserving OOXML write-back,
-- integrity gate before download,
-- real OpenAI text-only generation,
-- optional Vision through PowerPoint/LibreOffice rendering,
-- token/request/cost reporting.
-
-v0.2.4 is a **hardening release**. It focuses on failure recovery and avoiding unnecessary paid retries before the MVP is documented as complete.
-
-## What changed in v0.2.4
-
-### Recoverable AI generation
-
-- Every successful AI briefing/batch is saved to `ai-checkpoint.json`.
-- A failed job can be retried without re-generating compatible completed slides.
-- Missing target slides are recovered **individually/narrowly**, rather than paying to repeat an otherwise-successful batch.
-- Extra context-only slide output remains ignored safely.
-- Duplicate/empty/unresolved targets still fail closed after bounded semantic recovery.
-
-### Retry and idempotency
-
-- Added `POST /api/v1/jobs/{job_id}/retry`.
-- UI shows **Retry failed job** after a failed job.
-- Per-job in-process locks prevent duplicate execution of the same job within one app process.
-- Retry preserves the AI checkpoint so completed work can be resumed.
-
-### Vision resilience
-
-- `SLIDE_RENDERER=auto` now performs **runtime fallback**, not only availability selection.
-- Windows PowerPoint rendering runs in an isolated helper process with a configurable timeout.
-- If PowerPoint fails and LibreOffice is available, auto mode tries LibreOffice.
-- If all Vision rendering fails and `OPENAI_VISION_FALLBACK_TO_TEXT=true`, the job continues transparently in text-only mode and records a warning.
-- Explicit `powerpoint` / `libreoffice` modes do not silently switch providers.
-
-### Cost guardrail
-
-- Before any paid generation request, the pipeline creates `ai-preflight.json` with a conservative token/cost estimate.
-- `OPENAI_MAX_ESTIMATED_JOB_COST_USD` can stop unexpectedly large jobs **before** the API generation begins.
-- Added a zero-cost CLI estimator:
-
-```powershell
-.\scripts\preflight-cost.ps1 -Path ".\presentation.pptx" -Vision -Depth Mendalam -NotesMode replace_all
-```
-
-The estimate is intentionally conservative and is not a billing quote.
-
-## Architecture
+## Struktur
 
 ```text
-Browser
-  -> FastAPI
-  -> secure PPTX validation
-  -> full-deck parser
-  -> select target slides
-  -> no-cost AI preflight + cost guardrail
-  -> optional Vision renderer
-       -> PowerPoint helper process (Windows)
-       -> runtime fallback to LibreOffice in auto mode
-       -> optional transparent text-only fallback
-  -> NotesGenerator
-       -> Dummy
-       -> OpenAI
-            -> recoverable deck brief
-            -> batched Structured Outputs
-            -> narrow missing-slide recovery
-            -> per-job checkpoint
-  -> package-preserving OOXML notes writer
-  -> integrity gate
-  -> PPTX download
+ai-speaker-notes-v0.2.8-COMPLETE/
+├── backend/       Backend FastAPI untuk Google Cloud Run
+├── frontend/      Frontend static untuk Hostinger public_html/aispeakernote
+└── local-mvp/     Full/local MVP untuk development dan testing Windows
 ```
 
-## Windows upgrade / quick start
+## 1. Backend Cloud Run
 
-Keep your real `.env` private. Extract this release into a new folder and copy the old `.env`, or overlay the source while leaving `.env` untouched.
+Folder `backend/` berisi mesin aplikasi:
+
+- FastAPI
+- PPTX parser
+- OOXML speaker-notes writer
+- OpenAI generator
+- Vision renderer
+- LibreOffice support
+- integrity validation
+- checkpoint/resume
+- cost preflight/guardrail
+- Dockerfile Cloud Run
+- deployment script
+
+Deploy dari folder ini:
+
+```bash
+cd backend
+export PROJECT_ID="ai-speaker-notes-demo"
+export REGION="asia-southeast2"
+./deploy/cloudrun-deploy.sh
+```
+
+Sebelum deploy, Secret Manager harus sudah memiliki:
+
+- `openai-api-key`
+- `ai-speaker-demo-key`
+
+Jangan pernah commit `.env` atau API key.
+
+## 2. Frontend Hostinger
+
+Upload **isi** folder `frontend/` ke:
+
+```text
+public_html/aispeakernote/
+```
+
+Isi utamanya:
+
+```text
+index.html
+app.css
+app.js
+config.js
+```
+
+Setelah Cloud Run selesai, edit `frontend/config.js`:
+
+```js
+window.AISPEAKER_CONFIG = {
+  apiBaseUrl: "https://URL-CLOUD-RUN-KAMU"
+};
+```
+
+URL user tetap:
+
+```text
+https://demo.studioimpactid.com/aispeakernote/
+```
+
+## 3. Local MVP
+
+Folder `local-mvp/` adalah source lengkap untuk development Windows yang sebelumnya sudah diuji dengan PowerPoint renderer.
+
+Contoh:
 
 ```powershell
+cd local-mvp
 .\scripts\setup.ps1
 .\scripts\verify.ps1
-.\scripts\diagnose-ai.ps1
-```
-
-Expected:
-
-```text
-App version: 0.2.4
-Installed package version: 0.2.4
-37 passed
-```
-
-## Recommended `.env` for the current MVP
-
-```env
-OPENAI_MODEL=gpt-5.6-luna
-OPENAI_REASONING_EFFORT=low
-OPENAI_USE_VISION=true
-OPENAI_IMAGE_DETAIL=auto
-OPENAI_BATCH_SIZE=4
-OPENAI_MAX_RETRIES=2
-OPENAI_SEMANTIC_RETRIES=2
-OPENAI_RESUME_CHECKPOINTS=true
-
-SLIDE_RENDERER=auto
-POWERPOINT_RENDER_TIMEOUT_SECONDS=120
-OPENAI_VISION_FALLBACK_TO_TEXT=true
-
-# Conservative per-job preflight ceiling; raise intentionally when needed.
-OPENAI_MAX_ESTIMATED_JOB_COST_USD=1.00
-OPENAI_VISION_ESTIMATED_INPUT_TOKENS_PER_SLIDE=1100
-
-# Estimate display only; update when provider pricing changes.
-OPENAI_INPUT_USD_PER_MTOK=0.20
-OPENAI_OUTPUT_USD_PER_MTOK=1.20
-```
-
-Never commit or share `OPENAI_API_KEY`.
-
-## Zero-cost checks before a paid request
-
-### 1. Renderer
-
-```powershell
-.\scripts\test-vision-renderer.ps1
-```
-
-### 2. API/runtime configuration
-
-```powershell
-.\scripts\diagnose-ai.ps1
-```
-
-### 3. Cost preflight
-
-```powershell
-.\scripts\preflight-cost.ps1 -Path ".\presentation.pptx" -Vision -Depth Mendalam -NotesMode replace_all
-```
-
-None of those three commands calls OpenAI.
-
-## Start the app
-
-```powershell
 .\scripts\run.ps1
 ```
 
-Open the printed URL. The Windows runner falls back from port `8000` when the port cannot be bound.
-
-## Failure recovery behavior
-
-Example: a target batch requests slides `13,14,15,16` and the model returns notes for `13,14,16,17`.
-
-v0.2.4 will:
-
-1. keep valid notes for `13,14,16`,
-2. ignore context-only `17`,
-3. checkpoint the successful notes,
-4. request **only slide 15**,
-5. continue if slide 15 is recovered.
-
-If the app/job later fails after several completed batches, pressing **Retry failed job** reuses the compatible checkpoint rather than starting from slide 1.
-
-## Generated job artifacts
-
-A job directory can contain:
+## Arsitektur Deployment
 
 ```text
-input.pptx
-presentation.json
-ai-preflight.json
-ai-checkpoint.json
-ai-generation-report.json
-rendered/
-result-with-notes.pptx
-error.log                # only on failure
+User
+  ↓
+https://demo.studioimpactid.com/aispeakernote/
+  ↓
+Hostinger frontend
+  ↓ HTTPS
+Google Cloud Run backend
+  ↓
+LibreOffice headless + PPT processing
+  ↓
+OpenAI API
 ```
 
-All remain under the existing job retention policy.
 
-## Security / reliability notes
 
-- original upload is never modified,
-- `.pptx` ZIP structure and expansion limits are validated,
-- macro payloads are rejected,
-- same-origin browser upload controls are enforced,
-- OpenAI key is secret configuration and not stored in job metadata,
-- prompts/base64 slide screenshots are not logged,
-- OpenAI calls use `store=False`,
-- local concurrency is bounded,
-- package-preserving write-back is followed by an integrity gate,
-- cost guardrail runs before paid note generation,
-- Vision fallbacks are recorded rather than hidden.
+## Upgrade 0.2.8
 
-See `docs/SECURITY.md`, `docs/VISION-MVP.md`, and `docs/HARDENING-0.2.4.md`.
+v0.2.8 adds the white/green responsive UI, bilingual How to Use and Legal pages, optional login, bounded presentation-aware Chat AI, GPT-5.6 Sol quality mode with hard input/cost limits, manual data deletion, interrupted-job recovery, and additional file-security guardrails. See `docs/UPGRADE-0.2.8.md`.
 
-## Important limits of this MVP
+## Hardening 0.2.7
 
-v0.2.4 is more resilient, but not yet a multi-node production platform:
-
-- checkpoints/job state are local files; PostgreSQL/Redis/queue are still deferred,
-- in-process idempotency does not coordinate multiple application nodes,
-- the preflight estimator is heuristic, not a provider quote,
-- PowerPoint COM timeout isolates the caller but cannot guarantee cleanup of every orphaned Office process,
-- no enterprise malware scanning pipeline is included,
-- hidden-slide policy is not yet exposed,
-- `.pptm` is intentionally unsupported,
-- human review remains required for important facts/regulations.
-
-## Still deferred
-
-- per-slide review/edit/regenerate,
-- React/Vue production frontend,
-- authentication/roles,
-- PostgreSQL/Redis and durable distributed queue,
-- deployment/observability platform,
-- RAG/internal knowledge base,
-- approval workflow and source verification.
+Release ini menambahkan hidden-slide-aware rendering, partial Vision recovery, visual structure diagnostics, contradiction guard, serta UI bilingual Indonesia/English. Lihat `docs/HARDENING-0.2.7.md`.

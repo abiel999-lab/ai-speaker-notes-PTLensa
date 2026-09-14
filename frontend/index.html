@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>AI Speaker Notes</title>
+  <link rel="icon" type="image/png" href="./favicon.png?v=0.2.7">
+  <link rel="stylesheet" href="./app.css?v=0.2.7">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">AI</span><div><strong>Speaker Notes</strong><small>PT Lensa Makmur Sejahtera</small></div></div>
+      <div class="language-switch" role="group" aria-label="Interface language">
+        <button type="button" class="lang-btn active" data-lang="id">ID</button>
+        <button type="button" class="lang-btn" data-lang="en">EN</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow" data-i18n="eyebrow">AI POWERPOINT WORKFLOW</p>
+        <h1 data-i18n="heroTitle">Speaker notes yang lebih aman, jelas, dan tahan terhadap file PowerPoint nyata.</h1>
+        <p class="lede" data-i18n="heroLead">Upload PPTX, pilih gaya narasi, lalu sistem memeriksa struktur deck, menganalisis teks dan visual, menjaga notes lama, serta memvalidasi file hasil sebelum diunduh.</p>
+      </div>
+      <div class="trust-card">
+        <span class="trust-dot"></span>
+        <div><strong data-i18n="reliabilityTitle">Reliability-first processing</strong><p data-i18n="reliabilityText">Hidden slide, image-only slide, renderer fallback, checkpoint, dan integrity validation ditangani sebagai bagian dari pipeline.</p></div>
+      </div>
+    </section>
+
+    <section class="capabilities" aria-label="Runtime capabilities">
+      <article><span data-i18n="backendLabel">Backend</span><strong id="backend-state">Checking…</strong><small id="backend-version">Cloud Run</small></article>
+      <article><span>OpenAI</span><strong id="openai-state">Checking…</strong><small id="openai-model">-</small></article>
+      <article><span data-i18n="visionLabel">Visual analysis</span><strong id="vision-state">Checking…</strong><small id="vision-renderer">-</small></article>
+    </section>
+
+    <section class="workspace">
+      <div class="workspace-head">
+        <div><span class="step-kicker" data-i18n="workspaceKicker">NEW JOB</span><h2 data-i18n="workspaceTitle">Process presentation</h2></div>
+        <span class="safe-badge" data-i18n="safeBadge">Original file stays untouched</span>
+      </div>
+
+      <form id="job-form" enctype="multipart/form-data">
+        <label class="drop" id="drop-zone" for="file">
+          <div class="upload-icon" aria-hidden="true">↑</div>
+          <div><strong data-i18n="uploadTitle">Choose PowerPoint file</strong><span id="upload-help">File asli tidak dimodifikasi.</span><small id="file-name" data-i18n="uploadHint">Drag & drop or click to browse .pptx</small></div>
+          <input id="file" name="file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+        </label>
+
+        <div class="section-label"><span>01</span><div><strong data-i18n="aiSettingsTitle">AI settings</strong><small data-i18n="aiSettingsHelp">Atur bahasa, audiens, kedalaman, dan target panjang narasi.</small></div></div>
+        <div class="grid four">
+          <label><span data-i18n="generatorLabel">Generator</span>
+            <select id="engine" name="engine"><option value="openai" selected>OpenAI — GPT-5.6 Luna</option><option value="dummy">MVP test</option></select>
+          </label>
+          <label><span data-i18n="languageLabel">Bahasa output</span>
+            <select name="language"><option value="Bahasa Indonesia">Bahasa Indonesia</option><option value="English">English</option></select>
+          </label>
+          <label><span data-i18n="audienceLabel">Audiens</span>
+            <select name="audience"><option value="Umum">Umum / General</option><option value="Manajemen">Manajemen / Management</option><option value="Teknis">Teknis / Technical</option><option value="Regulator">Regulator</option><option value="Akademisi">Akademisi / Academic</option><option value="Mahasiswa">Mahasiswa / Student</option></select>
+          </label>
+          <label><span data-i18n="depthLabel">Kedalaman analisis</span>
+            <select name="depth"><option value="Low">Low</option><option value="Medium" selected>Medium</option><option value="High">High</option></select>
+            <span class="help" data-i18n="depthHelp">Medium direkomendasikan untuk keseimbangan kualitas, waktu, dan biaya.</span>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label><span data-i18n="lengthLabel">Jumlah kata per slide</span>
+            <select id="note-length" name="note_length"><option value="<100 kata">&lt;100</option><option value="100-250 kata" selected>100–250</option><option value="250-500 kata">250–500</option><option value="Custom">Custom</option></select>
+            <span class="help" data-i18n="lengthHelp">Slide judul atau transisi dapat lebih singkat bila memang tidak membutuhkan narasi panjang.</span>
+          </label>
+          <label id="custom-word-field" class="hidden"><span data-i18n="customLimitLabel">Batas kata custom</span>
+            <input id="custom-word-limit" name="custom_word_limit" type="number" min="30" max="600" value="150" disabled>
+            <span class="help" data-i18n="customLimitHelp">30–600 kata per slide.</span>
+          </label>
+        </div>
+
+        <label class="field-block"><span data-i18n="instructionsLabel">Instruksi tambahan <em>opsional</em></span>
+          <textarea id="custom-instructions" name="custom_instructions" maxlength="2000" rows="4" placeholder="Contoh: gunakan gaya akademik, tekankan implikasi kebijakan, pertahankan istilah teknis tertentu."></textarea>
+          <span class="help"><span id="custom-instructions-count">0</span>/2000</span>
+        </label>
+
+        <div class="section-label"><span>02</span><div><strong data-i18n="safetyTitle">Visual & safety</strong><small data-i18n="safetyHelp">Pilih bagaimana visual dianalisis dan bagaimana notes lama diperlakukan.</small></div></div>
+        <div class="grid two">
+          <label><span data-i18n="visionModeLabel">Mode analisis</span>
+            <select id="use-vision" name="use_vision"><option value="true" selected data-i18n="visionOption">Text + image analysis — recommended</option><option value="false" data-i18n="textOnlyOption">Text-only — lower cost</option></select>
+            <span class="help" data-i18n="visionHelp">Mode visual direkomendasikan untuk grafik, diagram, gambar, dan slide yang teksnya sedikit.</span>
+          </label>
+          <label><span data-i18n="notesModeLabel">Speaker notes existing</span>
+            <select id="notes-mode" name="notes_mode"><option value="missing_only" selected data-i18n="missingOnlyOption">Isi hanya slide tanpa notes — safest</option><option value="append" data-i18n="appendOption">Tambahkan ke notes lama</option><option value="replace_all" data-i18n="replaceOption">Ganti semua notes</option></select>
+            <span class="help" data-i18n="notesModeHelp">Default menjaga speaker notes yang sudah ada.</span>
+          </label>
+        </div>
+
+        <div id="replace-warning" class="warning hidden" role="alert"></div>
+        <div class="privacy-note"><span>✓</span><p data-i18n="privacyText">File upload divalidasi sebagai paket PPTX. Aplikasi tidak mengambil gambar eksternal dari URL untuk mencegah akses jaringan yang tidak aman.</p></div>
+        <button id="submit" class="primary" type="submit"><span data-i18n="processButton">Process presentation</span><span aria-hidden="true">→</span></button>
+      </form>
+
+      <section id="status" class="status hidden" aria-live="polite">
+        <div class="status-row"><div><span class="status-kicker" data-i18n="jobStatusLabel">JOB STATUS</span><strong id="status-title">Processing</strong></div><span id="status-count"></span></div>
+        <div class="progress"><div id="progress-bar"></div></div>
+        <p id="status-message"></p>
+
+        <div id="diagnostics" class="diagnostics hidden">
+          <article><span data-i18n="diagSlides">Visual coverage</span><strong id="diag-vision">—</strong></article>
+          <article><span data-i18n="diagHidden">Hidden slides</span><strong id="diag-hidden">—</strong></article>
+          <article><span data-i18n="diagImage">Image-dominant</span><strong id="diag-images">—</strong></article>
+          <article><span data-i18n="diagExternal">External media</span><strong id="diag-external">—</strong></article>
+        </div>
+        <div id="result-summary" class="result-summary hidden"></div>
+        <div id="usage-summary" class="result-summary hidden"></div>
+        <div id="warning-list" class="warning-list hidden"></div>
+        <div class="action-row"><button id="download" type="button" class="download hidden" data-i18n="downloadButton">Download result PPTX</button><button id="retry" type="button" class="secondary hidden" data-i18n="retryButton">Retry failed job</button></div>
+      </section>
+    </section>
+
+    <section class="features">
+      <article><span>01</span><strong data-i18n="feature1Title">Hidden-slide aware</strong><p data-i18n="feature1Text">Nomor slide dipertahankan saat renderer menemui hidden slides, sehingga gambar tidak bergeser ke slide yang salah.</p></article>
+      <article><span>02</span><strong data-i18n="feature2Title">Per-slide recovery</strong><p data-i18n="feature2Text">Satu slide gagal dirender tidak lagi mematikan Vision untuk seluruh deck.</p></article>
+      <article><span>03</span><strong data-i18n="feature3Title">Package integrity</strong><p data-i18n="feature3Text">Output diperiksa ulang agar struktur OOXML dan visible content tetap aman.</p></article>
+      <article><span>04</span><strong data-i18n="feature4Title">Resume & checkpoints</strong><p data-i18n="feature4Text">Retry dapat memakai hasil AI yang sudah valid agar tidak selalu mengulang dari awal.</p></article>
+    </section>
+  </main>
+  <script src="./config.js?v=0.2.7"></script>
+  <script src="./app.js?v=0.2.7" defer></script>
+</body>
+</html>

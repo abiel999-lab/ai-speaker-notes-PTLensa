@@ -23,12 +23,21 @@ class Audience(StrEnum):
     management = "Manajemen"
     technical = "Teknis"
     regulator = "Regulator"
+    academic = "Akademisi"
+    student = "Mahasiswa"
 
 
 class Depth(StrEnum):
-    concise = "Ringkas"
-    standard = "Standar"
-    deep = "Mendalam"
+    low = "Low"
+    medium = "Medium"
+    high = "High"
+
+
+class NoteLength(StrEnum):
+    under_100 = "<100 kata"
+    words_100_250 = "100-250 kata"
+    words_250_500 = "250-500 kata"
+    custom = "Custom"
 
 
 class NotesMode(StrEnum):
@@ -47,7 +56,10 @@ class GenerationEngine(StrEnum):
 class GenerationOptions(BaseModel):
     language: Language = Language.id
     audience: Audience = Audience.general
-    depth: Depth = Depth.standard
+    depth: Depth = Depth.medium
+    note_length: NoteLength = NoteLength.words_100_250
+    custom_word_limit: int | None = Field(default=None, ge=30, le=500)
+    custom_instructions: str = Field(default="", max_length=1500)
     notes_mode: NotesMode = NotesMode.missing_only
     engine: GenerationEngine = GenerationEngine.dummy
     use_vision: bool = False
@@ -59,6 +71,14 @@ class SlideContent(BaseModel):
     texts: list[str] = Field(default_factory=list)
     tables: list[list[list[str]]] = Field(default_factory=list)
     has_existing_notes: bool = False
+    hidden: bool = False
+    image_count: int = 0
+    chart_count: int = 0
+    external_image_count: int = 0
+
+    @property
+    def has_visual_content(self) -> bool:
+        return bool(self.image_count or self.chart_count or self.tables)
 
 
 class PresentationDeck(BaseModel):
@@ -115,12 +135,18 @@ class PipelineResult(BaseModel):
     resumed_slide_count: int = 0
     recovered_slide_count: int = 0
     warnings: list[str] = Field(default_factory=list)
+    vision_target_count: int = 0
+    vision_rendered_count: int = 0
+    hidden_slide_count: int = 0
+    image_dominant_slide_count: int = 0
+    external_image_count: int = 0
 
 
 class JobRecord(BaseModel):
     id: str
     status: JobStatus = JobStatus.queued
     original_filename: str
+    owner: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     progress_current: int = 0
@@ -147,6 +173,11 @@ class JobRecord(BaseModel):
     resumed_slide_count: int = 0
     recovered_slide_count: int = 0
     warnings: list[str] = Field(default_factory=list)
+    vision_target_count: int = 0
+    vision_rendered_count: int = 0
+    hidden_slide_count: int = 0
+    image_dominant_slide_count: int = 0
+    external_image_count: int = 0
     attempt_count: int = 0
 
     def touch(self) -> None:
@@ -183,6 +214,11 @@ class JobPublic(BaseModel):
     resumed_slide_count: int = 0
     recovered_slide_count: int = 0
     warnings: list[str] = Field(default_factory=list)
+    vision_target_count: int = 0
+    vision_rendered_count: int = 0
+    hidden_slide_count: int = 0
+    image_dominant_slide_count: int = 0
+    external_image_count: int = 0
     attempt_count: int = 0
 
     @classmethod
@@ -220,5 +256,10 @@ class JobPublic(BaseModel):
             resumed_slide_count=job.resumed_slide_count,
             recovered_slide_count=job.recovered_slide_count,
             warnings=job.warnings,
+            vision_target_count=job.vision_target_count,
+            vision_rendered_count=job.vision_rendered_count,
+            hidden_slide_count=job.hidden_slide_count,
+            image_dominant_slide_count=job.image_dominant_slide_count,
+            external_image_count=job.external_image_count,
             attempt_count=job.attempt_count,
         )

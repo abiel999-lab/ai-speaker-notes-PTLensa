@@ -13,6 +13,7 @@ def validate_pptx_package(
     *,
     max_entries: int,
     max_uncompressed_bytes: int,
+    allow_embedded_objects: bool = False,
 ) -> None:
     """Validate basic PPTX/ZIP structure without trusting MIME type or filename alone."""
     if path.suffix.lower() != ".pptx":
@@ -38,8 +39,14 @@ def validate_pptx_package(
             if posix.is_absolute() or ".." in posix.parts:
                 raise UploadValidationError("Unsafe path found inside PPTX package.")
 
-            if info.filename.lower().endswith("vbaproject.bin"):
+            lower_name = info.filename.lower()
+            if lower_name.endswith("vbaproject.bin"):
                 raise UploadValidationError("Macro-enabled content is not accepted in this MVP.")
+            if not allow_embedded_objects and lower_name.startswith("ppt/embeddings/") and not lower_name.endswith("/"):
+                raise UploadValidationError(
+                    "Embedded OLE/package objects are blocked for safety. Remove embedded files "
+                    "from the presentation or explicitly enable ALLOW_EMBEDDED_OBJECTS after review."
+                )
 
             total_uncompressed += info.file_size
             if total_uncompressed > max_uncompressed_bytes:

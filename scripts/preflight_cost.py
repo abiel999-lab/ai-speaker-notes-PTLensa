@@ -19,7 +19,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Estimate OpenAI cost without making any API request.")
     parser.add_argument("pptx", type=Path)
     parser.add_argument("--vision", action="store_true")
-    parser.add_argument("--depth", choices=[d.value for d in Depth], default=Depth.standard.value)
+    parser.add_argument("--depth", choices=[d.value for d in Depth], default=Depth.medium.value)
     parser.add_argument(
         "--notes-mode",
         choices=[m.value for m in NotesMode],

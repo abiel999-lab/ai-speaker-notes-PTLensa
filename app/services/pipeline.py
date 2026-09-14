@@ -17,7 +17,7 @@ from app.services.notes.factory import NotesGeneratorFactory
 from app.services.notes_writer import PptxNotesWriter
 from app.services.ppt_parser import PptxParser
 from app.services.ppt_renderer import SlideRenderer
-from app.services.preflight import enforce_cost_guardrail, estimate_openai_job
+from app.services.preflight import enforce_cost_guardrail, enforce_input_guardrails, estimate_openai_job
 
 ProgressCallback = Callable[[int, int, str], None]
 
@@ -61,7 +61,29 @@ class PresentationPipeline:
         effective_options = options
         preflight_cost: float | None = None
 
+        hidden_slide_count = sum(1 for slide in deck.slides if slide.hidden)
+        image_dominant_slide_count = sum(
+            1 for slide in deck.slides if slide.has_visual_content and not slide.texts
+        )
+        external_image_count = sum(slide.external_image_count for slide in deck.slides)
+        if hidden_slide_count:
+            warnings.append(
+                f"Detected {hidden_slide_count} hidden slide(s). Rendering uses a temporary normalized "
+                "copy so hidden slides do not shift slide-number mapping."
+            )
+        if external_image_count:
+            warnings.append(
+                f"Detected {external_image_count} externally linked image relationship(s). For security, "
+                "the app does not fetch external URLs; unavailable linked media may not appear in Vision."
+            )
+
         if options.engine == GenerationEngine.openai:
+            enforce_input_guardrails(
+                full_deck=deck,
+                target_deck=generation_deck,
+                options=options,
+                settings=self.settings,
+            )
             estimate = estimate_openai_job(
                 full_deck=deck,
                 target_deck=generation_deck,
@@ -101,18 +123,49 @@ class PresentationPipeline:
                         "or LibreOffice; for server deployment use LibreOffice."
                     )
                 target_numbers = {slide.number for slide in generation_deck.slides}
-                rendered_map = self.renderer.render(
-                    input_path,
-                    input_path.parent / "rendered",
-                    slide_numbers=target_numbers,
-                )
-                vision_renderer = self.renderer.name
+                render_dir = input_path.parent / "rendered"
+                try:
+                    rendered_map = self.renderer.render(
+                        input_path,
+                        render_dir,
+                        slide_numbers=target_numbers,
+                    )
+                    vision_renderer = self.renderer.name
+                except Exception as batch_exc:
+                    # A single malformed/unsupported slide must not disable Vision for the
+                    # entire deck. Recover slide-by-slide and keep every successful image.
+                    recovered: dict[int, Path] = {}
+                    failed: dict[int, str] = {}
+                    for number in sorted(target_numbers):
+                        per_slide_dir = render_dir / f"single-{number:03d}"
+                        try:
+                            item = self.renderer.render(
+                                input_path,
+                                per_slide_dir,
+                                slide_numbers={number},
+                            )
+                            recovered.update(item)
+                        except Exception as slide_exc:
+                            failed[number] = f"{type(slide_exc).__name__}: {slide_exc}"
+                    rendered_map = recovered
+                    vision_renderer = self.renderer.name if recovered else None
+                    if recovered:
+                        warning = (
+                            f"Batch vision rendering failed ({type(batch_exc).__name__}: {batch_exc}), "
+                            f"but {len(recovered)}/{len(target_numbers)} slide(s) were recovered "
+                            "individually. Slides without images will use text-only context."
+                        )
+                        if failed:
+                            warning += " Failed slide(s): " + ", ".join(map(str, sorted(failed)[:20])) + "."
+                        warnings.append(warning)
+                    else:
+                        raise batch_exc
             except Exception as exc:
                 if not self.settings.openai_vision_fallback_to_text:
                     raise
                 warning = (
-                    "Vision rendering failed; the job continued in text-only mode without sending "
-                    f"slide screenshots to the AI. Renderer error: {type(exc).__name__}: {exc}"
+                    "Vision rendering was unavailable for this deck; the job continued in text-only "
+                    f"mode. Renderer error: {type(exc).__name__}: {exc}"
                 )
                 warnings.append(warning)
                 effective_options = options.model_copy(update={"use_vision": False})
@@ -190,6 +243,11 @@ class PresentationPipeline:
             resumed_slide_count=generated.resumed_slide_count,
             recovered_slide_count=generated.recovered_slide_count,
             warnings=warnings,
+            vision_target_count=len(generation_deck.slides) if needs_vision else 0,
+            vision_rendered_count=len(rendered_map) if needs_vision else 0,
+            hidden_slide_count=hidden_slide_count,
+            image_dominant_slide_count=image_dominant_slide_count,
+            external_image_count=external_image_count,
         )
 
     @staticmethod

@@ -1,5 +1,5 @@
 from app.core.config import Settings
-from app.domain.models import Depth, GenerationOptions, PresentationDeck, SlideContent
+from app.domain.models import Depth, GenerationOptions, NoteLength, PresentationDeck, SlideContent
 from app.services.preflight import AICostGuardrailError, enforce_cost_guardrail, estimate_openai_job
 
 
@@ -15,13 +15,13 @@ def test_preflight_estimate_increases_when_vision_is_enabled():
     text = estimate_openai_job(
         full_deck=deck,
         target_deck=deck,
-        options=GenerationOptions(depth=Depth.deep, use_vision=False),
+        options=GenerationOptions(depth=Depth.high, use_vision=False),
         settings=settings,
     )
     vision = estimate_openai_job(
         full_deck=deck,
         target_deck=deck,
-        options=GenerationOptions(depth=Depth.deep, use_vision=True),
+        options=GenerationOptions(depth=Depth.high, use_vision=True),
         settings=settings,
     )
     assert vision.estimated_input_tokens > text.estimated_input_tokens
@@ -42,7 +42,7 @@ def test_preflight_cost_guardrail_blocks_before_paid_request():
     estimate = estimate_openai_job(
         full_deck=deck,
         target_deck=deck,
-        options=GenerationOptions(depth=Depth.deep, use_vision=True),
+        options=GenerationOptions(depth=Depth.high, use_vision=True),
         settings=settings,
     )
     try:
@@ -51,3 +51,25 @@ def test_preflight_cost_guardrail_blocks_before_paid_request():
         assert "cost guardrail" in str(exc)
     else:
         raise AssertionError("guardrail should have blocked the job")
+
+
+def test_preflight_estimate_increases_for_longer_note_length():
+    deck = PresentationDeck(
+        slide_count=3,
+        slides=[SlideContent(number=n, title="Slide", texts=["Content" * 20]) for n in range(1, 4)],
+    )
+    settings = Settings(_env_file=None, openai_batch_size=3)
+    short = estimate_openai_job(
+        full_deck=deck,
+        target_deck=deck,
+        options=GenerationOptions(note_length=NoteLength.under_100),
+        settings=settings,
+    )
+    long = estimate_openai_job(
+        full_deck=deck,
+        target_deck=deck,
+        options=GenerationOptions(note_length=NoteLength.words_250_500),
+        settings=settings,
+    )
+    assert long.estimated_output_tokens > short.estimated_output_tokens
+    assert long.estimated_cost_usd > short.estimated_cost_usd

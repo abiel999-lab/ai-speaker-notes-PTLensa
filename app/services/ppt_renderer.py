@@ -12,6 +12,25 @@ from typing import Protocol
 logger = logging.getLogger("speaker_notes.renderer")
 
 
+def _make_hidden_slides_renderable(source: Path, target: Path) -> int:
+    """Save a temporary PPTX with hidden-slide flags removed for visual rendering.
+
+    LibreOffice omits hidden slides from PDF export, which shifts every subsequent page.
+    python-pptx rewrites a temporary rendering copy only; the uploaded file and final output
+    remain untouched. The temp copy is disposable and never returned to the user.
+    """
+    from pptx import Presentation
+
+    presentation = Presentation(source)
+    hidden_count = 0
+    for slide in presentation.slides:
+        if slide._element.get("show") == "0":  # noqa: SLF001 - OOXML flag has no public API
+            slide._element.attrib.pop("show", None)
+            hidden_count += 1
+    presentation.save(target)
+    return hidden_count
+
+
 class RendererUnavailableError(RuntimeError):
     pass
 
@@ -229,6 +248,11 @@ class LibreOfficeSlideRenderer:
             profile_dir.mkdir()
             profile_uri = profile_dir.resolve().as_uri()
 
+            # LibreOffice excludes hidden slides from PDF export. Normalize only a
+            # temporary rendering copy so PDF page N remains PowerPoint slide N.
+            render_source = tmp_path / "render-source.pptx"
+            _make_hidden_slides_renderable(pptx_path, render_source)
+
             result = subprocess.run(
                 [
                     executable,
@@ -242,7 +266,7 @@ class LibreOfficeSlideRenderer:
                     "pdf",
                     "--outdir",
                     str(pdf_dir),
-                    str(pptx_path),
+                    str(render_source),
                 ],
                 check=False,
                 stdout=subprocess.PIPE,
@@ -256,7 +280,7 @@ class LibreOfficeSlideRenderer:
                     f"Exit code: {result.returncode}."
                 )
 
-            pdf_path = pdf_dir / f"{pptx_path.stem}.pdf"
+            pdf_path = pdf_dir / f"{render_source.stem}.pdf"
             if not pdf_path.exists():
                 raise RuntimeError("LibreOffice did not create the expected PDF output.")
 

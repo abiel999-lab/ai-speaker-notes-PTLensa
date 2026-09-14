@@ -2,8 +2,8 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Path,
     [switch]$Vision,
-    [ValidateSet("Ringkas", "Standar", "Mendalam")]
-    [string]$Depth = "Standar",
+    [ValidateSet("Low", "Medium", "High")]
+    [string]$Depth = "Medium",
     [ValidateSet("missing_only", "replace_all", "append")]
     [string]$NotesMode = "missing_only"
 )

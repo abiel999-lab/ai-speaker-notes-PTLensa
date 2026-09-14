@@ -72,3 +72,24 @@ def test_auto_renderer_runtime_fallbacks_from_powerpoint_to_libreoffice(monkeypa
 
     assert result[1].exists()
     assert renderer.name == "libreoffice"
+
+
+def test_hidden_slide_normalization_preserves_slide_count(tmp_path: Path):
+    from pptx import Presentation
+    from app.services.ppt_renderer import _make_hidden_slides_renderable
+
+    source = tmp_path / "hidden.pptx"
+    normalized = tmp_path / "normalized.pptx"
+    prs = Presentation()
+    first = prs.slides.add_slide(prs.slide_layouts[6])
+    second = prs.slides.add_slide(prs.slide_layouts[6])
+    first._element.set("show", "0")
+    prs.save(source)
+
+    count = _make_hidden_slides_renderable(source, normalized)
+    reparsed = Presentation(normalized)
+
+    assert count == 1
+    assert len(reparsed.slides) == 2
+    assert reparsed.slides[0]._element.get("show") != "0"
+    assert reparsed.slides[1]._element.get("show") != "0"

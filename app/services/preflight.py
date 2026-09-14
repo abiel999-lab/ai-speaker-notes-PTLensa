@@ -4,10 +4,14 @@ import math
 from dataclasses import dataclass
 
 from app.core.config import Settings
-from app.domain.models import Depth, GenerationOptions, PresentationDeck
+from app.domain.models import GenerationOptions, NoteLength, PresentationDeck
 
 
 class AICostGuardrailError(RuntimeError):
+    pass
+
+
+class AIInputGuardrailError(RuntimeError):
     pass
 
 
@@ -35,6 +39,48 @@ class OpenAIPreflightEstimate:
         }
 
 
+
+def _deck_source_chars(deck: PresentationDeck) -> int:
+    total = 0
+    for slide in deck.slides:
+        total += len(slide.title or "")
+        total += sum(len(item) for item in slide.texts)
+        for table in slide.tables:
+            for row in table:
+                total += sum(len(cell) for cell in row)
+    return total
+
+
+def enforce_input_guardrails(
+    *,
+    full_deck: PresentationDeck,
+    target_deck: PresentationDeck,
+    options: GenerationOptions,
+    settings: Settings,
+) -> None:
+    total_slides = len(full_deck.slides)
+    target_slides = len(target_deck.slides)
+    source_chars = _deck_source_chars(full_deck)
+
+    if total_slides > settings.openai_max_slides_per_job:
+        raise AIInputGuardrailError(
+            f"This deck contains {total_slides} slides; the AI limit is "
+            f"{settings.openai_max_slides_per_job} slides per job. Split the deck or raise "
+            "OPENAI_MAX_SLIDES_PER_JOB after reviewing cost and latency."
+        )
+    if options.use_vision and target_slides > settings.openai_max_vision_slides_per_job:
+        raise AIInputGuardrailError(
+            f"Visual analysis was requested for {target_slides} slides; the Vision limit is "
+            f"{settings.openai_max_vision_slides_per_job} target slides per job. Use text-only, "
+            "process a smaller deck, or change the server limit deliberately."
+        )
+    if source_chars > settings.openai_max_source_chars_per_job:
+        raise AIInputGuardrailError(
+            f"Extracted slide content is too large for one AI job ({source_chars:,} characters; "
+            f"limit {settings.openai_max_source_chars_per_job:,}). Split the presentation to keep "
+            "requests predictable and avoid context/cost spikes."
+        )
+
 def estimate_openai_job(
     *,
     full_deck: PresentationDeck,
@@ -55,19 +101,9 @@ def estimate_openai_job(
 
     batch_count = math.ceil(target_count / settings.openai_batch_size)
 
-    def slide_chars(deck: PresentationDeck) -> int:
-        total = 0
-        for slide in deck.slides:
-            total += len(slide.title or "")
-            total += sum(len(item) for item in slide.texts)
-            for table in slide.tables:
-                for row in table:
-                    total += sum(len(cell) for cell in row)
-        return total
-
     # 4 chars/token is a common rough estimate for mixed English/Indonesian prose.
-    full_deck_tokens = max(1, math.ceil(slide_chars(full_deck) / 4))
-    target_tokens = max(1, math.ceil(slide_chars(target_deck) / 4))
+    full_deck_tokens = max(1, math.ceil(_deck_source_chars(full_deck) / 4))
+    target_tokens = max(1, math.ceil(_deck_source_chars(target_deck) / 4))
 
     # One briefing request sees the full deck. Each note batch gets the outline plus
     # target detail and nearby-slide context. The factor intentionally includes prompt
@@ -78,10 +114,11 @@ def estimate_openai_job(
         estimated_input += target_count * settings.openai_vision_estimated_input_tokens_per_slide
 
     per_slide_output = {
-        Depth.concise: 220,
-        Depth.standard: 360,
-        Depth.deep: 560,
-    }[options.depth]
+        NoteLength.under_100: 170,
+        NoteLength.words_100_250: 400,
+        NoteLength.words_250_500: 800,
+        NoteLength.custom: max(100, int((options.custom_word_limit or 150) * 1.6)),
+    }[options.note_length]
     estimated_output = 700 + target_count * per_slide_output
     total = estimated_input + estimated_output
     cost = settings.estimated_openai_cost_usd(

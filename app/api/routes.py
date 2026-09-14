@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 import shutil
 import tempfile
 import uuid
@@ -8,8 +9,9 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
+from app.core.auth import require_identity, verify_csrf
 from app.core.job_store import JobNotFoundError
 from app.core.security import UploadValidationError, validate_pptx_package
 from app.core.version import get_app_version
@@ -22,6 +24,7 @@ from app.domain.models import (
     JobRecord,
     JobStatus,
     Language,
+    NoteLength,
     NotesMode,
 )
 
@@ -37,18 +40,50 @@ def _safe_display_name(filename: str | None) -> str:
     return cleaned[:120] or "presentation.pptx"
 
 
-def _reject_cross_site_browser_request(request: Request) -> None:
-    """Block browser cross-site job creation while keeping CLI/API clients usable."""
-    fetch_site = request.headers.get("sec-fetch-site", "").lower()
-    if fetch_site == "cross-site":
-        raise HTTPException(status_code=403, detail="Cross-site uploads are not allowed.")
+def _allowed_origin(request: Request, origin: str) -> bool:
+    allowed = request.app.state.settings.allowed_frontend_origins
+    return origin.rstrip("/") in allowed
 
+
+def _require_demo_access(request: Request) -> None:
+    settings = request.app.state.settings
+    if not settings.demo_access_configured:
+        return
+    supplied = request.headers.get("x-demo-key", "")
+    expected = settings.demo_access_key.get_secret_value() if settings.demo_access_key else ""
+    if not supplied or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing demo access code.")
+
+
+def _require_api_access(request: Request, *, mutate: bool = False):
+    _require_demo_access(request)
+    identity = require_identity(request)
+    if mutate:
+        verify_csrf(request, identity)
+    return identity
+
+
+def _owned_job(request: Request, job_id: str):
+    identity = require_identity(request)
+    try:
+        job = request.app.state.store.get(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Job not found.") from exc
+    if request.app.state.settings.auth_enabled and job.owner not in {None, identity.username}:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return job
+
+
+def _reject_cross_site_browser_request(request: Request) -> None:
+    """Allow only same-origin or explicitly configured browser frontends.
+
+    Non-browser clients without an Origin header remain usable, while an optional
+    X-Demo-Key can protect the public demo API from arbitrary callers.
+    """
     origin = request.headers.get("origin")
     if not origin:
         return
-
-    expected = f"{request.url.scheme}://{request.url.netloc}"
-    if origin.rstrip("/") != expected.rstrip("/"):
+    if not _allowed_origin(request, origin):
         raise HTTPException(status_code=403, detail="Origin is not allowed.")
 
 
@@ -123,6 +158,30 @@ def ready_alias(request: Request) -> JSONResponse:
     return ready(request)
 
 
+@router.get("/capabilities")
+def capabilities(request: Request) -> dict[str, object]:
+    settings = request.app.state.settings
+    renderer = request.app.state.renderer
+    renderer_available = renderer.available()
+    return {
+        "service": settings.app_name,
+        "version": get_app_version(),
+        "max_upload_mb": settings.max_upload_mb,
+        "openai_configured": settings.openai_configured,
+        "openai_model": settings.openai_model,
+        "vision_enabled": settings.openai_use_vision,
+        "vision_ready": settings.openai_use_vision and renderer_available,
+        "renderer": renderer.name if renderer_available else None,
+        "demo_access_required": settings.demo_access_configured,
+        "auth_enabled": settings.auth_enabled,
+        "max_ai_slides": settings.openai_max_slides_per_job,
+        "max_vision_slides": settings.openai_max_vision_slides_per_job,
+        "chat_model": settings.openai_chat_model,
+        "chat_max_message_chars": settings.chat_max_message_chars,
+        "chat_max_turns_per_job": settings.chat_max_turns_per_job,
+    }
+
+
 @router.post("/jobs", status_code=status.HTTP_202_ACCEPTED, response_model=JobPublic)
 async def create_job(
     request: Request,
@@ -130,16 +189,33 @@ async def create_job(
     file: UploadFile = File(...),
     language: Language = Form(Language.id),
     audience: Audience = Form(Audience.general),
-    depth: Depth = Form(Depth.standard),
+    depth: Depth = Form(Depth.medium),
+    note_length: NoteLength = Form(NoteLength.words_100_250),
+    custom_word_limit: int | None = Form(None, ge=30, le=500),
+    custom_instructions: str = Form("", max_length=1500),
     notes_mode: NotesMode = Form(NotesMode.missing_only),
     engine: GenerationEngine = Form(GenerationEngine.dummy),
     use_vision: bool = Form(False),
 ) -> JobPublic:
     _reject_cross_site_browser_request(request)
+    identity = _require_api_access(request, mutate=True)
 
     settings = request.app.state.settings
     store = request.app.state.store
     processor = request.app.state.processor
+
+    active = [
+        job for job in store.list_recent(limit=100, owner=identity.username if settings.auth_enabled else None)
+        if job.status in {JobStatus.queued, JobStatus.processing}
+    ]
+    if len(active) >= settings.max_active_jobs_per_user:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Too many active jobs ({len(active)}). Wait for one to finish before starting another; "
+                f"limit is {settings.max_active_jobs_per_user}."
+            ),
+        )
 
     if engine == GenerationEngine.openai:
         if not settings.openai_configured:
@@ -150,16 +226,25 @@ async def create_job(
         if use_vision and not settings.openai_use_vision:
             raise HTTPException(
                 status_code=503,
-                detail="Vision is disabled by server configuration (OPENAI_USE_VISION=false).",
+                detail="Text + image analysis is disabled by server configuration (OPENAI_USE_VISION=false).",
             )
         if use_vision and not request.app.state.renderer.available():
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "Vision was requested but no slide renderer is available. On Windows, install "
+                    "Text + image analysis was requested but no slide renderer is available. On Windows, install "
                     "Microsoft PowerPoint or LibreOffice; for server deployment use LibreOffice."
                 ),
             )
+
+    if note_length == NoteLength.custom and custom_word_limit is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Custom word count requires a maximum between 30 and 500 words per slide.",
+        )
+    if note_length != NoteLength.custom:
+        custom_word_limit = None
+    custom_instructions = custom_instructions.strip()
 
     filename = _safe_display_name(file.filename)
     if Path(filename).suffix.lower() != ".pptx":
@@ -186,6 +271,7 @@ async def create_job(
             input_path,
             max_entries=settings.max_zip_entries,
             max_uncompressed_bytes=settings.max_uncompressed_bytes,
+            allow_embedded_objects=settings.allow_embedded_objects,
         )
     except UploadValidationError as exc:
         shutil.rmtree(job_dir, ignore_errors=True)
@@ -200,6 +286,9 @@ async def create_job(
         language=language,
         audience=audience,
         depth=depth,
+        note_length=note_length,
+        custom_word_limit=custom_word_limit,
+        custom_instructions=custom_instructions,
         notes_mode=notes_mode,
         engine=engine,
         use_vision=use_vision,
@@ -207,6 +296,7 @@ async def create_job(
     job = JobRecord(
         id=job_id,
         original_filename=filename,
+        owner=identity.username,
         options=options,
         input_path=str(input_path),
     )
@@ -223,6 +313,7 @@ def retry_job(
 ) -> JobPublic:
     """Retry a failed job while preserving recoverable AI checkpoints."""
     _reject_cross_site_browser_request(request)
+    identity = _require_api_access(request, mutate=True)
     job_key = str(job_id)
     store = request.app.state.store
     processor = request.app.state.processor
@@ -230,6 +321,8 @@ def retry_job(
         job = store.get(job_key)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Job not found.") from exc
+    if request.app.state.settings.auth_enabled and job.owner not in {None, identity.username}:
+        raise HTTPException(status_code=404, detail="Job not found.")
 
     if job.status == JobStatus.completed:
         raise HTTPException(status_code=409, detail="Completed jobs do not need retrying.")
@@ -249,23 +342,39 @@ def retry_job(
     return JobPublic.from_record(store.get(job_key))
 
 
+@router.get("/jobs", response_model=list[JobPublic])
+def list_jobs(request: Request, limit: int = 20) -> list[JobPublic]:
+    _reject_cross_site_browser_request(request)
+    identity = _require_api_access(request)
+    owner = identity.username if request.app.state.settings.auth_enabled else None
+    jobs = request.app.state.store.list_recent(limit=max(1, min(limit, 50)), owner=owner)
+    return [JobPublic.from_record(job) for job in jobs]
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+def delete_job(request: Request, job_id: UUID):
+    _reject_cross_site_browser_request(request)
+    _require_api_access(request, mutate=True)
+    job = _owned_job(request, str(job_id))
+    if job.status == JobStatus.processing:
+        raise HTTPException(status_code=409, detail="A running job cannot be deleted. Wait for it to finish first.")
+    request.app.state.store.delete(str(job_id))
+    return Response(status_code=204)
+
+
 @router.get("/jobs/{job_id}", response_model=JobPublic)
 def get_job(request: Request, job_id: UUID) -> JobPublic:
-    job_key = str(job_id)
-    try:
-        job = request.app.state.store.get(job_key)
-    except JobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Job not found.") from exc
+    _reject_cross_site_browser_request(request)
+    _require_api_access(request)
+    job = _owned_job(request, str(job_id))
     return JobPublic.from_record(job)
 
 
 @router.get("/jobs/{job_id}/download")
 def download_job(request: Request, job_id: UUID) -> FileResponse:
-    job_key = str(job_id)
-    try:
-        job = request.app.state.store.get(job_key)
-    except JobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Job not found.") from exc
+    _reject_cross_site_browser_request(request)
+    _require_api_access(request)
+    job = _owned_job(request, str(job_id))
 
     if not job.output_path or job.status.value != "completed":
         raise HTTPException(status_code=409, detail="Output is not ready yet.")

@@ -43,6 +43,48 @@ class FileJobStore:
         with self._lock:
             return JobRecord.model_validate_json(path.read_text(encoding="utf-8"))
 
+
+    def list_recent(self, *, limit: int = 20, owner: str | None = None) -> list[JobRecord]:
+        jobs: list[JobRecord] = []
+        for child in self.base_dir.iterdir():
+            if not child.is_dir():
+                continue
+            record = child / "job.json"
+            if not record.exists():
+                continue
+            try:
+                job = JobRecord.model_validate_json(record.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if owner is not None and job.owner not in {None, owner}:
+                continue
+            jobs.append(job)
+        jobs.sort(key=lambda item: item.updated_at, reverse=True)
+        return jobs[: max(1, min(limit, 100))]
+
+    def delete(self, job_id: str) -> None:
+        import shutil
+
+        path = self._job_dir(job_id)
+        if not path.exists():
+            raise JobNotFoundError(job_id)
+        shutil.rmtree(path)
+
+    def recover_interrupted(self) -> int:
+        """Mark queued/processing jobs as retryable after an unclean server restart."""
+        from app.domain.models import JobStatus
+
+        recovered = 0
+        for job in self.list_recent(limit=100):
+            if job.status not in {JobStatus.queued, JobStatus.processing}:
+                continue
+            job.status = JobStatus.failed
+            job.error = "Job was interrupted by a server restart before completion."
+            job.message = "Interrupted job is safe to retry; existing AI checkpoints are preserved."
+            self.save(job)
+            recovered += 1
+        return recovered
+
     def cleanup_expired(self, retention_hours: int) -> int:
         cutoff = datetime.now(UTC) - timedelta(hours=retention_hours)
         removed = 0

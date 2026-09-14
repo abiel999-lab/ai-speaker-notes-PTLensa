@@ -1,4 +1,4 @@
-# Project Status — v0.2.4 Hardening
+# Project Status — v0.2.5 Hardening
 
 ## Implemented / passed in build environment
 
@@ -28,7 +28,7 @@
 
 ## Operator validation still required
 
-1. Upgrade to v0.2.4 while preserving `.env`.
+1. Upgrade to v0.2.5 while preserving `.env`.
 2. Run `setup.ps1` and `verify.ps1` — expect 37 tests.
 3. Run `diagnose-ai.ps1`.
 4. Run `test-vision-renderer.ps1` — no API cost.

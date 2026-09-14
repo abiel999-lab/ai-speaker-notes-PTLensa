@@ -10,7 +10,7 @@ from app.domain.models import JobStatus
 from app.services.integrity import IntegrityCheckError
 from app.services.notes.openai_generator import AIConfigurationError, AIResponseValidationError
 from app.services.pipeline import PresentationPipeline
-from app.services.preflight import AICostGuardrailError
+from app.services.preflight import AICostGuardrailError, AIInputGuardrailError
 
 logger = logging.getLogger("speaker_notes.jobs")
 
@@ -93,6 +93,11 @@ class JobProcessor:
                 job.resumed_slide_count = result.resumed_slide_count
                 job.recovered_slide_count = result.recovered_slide_count
                 job.warnings = result.warnings
+                job.vision_target_count = result.vision_target_count
+                job.vision_rendered_count = result.vision_rendered_count
+                job.hidden_slide_count = result.hidden_slide_count
+                job.image_dominant_slide_count = result.image_dominant_slide_count
+                job.external_image_count = result.external_image_count
                 suffix = ""
                 if result.provider == "openai":
                     vision = (
@@ -106,8 +111,13 @@ class JobProcessor:
                             f" resumed: {result.resumed_slide_count};"
                             f" recovered: {result.recovered_slide_count};"
                         )
+                    coverage = ""
+                    if result.vision_target_count:
+                        coverage = (
+                            f" visual coverage: {result.vision_rendered_count}/{result.vision_target_count};"
+                        )
                     suffix = (
-                        f" Model: {result.model}; tokens: {result.total_tokens};{vision}{recovery} "
+                        f" Model: {result.model}; tokens: {result.total_tokens};{vision}{coverage}{recovery} "
                         f"estimated API cost: ${result.estimated_cost_usd or 0:.4f}."
                     )
                 warning_suffix = ""
@@ -134,6 +144,7 @@ class JobProcessor:
                     AIConfigurationError,
                     AIResponseValidationError,
                     AICostGuardrailError,
+                    AIInputGuardrailError,
                 ),
             ):
                 public_error = f"{type(exc).__name__}: {exc}"

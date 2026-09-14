@@ -37,7 +37,7 @@ def test_job_route_rejects_non_pptx():
         response = client.post(
             "/api/v1/jobs",
             files={"file": ("bad.txt", b"not a deck", "text/plain")},
-            data={"language": "Bahasa Indonesia", "audience": "Umum", "depth": "Standar"},
+            data={"language": "Bahasa Indonesia", "audience": "Umum", "depth": "Medium"},
         )
         assert response.status_code == 415
 
@@ -73,7 +73,7 @@ def test_job_route_processes_valid_pptx(sample_pptx: Path):
                 data={
                     "language": "Bahasa Indonesia",
                     "audience": "Teknis",
-                    "depth": "Standar",
+                    "depth": "Medium",
                     "notes_mode": "missing_only",
                 },
             )
@@ -145,3 +145,102 @@ def test_failed_job_can_be_retried_and_attempt_count_increments(sample_pptx: Pat
         final = client.get(f"/api/v1/jobs/{job_id}").json()
         assert final["status"] == "completed"
         assert final["attempt_count"] == 2
+
+
+def test_capabilities_endpoint_exposes_public_runtime_flags():
+    with TestClient(app) as client:
+        response = client.get('/api/v1/capabilities')
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload['version']
+        assert 'openai_model' in payload
+        assert 'vision_ready' in payload
+        assert 'demo_access_required' in payload
+
+
+def test_configured_frontend_origin_is_allowed(sample_pptx: Path):
+    with TestClient(app) as client:
+        settings = client.app.state.settings
+        old_origins = settings.frontend_origins
+        settings.frontend_origins = 'https://demo.studioimpactid.com'
+        try:
+            with sample_pptx.open('rb') as fh:
+                response = client.post(
+                    '/api/v1/jobs',
+                    headers={'Origin': 'https://demo.studioimpactid.com', 'Sec-Fetch-Site': 'cross-site'},
+                    files={'file': ('sample.pptx', fh, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')},
+                )
+            assert response.status_code == 202
+        finally:
+            settings.frontend_origins = old_origins
+
+
+def test_demo_access_key_blocks_missing_key(sample_pptx: Path):
+    from pydantic import SecretStr
+
+    with TestClient(app) as client:
+        settings = client.app.state.settings
+        old_key = settings.demo_access_key
+        settings.demo_access_key = SecretStr('demo-secret')
+        try:
+            with sample_pptx.open('rb') as fh:
+                blocked = client.post(
+                    '/api/v1/jobs',
+                    files={'file': ('sample.pptx', fh, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')},
+                )
+            assert blocked.status_code == 401
+
+            with sample_pptx.open('rb') as fh:
+                allowed = client.post(
+                    '/api/v1/jobs',
+                    headers={'X-Demo-Key': 'demo-secret'},
+                    files={'file': ('sample.pptx', fh, 'application/vnd.openxmlformats-officedocument.presentationml.presentation')},
+                )
+            assert allowed.status_code == 202
+        finally:
+            settings.demo_access_key = old_key
+
+
+def test_job_route_accepts_new_audience_length_and_custom_instructions(sample_pptx: Path):
+    with TestClient(app) as client:
+        with sample_pptx.open("rb") as fh:
+            response = client.post(
+                "/api/v1/jobs",
+                files={
+                    "file": (
+                        "sample.pptx",
+                        fh,
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    )
+                },
+                data={
+                    "audience": "Akademisi",
+                    "note_length": "Custom",
+                    "custom_word_limit": "180",
+                    "custom_instructions": "Gunakan gaya akademik yang tetap mudah dipresentasikan.",
+                },
+            )
+        assert response.status_code == 202
+        job_id = response.json()["id"]
+        record = client.app.state.store.get(job_id)
+        assert record.options.audience.value == "Akademisi"
+        assert record.options.note_length.value == "Custom"
+        assert record.options.custom_word_limit == 180
+        assert "gaya akademik" in record.options.custom_instructions
+
+
+def test_job_route_requires_limit_for_custom_word_count(sample_pptx: Path):
+    with TestClient(app) as client, sample_pptx.open("rb") as fh:
+        response = client.post(
+            "/api/v1/jobs",
+            files={
+                "file": (
+                    "sample.pptx",
+                    fh,
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                )
+            },
+            data={"note_length": "Custom"},
+        )
+        assert response.status_code == 422
+        assert "Custom word count" in response.json()["detail"]
