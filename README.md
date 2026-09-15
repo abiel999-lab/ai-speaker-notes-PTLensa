@@ -2,6 +2,8 @@
 
 AI Speaker Notes adalah aplikasi produksi PT Lensa Makmur Sejahtera untuk membaca PowerPoint, menganalisis teks dan visual, membuat speaker notes, serta menyediakan Chat AI berbasis RAG per slide.
 
+link: https://aispeakernote.lensalingkungantech.com/
+
 ## Production stack
 
 - FastAPI + Jinja UI
