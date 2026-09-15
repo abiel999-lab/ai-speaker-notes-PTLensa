@@ -58,22 +58,13 @@ def enforce_input_guardrails(
     options: GenerationOptions,
     settings: Settings,
 ) -> None:
-    total_slides = len(full_deck.slides)
-    target_slides = len(target_deck.slides)
+    # Slide count itself is not a rejection criterion. The generator already sends
+    # target slides to the model in small OPENAI_BATCH_SIZE chunks, so large decks
+    # can proceed without a fixed 60/80-slide ceiling. Safety remains enforced by
+    # upload/package validation, extracted-context size, cost, timeouts, retries,
+    # checkpoints, and concurrency limits.
     source_chars = _deck_source_chars(full_deck)
 
-    if total_slides > settings.openai_max_slides_per_job:
-        raise AIInputGuardrailError(
-            f"This deck contains {total_slides} slides; the AI limit is "
-            f"{settings.openai_max_slides_per_job} slides per job. Split the deck or raise "
-            "OPENAI_MAX_SLIDES_PER_JOB after reviewing cost and latency."
-        )
-    if options.use_vision and target_slides > settings.openai_max_vision_slides_per_job:
-        raise AIInputGuardrailError(
-            f"Visual analysis was requested for {target_slides} slides; the Vision limit is "
-            f"{settings.openai_max_vision_slides_per_job} target slides per job. Use text-only, "
-            "process a smaller deck, or change the server limit deliberately."
-        )
     if source_chars > settings.openai_max_source_chars_per_job:
         raise AIInputGuardrailError(
             f"Extracted slide content is too large for one AI job ({source_chars:,} characters; "

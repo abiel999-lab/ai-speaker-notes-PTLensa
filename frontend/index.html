@@ -1,12 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>AI Speaker Notes</title>
-  <link rel="icon" type="image/png" href="./favicon.png?v=0.2.7">
+  <title>AI Speaker Notes | Lensa Lingkungan</title>
   <link rel="stylesheet" href="./app.css?v=0.2.7">
+    <meta name="theme-color" content="#16834d">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=0283">
+<link rel="shortcut icon" type="image/png" href="/favicon.png?v=0283">
+<link rel="apple-touch-icon" href="/favicon.png?v=0283">
 </head>
 <body>
   <main class="shell">
@@ -44,7 +47,7 @@
 
       <form id="job-form" enctype="multipart/form-data">
         <label class="drop" id="drop-zone" for="file">
-          <div class="upload-icon" aria-hidden="true">↑</div>
+          <div class="upload-icon" aria-hidden="true">â†‘</div>
           <div><strong data-i18n="uploadTitle">Choose PowerPoint file</strong><span id="upload-help">File asli tidak dimodifikasi.</span><small id="file-name" data-i18n="uploadHint">Drag & drop or click to browse .pptx</small></div>
           <input id="file" name="file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
         </label>
@@ -95,8 +98,8 @@
         </div>
 
         <div id="replace-warning" class="warning hidden" role="alert"></div>
-        <div class="privacy-note"><span>✓</span><p data-i18n="privacyText">File upload divalidasi sebagai paket PPTX. Aplikasi tidak mengambil gambar eksternal dari URL untuk mencegah akses jaringan yang tidak aman.</p></div>
-        <button id="submit" class="primary" type="submit"><span data-i18n="processButton">Process presentation</span><span aria-hidden="true">→</span></button>
+        <div class="privacy-note"><span>âœ“</span><p data-i18n="privacyText">File upload divalidasi sebagai paket PPTX. Aplikasi tidak mengambil gambar eksternal dari URL untuk mencegah akses jaringan yang tidak aman.</p></div>
+        <button id="submit" class="primary" type="submit"><span data-i18n="processButton">Process presentation</span><span aria-hidden="true">â†’</span></button>
       </form>
 
       <section id="status" class="status hidden" aria-live="polite">
@@ -128,3 +131,5 @@
   <script src="./app.js?v=0.2.7" defer></script>
 </body>
 </html>
+
+

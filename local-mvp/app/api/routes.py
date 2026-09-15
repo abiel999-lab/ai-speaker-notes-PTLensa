@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 import shutil
@@ -69,7 +70,7 @@ def _owned_job(request: Request, job_id: str):
         job = request.app.state.store.get(job_id)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Job not found.") from exc
-    if request.app.state.settings.auth_enabled and job.owner not in {None, identity.username}:
+    if request.app.state.settings.auth_enabled and job.owner != identity.owner_key:
         raise HTTPException(status_code=404, detail="Job not found.")
     return job
 
@@ -103,6 +104,12 @@ def _readiness_payload(request: Request) -> tuple[dict[str, object], bool]:
     except OSError:
         checks["storage"] = "unavailable"
         ready = False
+
+    db = getattr(request.app.state, "db", None)
+    if settings.database_url:
+        db_ok = bool(db and db.healthcheck())
+        checks["database"] = "ok" if db_ok else "unavailable"
+        ready = ready and db_ok
 
     renderer_available = renderer.available()
     checks["renderer"] = {
@@ -174,8 +181,10 @@ def capabilities(request: Request) -> dict[str, object]:
         "renderer": renderer.name if renderer_available else None,
         "demo_access_required": settings.demo_access_configured,
         "auth_enabled": settings.auth_enabled,
-        "max_ai_slides": settings.openai_max_slides_per_job,
-        "max_vision_slides": settings.openai_max_vision_slides_per_job,
+        "max_ai_slides": None,
+        "max_vision_slides": None,
+        "slide_count_policy": "automatic_batching",
+        "openai_batch_size": settings.openai_batch_size,
         "chat_model": settings.openai_chat_model,
         "chat_max_message_chars": settings.chat_max_message_chars,
         "chat_max_turns_per_job": settings.chat_max_turns_per_job,
@@ -205,7 +214,7 @@ async def create_job(
     processor = request.app.state.processor
 
     active = [
-        job for job in store.list_recent(limit=100, owner=identity.username if settings.auth_enabled else None)
+        job for job in store.list_recent(limit=100, owner=identity.owner_key if settings.auth_enabled else None)
         if job.status in {JobStatus.queued, JobStatus.processing}
     ]
     if len(active) >= settings.max_active_jobs_per_user:
@@ -251,7 +260,11 @@ async def create_job(
         raise HTTPException(status_code=415, detail="Only .pptx files are accepted.")
 
     job_id = str(uuid.uuid4())
-    job_dir = store.base_dir / job_id
+    if settings.database_url and settings.auth_enabled:
+        owner_bucket = hashlib.sha256(identity.owner_key.encode("utf-8")).hexdigest()[:24]
+        job_dir = store.base_dir / owner_bucket / job_id
+    else:
+        job_dir = store.base_dir / job_id
     job_dir.mkdir(parents=True, exist_ok=False)
     input_path = job_dir / "input.pptx"
 
@@ -296,11 +309,19 @@ async def create_job(
     job = JobRecord(
         id=job_id,
         original_filename=filename,
-        owner=identity.username,
+        owner=identity.owner_key,
         options=options,
         input_path=str(input_path),
     )
     store.save(job)
+    if request.app.state.db is not None:
+        request.app.state.db.audit(
+            "job_created",
+            owner=identity.owner_key,
+            resource_type="presentation_job",
+            resource_id=job_id,
+            metadata={"filename": filename, "engine": engine.value, "vision": use_vision, "notes_mode": notes_mode.value},
+        )
     background_tasks.add_task(processor.run, job_id)
     return JobPublic.from_record(store.get(job_id))
 
@@ -321,7 +342,7 @@ def retry_job(
         job = store.get(job_key)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Job not found.") from exc
-    if request.app.state.settings.auth_enabled and job.owner not in {None, identity.username}:
+    if request.app.state.settings.auth_enabled and job.owner != identity.owner_key:
         raise HTTPException(status_code=404, detail="Job not found.")
 
     if job.status == JobStatus.completed:
@@ -346,7 +367,7 @@ def retry_job(
 def list_jobs(request: Request, limit: int = 20) -> list[JobPublic]:
     _reject_cross_site_browser_request(request)
     identity = _require_api_access(request)
-    owner = identity.username if request.app.state.settings.auth_enabled else None
+    owner = identity.owner_key if request.app.state.settings.auth_enabled else None
     jobs = request.app.state.store.list_recent(limit=max(1, min(limit, 50)), owner=owner)
     return [JobPublic.from_record(job) for job in jobs]
 
@@ -354,11 +375,15 @@ def list_jobs(request: Request, limit: int = 20) -> list[JobPublic]:
 @router.delete("/jobs/{job_id}", status_code=204)
 def delete_job(request: Request, job_id: UUID):
     _reject_cross_site_browser_request(request)
-    _require_api_access(request, mutate=True)
+    identity = _require_api_access(request, mutate=True)
     job = _owned_job(request, str(job_id))
     if job.status == JobStatus.processing:
         raise HTTPException(status_code=409, detail="A running job cannot be deleted. Wait for it to finish first.")
     request.app.state.store.delete(str(job_id))
+    if request.app.state.db is not None:
+        request.app.state.db.audit(
+            "job_deleted", owner=identity.owner_key, resource_type="presentation_job", resource_id=str(job_id)
+        )
     return Response(status_code=204)
 
 
@@ -373,7 +398,7 @@ def get_job(request: Request, job_id: UUID) -> JobPublic:
 @router.get("/jobs/{job_id}/download")
 def download_job(request: Request, job_id: UUID) -> FileResponse:
     _reject_cross_site_browser_request(request)
-    _require_api_access(request)
+    identity = _require_api_access(request)
     job = _owned_job(request, str(job_id))
 
     if not job.output_path or job.status.value != "completed":
@@ -384,8 +409,15 @@ def download_job(request: Request, job_id: UUID) -> FileResponse:
         raise HTTPException(status_code=410, detail="Output file has expired or is unavailable.")
 
     stem = Path(job.original_filename).stem[:80] or "presentation"
+    suffix = "-with-speaker-notes"
+    while stem.lower().endswith(suffix):
+        stem = stem[: -len(suffix)]
+    if request.app.state.db is not None:
+        request.app.state.db.audit(
+            "job_downloaded", owner=identity.owner_key, resource_type="presentation_job", resource_id=str(job_id)
+        )
     return FileResponse(
         output_path,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        filename=f"{stem}-with-speaker-notes.pptx",
+        filename=f"{stem or 'presentation'}{suffix}.pptx",
     )

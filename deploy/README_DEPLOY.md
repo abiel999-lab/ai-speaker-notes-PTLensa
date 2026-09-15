@@ -1,78 +1,184 @@
-# Deployment — AI Speaker Notes v0.2.8
+# Production Deployment — AI Speaker Notes v1.0.0
 
-## Recommended topology
+Target public URL:
 
-For v0.2.8, serve **both the UI and API from the same Cloud Run service**. This keeps the signed login cookie, CSRF protection, Chat AI, downloads, and job ownership on one origin and avoids fragile cross-origin authentication.
-
-The bundled `local-mvp/frontend-hostinger/` remains a legacy split-frontend fallback. Do not use that static fallback with `AUTH_ENABLED=true` unless you deliberately rework its credentialed CORS/login flow.
-
-## Production safety defaults
-
-- Public Cloud Run endpoint protected by application login.
-- `AUTH_PASSWORD`, `SESSION_SECRET`, and `OPENAI_API_KEY` are stored in Secret Manager.
-- HttpOnly, `SameSite=Strict`, Secure session cookie in production.
-- Session-bound CSRF header for mutating APIs.
-- Max Cloud Run instances: 1 (important because v0.2.8 still uses local file storage/in-process locks).
-- Concurrency: 1.
-- Max upload: 25 MB in the provided deploy script.
-- Macro and embedded OLE/package objects blocked.
-- AI/Vision/context/cost/chat limits enabled.
-- LibreOffice headless renderer.
-
-## First deployment
-
-Create/select a Google Cloud project, enable Billing, open Cloud Shell, and upload/extract the backend source.
-
-Create the required secrets once:
-
-```bash
-read -s -p "OpenAI API key: " OPENAI_KEY; echo
-printf %s "$OPENAI_KEY" | gcloud secrets create openai-api-key --data-file=-
-unset OPENAI_KEY
-
-read -s -p "Choose the AI Speaker Notes login password: " AUTH_PASSWORD; echo
-printf %s "$AUTH_PASSWORD" | gcloud secrets create ai-speaker-auth-password --data-file=-
-unset AUTH_PASSWORD
-
-python - <<'PY' >/tmp/session-secret.txt
-import secrets
-print(secrets.token_urlsafe(48), end="")
-PY
-gcloud secrets create ai-speaker-session-secret --data-file=/tmp/session-secret.txt
-rm -f /tmp/session-secret.txt
+```text
+https://aispeakernote.lensalingkungantech.com
 ```
 
-Set project and deploy:
+## Topology
 
-```bash
-export PROJECT_ID="YOUR_GOOGLE_CLOUD_PROJECT_ID"
-export REGION="asia-southeast2"
-./deploy/cloudrun-deploy.sh
+```text
+User
+  |
+  v
+Hostinger/cPanel DNS
+  |
+  v
+VPS public IP
+  |
+  +-- Nginx :443
+       |
+       +-- /                 -> FastAPI 127.0.0.1:8000
+       +-- /auth/realms/*    -> Keycloak 127.0.0.1:8081
+       +-- /auth/resources/* -> Keycloak 127.0.0.1:8081
+
+Docker private network
+  +-- app
+  +-- PostgreSQL
+  +-- Keycloak
 ```
 
-The deploy script uses `AUTH_USERNAME=admin`. Change that env value in the script or Cloud Run configuration if needed.
+PostgreSQL dan Keycloak tidak diekspos ke internet. Keycloak Admin UI diblokir oleh Nginx dan dikelola melalui SSH port forwarding.
 
-## Verify
+## 1. DNS di Hostinger/cPanel
 
-Open the Cloud Run URL in a browser. You should be redirected to `/login`.
+Buat A record:
 
-Health endpoints remain available for monitoring:
-
-```bash
-curl https://YOUR-CLOUD-RUN-URL/health/live
-curl https://YOUR-CLOUD-RUN-URL/health/ready
+```text
+Type : A
+Name : aispeakernote
+Value: <PUBLIC_IP_VPS>
+TTL  : 300 atau default
 ```
 
-After login, verify:
+Verifikasi dari PC:
 
-1. Dashboard loads with the white/green v0.2.8 UI.
-2. `/how-to` and `/legal` render.
-3. A small PPTX completes successfully.
-4. Download works.
-5. Chat AI can be opened from the result.
-6. Manual job deletion removes the job from history.
-7. Logout returns to `/login`.
+```powershell
+nslookup aispeakernote.lensalingkungantech.com 8.8.8.8
+```
 
-## Important storage limitation
+Jangan lanjut SSL sebelum DNS mengarah ke public IP VPS yang benar.
 
-Cloud Run local `/tmp` storage is ephemeral. v0.2.8 intentionally keeps `--max-instances 1` to avoid cross-instance job races. This is suitable for a controlled MVP/demo, not a multi-tenant production platform. A larger deployment should move job metadata/files to durable shared storage and use a database/queue/distributed lock/rate limiter.
+## 2. Siapkan VPS
+
+Ubuntu 22.04/24.04:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl git nginx certbot python3-certbot-nginx
+```
+
+Install Docker Engine + Compose plugin dari repository resmi Docker jika belum tersedia.
+
+Clone repository:
+
+```bash
+sudo mkdir -p /opt/ai-speaker-notes
+sudo chown "$USER":"$USER" /opt/ai-speaker-notes
+cd /opt/ai-speaker-notes
+git clone <YOUR_GITHUB_REPOSITORY_URL> .
+```
+
+## 3. Production secrets
+
+```bash
+cp deploy/production.env.example .env.prod
+chmod 600 .env.prod
+nano .env.prod
+```
+
+Generate secret contoh:
+
+```bash
+openssl rand -base64 48
+```
+
+Semua `CHANGE_ME` wajib diganti.
+
+## 4. Nginx + HTTPS
+
+Sebelum certificate tersedia, aktifkan HTTP config sementara atau jalankan Certbot setelah A record resolve.
+
+Copy config:
+
+```bash
+sudo cp deploy/nginx/aispeakernote.lensalingkungantech.com.conf /etc/nginx/sites-available/aispeakernote.conf
+sudo ln -sfn /etc/nginx/sites-available/aispeakernote.conf /etc/nginx/sites-enabled/aispeakernote.conf
+```
+
+Untuk issuance pertama, pastikan blok port 80 aktif dan certificate path pada blok 443 belum membuat `nginx -t` gagal. Cara paling mudah adalah:
+
+```bash
+sudo certbot certonly --nginx -d aispeakernote.lensalingkungantech.com
+```
+
+Setelah certificate tersedia:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## 5. Start production stack
+
+```bash
+chmod +x deploy/deploy-v1.sh
+./deploy/deploy-v1.sh
+```
+
+Check:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.production.yml ps
+curl -fsS http://127.0.0.1:8000/health/ready
+```
+
+## 6. Keycloak admin access
+
+Admin Console sengaja tidak diekspos publik. Dari PC lokal:
+
+```bash
+ssh -L 8081:127.0.0.1:8081 <VPS_USER>@<VPS_IP>
+```
+
+Lalu buka:
+
+```text
+http://127.0.0.1:8081/auth/admin/
+```
+
+Login menggunakan `KEYCLOAK_ADMIN_USERNAME` dan `KEYCLOAK_ADMIN_PASSWORD` dari `.env.prod`.
+
+Realm `ai-speaker-notes` dan confidential client `ai-speaker-notes` di-import otomatis saat first startup. Buat user production dari Keycloak Admin Console.
+
+## 7. Production verification
+
+```bash
+curl -I https://aispeakernote.lensalingkungantech.com/
+curl https://aispeakernote.lensalingkungantech.com/health/live
+curl https://aispeakernote.lensalingkungantech.com/health/ready
+```
+
+Browser checklist:
+
+1. Root redirects ke Keycloak saat belum login.
+2. Login theme memakai branding Lensa Lingkungan.
+3. Login berhasil dan Dashboard menampilkan v1.0.0.
+4. User A hanya melihat job/chat User A.
+5. Upload PPTX -> Vision -> output PPTX berhasil.
+6. Existing notes preserve/append/replace tetap bekerja.
+7. Large deck >60 slides tetap diproses dengan batching.
+8. Exact slide RAG dan follow-up same-slide bekerja.
+9. General chat bekerja tanpa PPT.
+10. Logout menghapus local session dan menuju Keycloak logout.
+
+## 8. Backups
+
+Database:
+
+```bash
+./deploy/backup-v1.sh
+```
+
+Selain database dump, snapshot/backup Docker volume `app_data` karena di sana file PPTX/output disimpan.
+
+## 9. Upgrade workflow
+
+```bash
+cd /opt/ai-speaker-notes
+git pull --ff-only
+./deploy/deploy-v1.sh
+```
+
+Jangan melakukan `docker compose down -v` di production karena `-v` menghapus database dan file volume.

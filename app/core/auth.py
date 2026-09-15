@@ -31,6 +31,13 @@ class SessionIdentity:
     csrf: str
     terms_version: str
     expires_at: int
+    subject: str | None = None
+    email: str | None = None
+    display_name: str | None = None
+
+    @property
+    def owner_key(self) -> str:
+        return self.subject or self.username
 
 
 class SessionManager:
@@ -46,13 +53,24 @@ class SessionManager:
         self._secret = secret.encode("utf-8")
         self.max_age_seconds = max_age_seconds
 
-    def issue(self, username: str, *, terms_version: str) -> tuple[str, SessionIdentity]:
+    def issue(
+        self,
+        username: str,
+        *,
+        terms_version: str,
+        subject: str | None = None,
+        email: str | None = None,
+        display_name: str | None = None,
+    ) -> tuple[str, SessionIdentity]:
         now = int(time.time())
         identity = SessionIdentity(
             username=username,
             csrf=secrets.token_urlsafe(24),
             terms_version=terms_version,
             expires_at=now + self.max_age_seconds,
+            subject=subject,
+            email=email,
+            display_name=display_name,
         )
         payload = {
             "u": identity.username,
@@ -60,6 +78,9 @@ class SessionManager:
             "t": identity.terms_version,
             "iat": now,
             "exp": identity.expires_at,
+            "s": identity.subject,
+            "e": identity.email,
+            "n": identity.display_name,
         }
         encoded = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
         signature = _b64url_encode(hmac.new(self._secret, encoded.encode("ascii"), hashlib.sha256).digest())
@@ -78,11 +99,14 @@ class SessionManager:
             csrf = str(payload["c"])
             terms_version = str(payload["t"])
             expires_at = int(payload["exp"])
+            subject = str(payload["s"]) if payload.get("s") else None
+            email = str(payload["e"]) if payload.get("e") else None
+            display_name = str(payload["n"]) if payload.get("n") else None
         except (KeyError, ValueError, TypeError, json.JSONDecodeError):
             return None
         if expires_at < int(time.time()):
             return None
-        return SessionIdentity(username, csrf, terms_version, expires_at)
+        return SessionIdentity(username, csrf, terms_version, expires_at, subject, email, display_name)
 
 
 class LoginRateLimiter:
@@ -129,7 +153,7 @@ class LoginRateLimiter:
 def request_identity(request: Request) -> SessionIdentity | None:
     settings = request.app.state.settings
     if not settings.auth_enabled:
-        return SessionIdentity("local-user", "", settings.terms_version, int(time.time()) + 3600)
+        return SessionIdentity("local-user", "", settings.terms_version, int(time.time()) + 3600, "local-user", None, "Local User")
     manager: SessionManager = request.app.state.session_manager
     return manager.parse(request.cookies.get(COOKIE_NAME))
 

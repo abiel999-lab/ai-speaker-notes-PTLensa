@@ -68,8 +68,8 @@ class PresentationPipeline:
         external_image_count = sum(slide.external_image_count for slide in deck.slides)
         if hidden_slide_count:
             warnings.append(
-                f"Detected {hidden_slide_count} hidden slide(s). Rendering uses a temporary normalized "
-                "copy so hidden slides do not shift slide-number mapping."
+                f"{hidden_slide_count} hidden slide(s) detected and handled automatically. "
+                "A temporary rendering copy keeps slide-to-visual mapping aligned; the original hidden state is preserved."
             )
         if external_image_count:
             warnings.append(
@@ -216,7 +216,7 @@ class PresentationPipeline:
         )
 
         existing = deck.existing_notes_count
-        preserved = existing if options.notes_mode == NotesMode.missing_only else 0
+        preserved = existing if options.notes_mode in {NotesMode.missing_only, NotesMode.append} else 0
         cost = None
         if generated.provider == "openai":
             cost = self.settings.estimated_openai_cost_usd(

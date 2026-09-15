@@ -25,6 +25,7 @@ const fileSelected=document.querySelector('#file-selected');
 const dropZone=document.querySelector('#drop-zone');
 const historyList=document.querySelector('#history-list');
 let lastJobId=null;
+let lastRenderedJob=null;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 function updateModeWarning(){replaceWarning.classList.toggle('hidden',notesMode.value!=='replace_all');}
@@ -46,14 +47,16 @@ document.querySelectorAll('[data-preset]').forEach(btn=>btn.addEventListener('cl
 }));
 
 function metric(label,value){return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;}
+function localizedStatus(value){const key=String(value||'processing').toLowerCase();return t(key)||key;}
 function renderResult(job){
+  lastRenderedJob=job;
   const visual=job.vision_target_count?`${job.vision_rendered_count}/${job.vision_target_count}`:(job.used_vision?'On':'—');
-  resultMetrics.innerHTML=[metric('Notes generated',job.generated_notes_count),metric('Existing preserved',job.preserved_existing_notes_count),metric('Visual coverage',visual),metric('Hidden slides',job.hidden_slide_count||0)].join('');
+  resultMetrics.innerHTML=[metric(t('notesGenerated'),job.generated_notes_count),metric(t('existingPreserved'),job.preserved_existing_notes_count),metric(t('visualCoverage'),visual),metric(t('hiddenSlides'),job.hidden_slide_count||0)].join('');
   resultMetrics.classList.remove('hidden');
   const warnings=job.warnings||[];warningList.innerHTML=warnings.map(w=>`<div class="warning-item">⚠ ${escapeHtml(w)}</div>`).join('');warningList.classList.toggle('hidden',!warnings.length);
   if(job.provider==='openai'){
     const cost=Number(job.estimated_cost_usd||0).toFixed(4),preflight=Number(job.preflight_estimated_cost_usd||0).toFixed(4);
-    usageSummary.textContent=`${job.model} · ${Number(job.total_tokens||0).toLocaleString()} tokens · ${job.request_count} request(s) · estimated $${cost} (preflight $${preflight})`;
+    usageSummary.textContent=`${job.model} · ${Number(job.total_tokens||0).toLocaleString()} ${t('usageTokens')} · ${job.request_count} ${t('usageRequests')} · ${t('usageEstimated')} $${cost} (${t('usagePreflight')} $${preflight})`;
     usageSummary.classList.remove('hidden');
   }else usageSummary.classList.add('hidden');
 }
@@ -65,7 +68,7 @@ async function poll(jobId){
     if(response.status===401){window.location.href='/login';return;}
     if(!response.ok)throw new Error('Unable to read processing status.');
     const job=await response.json();
-    statusTitle.textContent=(job.status||'processing').toUpperCase();statusMessage.textContent=job.error||job.message;statusCount.textContent=job.progress_total?`${job.progress_current}/${job.progress_total}`:'';
+    statusTitle.textContent=localizedStatus(job.status).toUpperCase();statusMessage.textContent=job.error||job.message;statusCount.textContent=job.progress_total?`${job.progress_current}/${job.progress_total}`:'';
     const pct=job.progress_total?(job.progress_current/job.progress_total)*100:5;progressBar.style.width=`${Math.max(5,pct)}%`;
     if(job.status==='completed'){
       retry.classList.add('hidden');renderResult(job);download.href=job.download_url;download.classList.remove('hidden');chatResult.href=`/chat?job=${job.id}`;chatResult.classList.remove('hidden');submit.disabled=false;await loadHistory();return;
@@ -80,16 +83,16 @@ form.addEventListener('submit',async event=>{
   if(!csrfToken) await authState();
   if(notesMode.value==='replace_all'&&!window.confirm(t('confirmReplace')))return;
   if(engine.value==='openai'&&!window.confirm(t('confirmAI')))return;
-  submit.disabled=true;download.classList.add('hidden');chatResult.classList.add('hidden');retry.classList.add('hidden');resultMetrics.classList.add('hidden');usageSummary.classList.add('hidden');warningList.classList.add('hidden');statusBox.classList.remove('hidden');statusTitle.textContent='UPLOADING';statusMessage.textContent=t('uploading');progressBar.style.width='5%';
+  submit.disabled=true;download.classList.add('hidden');chatResult.classList.add('hidden');retry.classList.add('hidden');resultMetrics.classList.add('hidden');usageSummary.classList.add('hidden');warningList.classList.add('hidden');statusBox.classList.remove('hidden');statusTitle.textContent=t('uploadingLabel');statusMessage.textContent=t('uploading');progressBar.style.width='5%';
   try{
     const response=await fetch('/api/v1/jobs',{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch'}),body:new FormData(form)});
     const payload=await response.json();if(response.status===401){window.location.href='/login';return;}if(!response.ok)throw new Error(payload.detail||'Upload failed.');lastJobId=payload.id;await poll(payload.id);
-  }catch(error){statusTitle.textContent='FAILED';statusMessage.textContent=error.message;submit.disabled=false;}
+  }catch(error){statusTitle.textContent=t('failed').toUpperCase();statusMessage.textContent=error.message;submit.disabled=false;}
 });
 
 retry.addEventListener('click',async()=>{
-  if(!lastJobId)return;retry.disabled=true;statusTitle.textContent='RETRYING';statusMessage.textContent='Retrying failed job and reusing safe checkpoints…';
-  try{const response=await fetch(`/api/v1/jobs/${lastJobId}/retry`,{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch',Accept:'application/json'})});const payload=await response.json();if(!response.ok)throw new Error(payload.detail||'Retry failed.');retry.classList.add('hidden');await poll(lastJobId);}catch(error){statusTitle.textContent='FAILED';statusMessage.textContent=error.message;retry.classList.remove('hidden');}finally{retry.disabled=false;}
+  if(!lastJobId)return;retry.disabled=true;statusTitle.textContent=t('retryingLabel');statusMessage.textContent=t('retrying');
+  try{const response=await fetch(`/api/v1/jobs/${lastJobId}/retry`,{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch',Accept:'application/json'})});const payload=await response.json();if(!response.ok)throw new Error(payload.detail||'Retry failed.');retry.classList.add('hidden');await poll(lastJobId);}catch(error){statusTitle.textContent=t('failed').toUpperCase();statusMessage.textContent=error.message;retry.classList.remove('hidden');}finally{retry.disabled=false;}
 });
 
 async function deleteJob(id){
@@ -97,7 +100,10 @@ async function deleteJob(id){
   const res=await fetch(`/api/v1/jobs/${id}`,{method:'DELETE',headers:apiHeaders({'X-Requested-With':'fetch'})});if(!res.ok&&res.status!==204){let p={};try{p=await res.json();}catch{}alert(p.detail||'Delete failed.');return;}await loadHistory();
 }
 async function loadHistory(){
-  try{const res=await fetch('/api/v1/jobs?limit=8',{headers:apiHeaders({Accept:'application/json'})});if(!res.ok)return;const jobs=await res.json();if(!jobs.length){historyList.innerHTML=`<p class="help">${t('noJobs')}</p>`;return;}historyList.innerHTML=jobs.map(job=>`<div class="history-item"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(job.status)} · ${new Date(job.updated_at).toLocaleString()}${job.model?` · ${escapeHtml(job.model)}`:''}</small></div><div class="history-actions">${job.status==='completed'?`<a class="btn secondary" href="/chat?job=${job.id}">${t('openChat')}</a>`:''}<button class="danger-btn" type="button" data-delete-job="${job.id}">${t('delete')}</button></div></div>`).join('');historyList.querySelectorAll('[data-delete-job]').forEach(b=>b.addEventListener('click',()=>deleteJob(b.dataset.deleteJob)));}catch{}
+  try{const res=await fetch('/api/v1/jobs?limit=8',{headers:apiHeaders({Accept:'application/json'})});if(!res.ok)return;const jobs=await res.json();if(!jobs.length){historyList.innerHTML=`<p class="help">${t('noJobs')}</p>`;return;}historyList.innerHTML=jobs.map(job=>`<div class="history-item"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(job.status)} | ${new Date(job.updated_at).toLocaleString()}${job.model?` | ${escapeHtml(job.model)}`:''}</small></div><div class="history-actions">${job.status==='completed'?`<a class="btn primary history-download-btn" href="${job.download_url || `/api/v1/jobs/${job.id}/download`}">${t('download')}</a><a class="btn secondary" href="/chat?job=${job.id}">${t('openChat')}</a>`:''}<button class="danger-btn" type="button" data-delete-job="${job.id}">${t('delete')}</button></div></div>`).join('');historyList.querySelectorAll('[data-delete-job]').forEach(b=>b.addEventListener('click',()=>deleteJob(b.dataset.deleteJob)));}catch{}
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{if(await ensureAuth())loadHistory();});
+
+document.addEventListener('asn:languagechange',()=>{ if(lastRenderedJob) renderResult(lastRenderedJob); loadHistory(); });
+

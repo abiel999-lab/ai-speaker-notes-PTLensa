@@ -1,55 +1,44 @@
-# Project Status — v0.2.5 Hardening
+# Project Status — AI Speaker Notes v1.0.0
 
-## Implemented / passed in build environment
+Status: Production release preparation
+Date: 2026-09-14
 
-- secure PPTX upload and package validation
-- full-deck parser
-- existing speaker-notes protection modes
-- package-preserving OOXML write-back
-- strict integrity gate
-- GPT-5.6 Luna OpenAI provider
-- full-deck briefing + batched Structured Outputs
-- per-job Text-only / Vision
-- PowerPoint + LibreOffice renderer abstraction
-- runtime renderer fallback in auto mode
-- isolated PowerPoint helper process + timeout
-- configurable Vision -> text-only fallback with warning
-- harmless extra-slide filtering
-- narrow missing-slide recovery
-- atomic AI checkpoints
-- compatible checkpoint resume
-- failed-job retry endpoint/UI
-- in-process per-job idempotency lock
-- no-cost preflight estimate
-- configurable per-job cost guardrail before paid generation
-- token/request/actual-estimate reporting
-- **37 automated tests passing**
-- deterministic non-AI verification PASS
+## Completed functional verification
 
-## Operator validation still required
+- Baseline 42-slide generation: PASS
+- Existing notes preserve: PASS
+- Append notes: PASS
+- Replace all notes: PASS
+- Hidden slide handling: PASS
+- Image-only / chart Vision: PASS
+- Large deck 72 slides: PASS
+- Vision 72/72: PASS
+- Automatic batching beyond legacy 60-slide limit: PASS
+- Partial existing notes (17 preserved / 55 generated): PASS
+- Original PPTX remains untouched: PASS
+- Exact-slide RAG: PASS
+- Natural language slide selection: PASS
+- Same-slide follow-up: PASS
+- General Chat: PASS
+- Hallucination guard: PASS
+- Chat character limit: PASS
+- Chat turn limit: PASS
+- Responsive mobile/tablet/desktop: PASS
+- Indonesian/English UI: PASS
 
-1. Upgrade to v0.2.5 while preserving `.env`.
-2. Run `setup.ps1` and `verify.ps1` — expect 37 tests.
-3. Run `diagnose-ai.ps1`.
-4. Run `test-vision-renderer.ps1` — no API cost.
-5. Run `preflight-cost.ps1` against the intended real deck — no API cost.
-6. Run one real Vision job.
-7. Confirm result reports the actual Vision renderer or an explicit text-only fallback warning.
-8. Open output in Microsoft PowerPoint and verify no new Repair/Recover warning.
-9. Verify notes quality and package integrity.
-10. Capture evidence for the MVP documentation.
+## v1.0.0 production work included
 
-## Hardening exit criterion
+- PostgreSQL persistence layer
+- Keycloak OIDC integration with PKCE
+- Per-user server-side ownership isolation
+- PostgreSQL chat history
+- Audit events
+- Durable production file storage layout
+- Docker Compose production stack
+- Nginx production reverse proxy
+- Branded Keycloak theme
+- Production deployment/backup scripts
 
-The v0.2.x MVP can be closed for today's documentation after a clean real-world Vision job passes with:
+## Deployment target
 
-- Vision renderer actually used,
-- all target notes produced,
-- output PPTX opens cleanly,
-- integrity gate passes,
-- cost/token metadata recorded,
-- no unresolved recovery errors.
-
-## Deferred
-
-Per-slide review/regenerate, production frontend, authentication, PostgreSQL/Redis, distributed queue, deployment observability, RAG, approval workflow, enterprise malware scanning.
+`https://aispeakernote.lensalingkungantech.com`

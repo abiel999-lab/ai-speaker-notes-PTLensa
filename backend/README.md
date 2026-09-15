@@ -1,114 +1,73 @@
-# AI Speaker Notes PT Lensa — Complete Source v0.2.8
+# AI Speaker Notes — Production v1.0.0
 
-Bundle ini sengaja dipisah jelas agar tidak membingungkan saat deployment.
+AI Speaker Notes adalah aplikasi produksi PT Lensa Makmur Sejahtera untuk membaca PowerPoint, menganalisis teks dan visual, membuat speaker notes, serta menyediakan Chat AI berbasis RAG per slide.
 
-## Struktur
+## Production stack
 
-```text
-ai-speaker-notes-v0.2.8-COMPLETE/
-├── backend/       Backend FastAPI untuk Google Cloud Run
-├── frontend/      Frontend static untuk Hostinger public_html/aispeakernote
-└── local-mvp/     Full/local MVP untuk development dan testing Windows
-```
+- FastAPI + Jinja UI
+- PostgreSQL untuk user metadata, job metadata, audit trail, dan chat history
+- Keycloak OIDC untuk multi-user login
+- Durable Docker volume untuk PPTX/output/checkpoint/render artifacts
+- LibreOffice headless renderer untuk Vision di Linux
+- OpenAI GPT-5.6 untuk generation dan Chat AI
+- Nginx reverse proxy + HTTPS
+- Domain: `https://aispeakernote.lensalingkungantech.com`
 
-## 1. Backend Cloud Run
+## v1.0.0 guarantees
 
-Folder `backend/` berisi mesin aplikasi:
+- Per-user isolation menggunakan stable Keycloak `sub` sebagai ownership key.
+- Existing notes mendukung preserve, append, dan replace.
+- Hidden slides ditangani dengan temporary normalized rendering copy tanpa mengubah hidden state file asli.
+- Vision tidak memiliki fixed slide-count cap; large decks diproses melalui automatic batching.
+- Chat AI mendukung exact-slide RAG, natural-language slide selection, follow-up same-slide context, general chat, hallucination guard, input/turn limits.
+- PPTX original tidak diubah; output dibuat sebagai file baru.
+- Chat history dan job metadata persistent di PostgreSQL.
+- File artifacts persistent pada mounted storage volume.
+- Secure session cookie, CSRF protection, same-origin protection, security headers, upload package validation, OLE/macro guardrails, and cost guardrails.
 
-- FastAPI
-- PPTX parser
-- OOXML speaker-notes writer
-- OpenAI generator
-- Vision renderer
-- LibreOffice support
-- integrity validation
-- checkpoint/resume
-- cost preflight/guardrail
-- Dockerfile Cloud Run
-- deployment script
-
-Deploy dari folder ini:
-
-```bash
-cd backend
-export PROJECT_ID="ai-speaker-notes-demo"
-export REGION="asia-southeast2"
-./deploy/cloudrun-deploy.sh
-```
-
-Sebelum deploy, Secret Manager harus sudah memiliki:
-
-- `openai-api-key`
-- `ai-speaker-demo-key`
-
-Jangan pernah commit `.env` atau API key.
-
-## 2. Frontend Hostinger
-
-Upload **isi** folder `frontend/` ke:
-
-```text
-public_html/aispeakernote/
-```
-
-Isi utamanya:
-
-```text
-index.html
-app.css
-app.js
-config.js
-```
-
-Setelah Cloud Run selesai, edit `frontend/config.js`:
-
-```js
-window.AISPEAKER_CONFIG = {
-  apiBaseUrl: "https://URL-CLOUD-RUN-KAMU"
-};
-```
-
-URL user tetap:
-
-```text
-https://demo.studioimpactid.com/aispeakernote/
-```
-
-## 3. Local MVP
-
-Folder `local-mvp/` adalah source lengkap untuk development Windows yang sebelumnya sudah diuji dengan PowerPoint renderer.
-
-Contoh:
+## Local development
 
 ```powershell
-cd local-mvp
-.\scripts\setup.ps1
-.\scripts\verify.ps1
-.\scripts\run.ps1
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-## Arsitektur Deployment
+Local mode tetap dapat menggunakan file-store fallback jika `DATABASE_URL` kosong dan `APP_ENV=development`.
+
+## Production deployment
+
+Gunakan file berikut:
 
 ```text
-User
-  ↓
-https://demo.studioimpactid.com/aispeakernote/
-  ↓
-Hostinger frontend
-  ↓ HTTPS
-Google Cloud Run backend
-  ↓
-LibreOffice headless + PPT processing
-  ↓
-OpenAI API
+docker-compose.production.yml
+deploy/production.env.example
+deploy/deploy-v1.sh
+deploy/nginx/aispeakernote.lensalingkungantech.com.conf
+deploy/keycloak/ai-speaker-notes-realm.json
+deploy/keycloak/themes/lensa-ai/
 ```
 
+Lihat `deploy/README_DEPLOY.md` untuk langkah production deployment lengkap.
 
+## Tests
 
-## Upgrade 0.2.8
+```bash
+OPENAI_API_KEY='' AUTH_ENABLED=false DATABASE_URL='' APP_ENV=development python -m pytest -q
+```
 
-v0.2.8 adds the white/green responsive UI, bilingual How to Use and Legal pages, optional login, bounded presentation-aware Chat AI, GPT-5.6 Sol quality mode with hard input/cost limits, manual data deletion, interrupted-job recovery, and additional file-security guardrails. See `docs/UPGRADE-0.2.8.md`.
+Release v1.0.0 harus lulus seluruh regression suite sebelum deployment.
 
-## Hardening 0.2.7
+## Secrets
 
-Release ini menambahkan hidden-slide-aware rendering, partial Vision recovery, visual structure diagnostics, contradiction guard, serta UI bilingual Indonesia/English. Lihat `docs/HARDENING-0.2.7.md`.
+Jangan commit file berikut:
+
+```text
+.env
+.env.prod
+*.pem
+*.key
+backups/
+storage/
+```
+
+Gunakan secret unik dan panjang untuk PostgreSQL, Keycloak, OIDC client, dan application session.

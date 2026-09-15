@@ -1,0 +1,17 @@
+services:
+  keycloak:
+    command:
+      - start-dev
+      - --import-realm
+      - --spi-theme-static-max-age=-1
+      - --spi-theme-cache-themes=false
+      - --spi-theme-cache-templates=false
+
+    environment:
+      KC_HOSTNAME: http://localhost:8082/auth
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /auth
+
+    volumes:
+      - ./deploy/keycloak/themes/lensa-ai:/opt/keycloak/themes/lensa-ai:ro

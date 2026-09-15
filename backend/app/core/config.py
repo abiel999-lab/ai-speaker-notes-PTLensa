@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = "AI Speaker Notes MVP"
+    app_name: str = "AI Speaker Notes"
     app_env: str = "development"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     terms_version: str = "2026-09-13"
     require_terms_acceptance: bool = True
 
+    # v1.0.0 production persistence and identity.
+    database_url: str | None = None
+    auth_provider: str = "local"  # local | keycloak
+    public_base_url: str = "http://127.0.0.1:8000"
+    keycloak_issuer: str = ""
+    keycloak_internal_issuer: str = ""
+    keycloak_client_id: str = "ai-speaker-notes"
+    keycloak_client_secret: SecretStr | None = None
+
     storage_dir: Path = Path("storage/jobs")
     max_upload_mb: int = Field(default=50, ge=1, le=500)
     max_zip_entries: int = Field(default=10_000, ge=100, le=100_000)
@@ -46,7 +55,7 @@ class Settings(BaseSettings):
     # OpenAI is opt-in. OPENAI_USE_VISION enables the feature; each job can still
     # choose text-only or vision mode from the UI.
     openai_api_key: SecretStr | None = None
-    # GPT-5.6 Sol is the quality-first default in v0.2.8. Limits below keep usage bounded.
+    # Model choice is configurable. Large decks are handled with automatic batching.
     openai_model: str = "gpt-5.6-sol"
     openai_reasoning_effort: str = "medium"
     openai_use_vision: bool = True
@@ -63,8 +72,6 @@ class Settings(BaseSettings):
     # not a billing quote.
     openai_max_estimated_job_cost_usd: float = Field(default=1.00, ge=0, le=1000)
     openai_vision_estimated_input_tokens_per_slide: int = Field(default=1100, ge=0, le=10000)
-    openai_max_slides_per_job: int = Field(default=80, ge=1, le=500)
-    openai_max_vision_slides_per_job: int = Field(default=60, ge=1, le=500)
     openai_max_source_chars_per_job: int = Field(default=180_000, ge=1_000, le=2_000_000)
 
     # File-aware chat uses the same strong model but intentionally receives a narrow context.
@@ -100,12 +107,25 @@ class Settings(BaseSettings):
     def auth_configured(self) -> bool:
         if not self.auth_enabled:
             return True
+        session_ok = bool(self.session_secret and len(self.session_secret.get_secret_value()) >= 32)
+        if self.auth_provider.lower() == "keycloak":
+            return bool(
+                session_ok
+                and self.public_base_url.startswith("http")
+                and self.keycloak_issuer.startswith("http")
+                and self.keycloak_client_id.strip()
+                and self.keycloak_client_secret
+                and self.keycloak_client_secret.get_secret_value().strip()
+            )
         return bool(
-            self.auth_password
+            session_ok
+            and self.auth_password
             and self.auth_password.get_secret_value().strip()
-            and self.session_secret
-            and len(self.session_secret.get_secret_value()) >= 32
         )
+
+    @property
+    def keycloak_enabled(self) -> bool:
+        return self.auth_enabled and self.auth_provider.lower() == "keycloak"
 
     @property
     def demo_access_configured(self) -> bool:
@@ -122,3 +142,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+

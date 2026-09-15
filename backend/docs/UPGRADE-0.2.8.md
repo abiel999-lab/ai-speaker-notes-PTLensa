@@ -29,8 +29,8 @@ Environment variables:
 
 ```text
 AUTH_ENABLED=true
-AUTH_USERNAME=<set-at-deploy-time>
-AUTH_PASSWORD=<set-via-secret-manager>
+AUTH_USERNAME=admin
+AUTH_PASSWORD=<secret>
 SESSION_SECRET=<random value at least 32 chars>
 SESSION_HOURS=8
 TERMS_VERSION=2026-09-13
@@ -49,15 +49,13 @@ Security behavior:
 
 This remains a **single-account MVP**, not a multi-tenant identity platform. Do not treat it as a replacement for enterprise SSO, Keycloak, or a full user database.
 
-## Strong model with bounded input
+## Strong model with automatic batching
 
 The default AI model changes to `gpt-5.6-sol` with medium reasoning. The application does not expose the model to unlimited input.
 
 Default limits:
 
 ```text
-OPENAI_MAX_SLIDES_PER_JOB=80
-OPENAI_MAX_VISION_SLIDES_PER_JOB=60
 OPENAI_MAX_SOURCE_CHARS_PER_JOB=180000
 OPENAI_MAX_ESTIMATED_JOB_COST_USD=1.00
 custom instructions <= 1500 characters
