@@ -1,0 +1,17 @@
+AI Speaker Notes Admin Privacy Controls v13
+
+Changes:
+- Presentations & Chat can be filtered by user.
+- Chat thread lists expose metadata only; message contents and previews are hidden by default.
+- Viewing conversation content requires an explicit reason:
+  - Customer support.
+  - Bug investigation.
+  - Security review.
+  - Legal / compliance.
+- Every content reveal writes admin_chat_content_accessed to audit_events with admin identity, target user, reason, note, and message count.
+- User Management detail now shows chat metadata only and links to the privacy-controlled activity page.
+- Per-user activity metrics reflect the selected user's jobs and chat threads.
+- No database schema migration is required; existing audit_events table is used.
+
+Next planned step:
+- Connect the admin application to the same production PostgreSQL used by AI Speaker Notes so presentation and chat activity appear here.

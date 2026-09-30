@@ -1,0 +1,12 @@
+AI Speaker Notes Admin v16
+
+Adds an admin-only ID / EN language switcher.
+
+Behavior:
+- EN is the default language.
+- Selecting ID translates the admin UI to Bahasa Indonesia.
+- The choice is stored in browser localStorage and persists across admin pages/reloads.
+- Switching back to EN restores the original English server-rendered UI.
+- Dynamic admin content is translated as it is rendered.
+- Dates follow id-ID or en-US formatting based on the selected language.
+- The user-facing AI Speaker Notes app is unchanged.

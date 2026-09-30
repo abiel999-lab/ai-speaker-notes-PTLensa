@@ -1,0 +1,9 @@
+AI Speaker Notes Admin Unauthorized Recovery v14
+
+- Non-admin accounts that authenticate against ai-speaker-admin-login are redirected to /admin/unauthorized instead of receiving raw JSON 403.
+- The recovery page explains that the account is authenticated but lacks the signed Keycloak admin role.
+- "Sign in with another admin account" uses a short-lived signed restart token.
+- Restart clears the local application session and OIDC state cookies.
+- Restart sends the browser to Keycloak RP-initiated logout using ai-speaker-admin-login, then returns to /admin so a fresh admin login is required.
+- Unauthorized and reauthentication attempts are audit-loggable when PostgreSQL is configured.
+- Normal AI Speaker Notes user login flow is unchanged.

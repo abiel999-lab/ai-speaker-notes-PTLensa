@@ -1,0 +1,14 @@
+AI Speaker Notes Admin Dashboard v10
+
+Changes:
+- Dedicated professional admin layout with left sidebar, sticky command bar, metric cards, large user table, and user detail workspace.
+- Keycloak management connection status indicator.
+- Clear realm-management permission diagnostic listing the exact roles required.
+- Dedicated admin OIDC flow now adds prompt=login so opening /admin asks for administrator authentication even when a user SSO session already exists.
+- User login remains normal SSO.
+- Existing CSRF, role checks, session validation, CRUD endpoints, PostgreSQL data, presentation history, and chat history are preserved.
+
+Required Keycloak service-account roles for client ai-speaker-admin:
+- query-users
+- view-users
+- manage-users

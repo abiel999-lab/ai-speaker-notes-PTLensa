@@ -1,0 +1,11 @@
+AI Speaker Notes local login patch v7
+
+Purpose:
+- Keep Keycloak authorization-code + PKCE + signed state.
+- Validate the Keycloak access token cryptographically and bind it to ai-speaker-notes.
+- Load the user's OpenID Connect profile from Keycloak userinfo.
+- Stop depending on custom/optional ID-token audience mappings for local sign-in.
+- Keep admin authorization based only on the validated Keycloak role `admin`.
+
+Extract this ZIP into the parent folder containing ai-speaker-notes-admin-local and overwrite files.
+The ZIP does not contain .env, secrets, database files, storage, or virtualenv files.

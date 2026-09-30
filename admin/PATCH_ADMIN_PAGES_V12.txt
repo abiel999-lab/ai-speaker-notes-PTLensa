@@ -1,0 +1,20 @@
+AI Speaker Notes Admin v12
+
+Changes:
+- Sidebar is now fixed to the full viewport height; no white gap below navigation on tall pages.
+- /admin remains the overview page.
+- /admin/users is now a real User Management page.
+- /admin/activity is now a real Presentations & Chat page.
+- Sidebar navigation uses real URLs and active states instead of in-page hash anchors.
+- Added global admin activity API for presentation jobs and saved chat threads.
+- Added database helpers for global job/chat activity lists.
+- Admin JavaScript now works page-by-page without assuming the user table exists on every page.
+- Overview metrics use the Keycloak-visible user count while activity metrics come from PostgreSQL.
+- Added recent presentation and chat activity panels with proper empty states.
+- Kept the existing logo, Keycloak management status, user CRUD, and admin session flow.
+
+Validation:
+- Full pytest suite PASS.
+- Python compileall PASS.
+- admin.js node syntax check PASS.
+- admin.html Jinja parse PASS.

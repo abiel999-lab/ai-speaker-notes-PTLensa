@@ -1,23 +1,69 @@
+# Production secrets.
 .env
 .env.*
+*.env
+staging.env
+production.env
+
+# Safe examples.
 !.env.example
 !.env.production.example
-!deploy/production.env.example
-.venv/
+!.env.cloudrun.example
+!*.env.example
+
+# Python.
 __pycache__/
 *.py[cod]
+*.pyo
 .pytest_cache/
+.mypy_cache/
 .ruff_cache/
-storage/
-backups/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Virtual environments.
+.venv/
+venv/
+
+# Runtime data.
+data/
+jobs/
+storage/jobs/
+uploads/
+tmp/
 *.log
+*.pid
+
+# Backup files.
+*.backup
+*.backup-*
+*.bak
+*.old
+*~
+
+# Private keys / certificates.
 *.pem
 *.key
+*.p12
+*.pfx
+
+# Editors / OS.
+.vscode/
+.idea/
 .DS_Store
-.patch-backups/
-AI_Speaker_Notes_Chat_Background_Indicator_Fix/
-AI_Speaker_Notes_Chat_Background_Indicator_Fix_v2/
-AI_Speaker_Notes_History_Download_Fix/
-testing_evidence/
-examples/vision-rendered/
+Thumbs.db
+
+# Build output.
+dist/
+build/
+
+# Additional editor/debug backups.
 *.bak*
+*.backup*
+*.orig*
+
+# Additional editor/debug backups.
+*.bak*
+*.backup*
+*.orig*

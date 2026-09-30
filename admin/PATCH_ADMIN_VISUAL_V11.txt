@@ -1,0 +1,9 @@
+AI Speaker Notes Admin Visual Refresh v11
+
+Scope of this patch:
+- Reworked the admin dashboard shell into a more conventional SaaS administration layout.
+- Added the Lensa Lingkungan logo to the administration sidebar.
+- Improved visual hierarchy across the sidebar, command bar, dashboard header, metric cards, user table, and detail panel.
+- Preserved all existing admin API IDs and JavaScript hooks.
+- Added lightweight activity preview cards only; dedicated navigation pages remain a separate follow-up task.
+- No database, Keycloak, payment, Google, Apple, or user-app data integration behavior was changed by this visual-only patch.

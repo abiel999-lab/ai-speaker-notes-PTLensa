@@ -1,0 +1,16 @@
+AI Speaker Notes Admin v21 — production data performance
+
+Root cause found in the supplied project:
+- User Management performed list_users + user_job_counts + admin_counts as separate remote DB operations.
+- admin_counts itself issued multiple COUNT statements sequentially.
+- Presentations & Chat simultaneously requested the database user directory and activity, duplicating remote reads.
+- The activity page also started Keycloak directory enrichment even though Keycloak-only users have no presentation/chat data.
+- Browser fetches had no timeout, so a slow/stale SSH tunnel could look like an infinite loading state.
+
+Fix:
+- Batch database work into directory_snapshot/activity_snapshot using one DB checkout.
+- Collapse dashboard counts into one SQL statement.
+- Use NullPool for SSH-tunnel PostgreSQL so stale pooled sockets are not reused.
+- Activity page now receives its user filter and activity data in one API response.
+- Keycloak enrichment is only background work on User Management.
+- Add browser timeouts and server-side elapsed_ms logging.

@@ -1,0 +1,7 @@
+Admin performance + logout reliability v18
+- Native server-side POST logout form, no JavaScript dependency.
+- Clears local auth cookies before redirecting through the dedicated admin Keycloak client.
+- Reuses one HTTP connection pool for Keycloak Admin API calls.
+- Adds short user/count caches and invalidates them on user mutations.
+- Loads Presentations & Chat activity in parallel with the Keycloak directory.
+- Reduces admin directory safety cap from 2000 to 500 users per refresh.

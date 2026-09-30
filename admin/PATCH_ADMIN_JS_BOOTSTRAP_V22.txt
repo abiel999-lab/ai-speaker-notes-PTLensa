@@ -1,0 +1,12 @@
+AI Speaker Notes Admin v22
+
+Root cause of stuck loading:
+- common.js declares global function t().
+- admin.js declared global const t.
+- Classic browser scripts share one global lexical environment, so admin.js failed before executing with: SyntaxError: Identifier 't' has already been declared.
+- Because admin.js never executed, no /api/v1/admin/summary, /users, or /activity request was sent.
+
+Fix:
+- Remove common.js from admin.html.
+- Isolate admin.js in an IIFE.
+- Cache-bust admin.js as v=2210.

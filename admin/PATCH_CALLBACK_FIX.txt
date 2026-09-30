@@ -1,0 +1,20 @@
+AI Speaker Notes Admin Local - Keycloak callback fix
+
+What changed:
+- Replayed/stale Keycloak authorization codes no longer leave the browser on 502.
+- One stale-code recovery automatically starts a brand-new OIDC flow.
+- A second invalid_grant stops cleanly instead of looping.
+- Successful callbacks clear the recovery cookie.
+- No .env or secrets are included in this patch.
+
+Apply:
+Extract this ZIP into:
+D:\kerja\PT_lensa_Makmur_Sejahtera\folder_kerja\
+Allow overwrite of ai-speaker-notes-admin-local\app\api\auth_routes.py
+
+Then restart:
+.\scripts\run-admin-local.ps1
+
+Open a NEW URL:
+http://127.0.0.1:8001/admin
+Do not refresh or reuse an old /auth/callback?...code=... URL.

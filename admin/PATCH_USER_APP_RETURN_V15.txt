@@ -1,0 +1,7 @@
+AI Speaker Notes Admin v15 — User app return fix
+
+- Adds USER_APP_URL (default: https://aispeakernote.lensalingkungantech.com).
+- Unauthorized "Return to AI Speaker Notes" now opens the real user application instead of local /.
+- Admin sidebar "Open user app" uses the same canonical URL.
+- Prevents the local admin process from unnecessarily starting the ai-speaker-notes OIDC callback flow when leaving admin.
+- .env is not shipped in the ZIP.

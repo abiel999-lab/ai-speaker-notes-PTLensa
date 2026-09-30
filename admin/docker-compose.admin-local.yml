@@ -1,0 +1,21 @@
+services:
+  postgres-admin-local:
+    image: postgres:17-alpine
+    container_name: ai-speaker-notes-admin-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aispeaker
+      POSTGRES_PASSWORD: aispeaker_local_dev
+      POSTGRES_DB: aispeaker
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - admin_local_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aispeaker -d aispeaker"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  admin_local_postgres:

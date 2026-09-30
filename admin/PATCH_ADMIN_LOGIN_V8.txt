@@ -1,0 +1,14 @@
+AI Speaker Notes Admin Login v8
+
+Purpose:
+- Normal users continue using Keycloak client ai-speaker-notes and /auth/callback.
+- Administrators use dedicated client ai-speaker-admin-login and /auth/admin/callback.
+- The existing ai-speaker-admin client remains service-account only for Keycloak Admin API.
+- Admin callback refuses to issue an app session unless the signed Keycloak token contains realm/client role configured by ADMIN_ROLE (default: admin).
+
+Required local .env values (do not commit secrets):
+KEYCLOAK_ADMIN_LOGIN_CLIENT_ID=ai-speaker-admin-login
+KEYCLOAK_ADMIN_LOGIN_CLIENT_SECRET=<copy from Keycloak Credentials>
+
+Keycloak redirect URI for ai-speaker-admin-login:
+http://127.0.0.1:8001/auth/admin/callback

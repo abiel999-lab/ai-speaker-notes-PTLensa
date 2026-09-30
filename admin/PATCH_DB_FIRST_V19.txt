@@ -1,0 +1,7 @@
+AI Speaker Notes Admin v19 — DB-first production data
+
+- Admin KPIs come directly from APPLICATION_DATABASE_URL and no longer wait for Keycloak.
+- User Management paints production PostgreSQL users first, then enriches in the background with Keycloak-only accounts and live enabled/disabled state.
+- Presentations & Chat reads production jobs/chat immediately from APPLICATION_DATABASE_URL.
+- Keycloak health/status is checked separately in a lightweight background request.
+- Existing create/edit/ban/unban/delete operations remain backed by the Keycloak Admin API.

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#087443">
+  <title>Support | {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=1007">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+  <link rel="shortcut icon" type="image/png" href="/static/favicon.png?v=0284">
+  <link rel="apple-touch-icon" href="/static/favicon.png?v=0284">
+</head>
+<body data-page="support">
+<header class="topbar">
+  <nav class="nav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="AI Speaker Notes home"><span>AI Speaker Notes<small>v{{ version }}</small></span></a>
+    <div class="nav-links">
+      <a href="/">Dashboard</a>
+      <a href="/chat">AI Chat</a>
+      <a href="/how-to">How to Use</a>
+      <a class="active" href="/support">Support</a>
+      <a href="/legal">Legal</a>
+    </div>
+    <div class="nav-actions">
+      {% if auth_enabled and authenticated %}
+      <div class="account-actions">
+        <span class="plan-chip" data-plan-chip>Free</span>
+        <div class="account-chip" title="{{ username }}">
+          <span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span>
+          <span class="account-name">{{ username }}</span>
+        </div>
+        <button class="logout-btn" type="button" data-support-logout aria-label="Sign out">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Sign out</span>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </nav>
+</header>
+
+<main class="shell support-shell">
+  <section class="page-hero support-hero">
+    <p class="eyebrow"><span class="dot"></span>Notepreso support</p>
+    <h1>How can we help?</h1>
+    <p>Get help with technical issues, billing, or refunds.</p>
+  </section>
+
+  {% if status == 'sent' %}
+  <div class="support-alert success" role="status">
+    <strong>Your request was sent successfully.</strong>
+    <span>Reference: {{ reference }}. Keep this reference if you contact us again about the same request.</span>
+  </div>
+  {% elif status == 'smtp_failed' %}
+  <div class="support-alert error" role="alert">
+    <strong>We couldn’t send your request right now.</strong>
+    <span>Please email us directly instead.</span>
+  </div>
+  {% elif status == 'invalid' %}
+  <div class="support-alert error" role="alert">
+    <strong>Please check the form.</strong>
+    <span>{{ error_message }}</span>
+  </div>
+  {% elif status == 'rate_limited' %}
+  <div class="support-alert error" role="alert">
+    <strong>Too many requests were submitted.</strong>
+    <span>Please email us directly.</span>
+  </div>
+  {% endif %}
+
+  <section class="support-grid">
+    <article class="content-card support-form-card">
+      <div class="support-card-heading">
+        <div>
+          <h2>Send a request</h2>
+        </div>
+      </div>
+
+      <form method="post" action="/support" class="support-form" autocomplete="on">
+        <div class="support-two-col">
+          <label class="field">Request type
+            <select name="request_type" required>
+              {% for value, label in request_types.items() %}
+              <option value="{{ value }}" {% if form.request_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="field">Full name
+            <input type="text" name="name" value="{{ form.name }}" required minlength="2" maxlength="120" autocomplete="name">
+          </label>
+        </div>
+
+        <div class="support-two-col">
+          <label class="field">Email address
+            <input type="email" name="email" value="{{ form.email }}" required maxlength="254" autocomplete="email">
+          </label>
+          <label class="field">Transaction or invoice ID <span class="help">Optional</span>
+            <input type="text" name="transaction_id" value="{{ form.transaction_id }}" maxlength="120" placeholder="Recommended for refund requests">
+          </label>
+        </div>
+
+        <label class="field">Message
+          <textarea name="message" required minlength="10" maxlength="5000" rows="8" placeholder="Describe the issue or refund request clearly.">{{ form.message }}</textarea>
+          <span class="help">Do not include passwords, API keys, card numbers, or other secrets.</span>
+        </label>
+
+        <div class="support-honeypot" aria-hidden="true">
+          <label>Company website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+        </div>
+
+        <div class="form-actions support-actions">
+          <button class="primary" type="submit">Send to Support</button>
+        </div>
+      </form>
+    </article>
+
+    <aside class="support-side">
+      <article class="content-card support-manual-card">
+        <h2>Email support</h2>
+        <p>Prefer email? Contact us directly.</p>
+        <a class="btn secondary support-mailto" href="{{ mailto_url }}">Email Support</a>
+        <div class="support-address">
+          <span>Support inbox</span>
+          <strong>{{ support_email }}</strong>
+        </div>
+      </article>
+
+      <article id="refund" class="content-card support-info-card">
+        <span class="feature-number">REFUNDS</span>
+        <h2>Refund requests</h2>
+        <p>Select <strong>Refund request</strong> and add your transaction or invoice ID.</p>
+      </article>
+
+      <article class="content-card support-info-card">
+        <span class="feature-number">SECURITY</span>
+        <h2>Keep secrets out of support messages</h2>
+        <p>Never include passwords, verification codes, API keys, private keys, or full card details.</p>
+      </article>
+    </aside>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>AI Speaker Notes v{{ version }}</span>
+    <span><a href="/">Dashboard</a> &middot; <a href="/how-to">How to Use</a> &middot; <a href="/legal">Terms & Privacy</a></span>
+  </div>
+</footer>
+<script src="/static/common.js?v=1020" defer></script>
+<script src="/static/support.js?v=1001" defer></script>
+</body>
+</html>
