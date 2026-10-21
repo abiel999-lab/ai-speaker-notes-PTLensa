@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08281d">
+  <title>Access denied · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=1010">
+  <link rel="stylesheet" href="/static/admin.css?v=1410">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+</head>
+<body class="admin-unauthorized-body">
+  <main class="admin-unauthorized-shell">
+    <section class="admin-unauthorized-brand" aria-label="AI Speaker Notes Administration">
+      <div class="admin-unauthorized-brand-lockup">
+        <span class="admin-unauthorized-logo"><img src="/static/admin-logo.png?v=1210" alt="Lensa Lingkungan"></span>
+        <div>
+          <strong>AI Speaker Notes</strong>
+          <span>Administration</span>
+        </div>
+      </div>
+      <div class="admin-unauthorized-brand-copy">
+        <span class="admin-unauthorized-eyebrow">ADMINISTRATIVE ACCESS</span>
+        <h1>Administrator permission is required.</h1>
+        <p>This sign-in was valid, but the account does not have access to the AI Speaker Notes administration workspace.</p>
+      </div>
+      <div class="admin-unauthorized-security-note">
+        <span></span>
+        <p>Access is granted only to accounts with the signed Keycloak <strong>admin</strong> role.</p>
+      </div>
+    </section>
+
+    <section class="admin-unauthorized-panel">
+      <div class="admin-unauthorized-card">
+        <div class="admin-unauthorized-status-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5.25 3.84 9.74 9 10 5.16-.26 9-4.75 9-10V6l-9-4Zm0 2.18L19 7.3V12c0 4.09-2.86 7.67-7 8-4.14-.33-7-3.91-7-8V7.3l7-3.12Zm-1 4.32h2V13h-2V8.5Zm0 6h2v2h-2v-2Z"/></svg>
+        </div>
+        <span class="admin-unauthorized-kicker">ACCESS NOT AUTHORIZED</span>
+        <h2>Sign in again with an administrator account.</h2>
+        <p class="admin-unauthorized-description">The current Keycloak session can be ended safely. You will then be returned to the admin sign-in page and asked to authenticate again.</p>
+
+        {% if username %}
+        <div class="admin-unauthorized-current-user">
+          <span>Current session</span>
+          <strong>{{ username }}</strong>
+          <small>No administrator permission detected.</small>
+        </div>
+        {% endif %}
+
+        <form method="post" action="/auth/admin/restart" class="admin-unauthorized-actions">
+          <input type="hidden" name="restart_token" value="{{ restart_token }}">
+          <button type="submit" class="admin-unauthorized-primary">
+            <span>Sign in with another admin account</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 5 7 7-7 7-1.41-1.41L16.17 13H4v-2h12.17l-4.58-4.59L13 5Z"/></svg>
+          </button>
+          <a href="{{ user_app_url }}/" class="admin-unauthorized-secondary" rel="noopener">Return to AI Speaker Notes</a>
+        </form>
+
+        <p class="admin-unauthorized-footnote">Continuing will clear the local application session and request logout from the current Keycloak SSO session before admin authentication starts again.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

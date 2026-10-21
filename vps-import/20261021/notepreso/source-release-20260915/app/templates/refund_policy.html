@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#087443">
+  <title>Kebijakan Refund · {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=1071">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+</head>
+<body data-page="refund-policy">
+<header class="topbar"><nav class="nav">
+  <a class="brand" href="/"><span>AI Speaker Notes<small>v{{ version }}</small></span></a>
+  <div class="nav-links"><a href="/">Dashboard</a><a href="/chat">Chat AI</a><a href="/how-to">Cara Pakai</a><a href="/legal">Legal</a><a class="active" href="/refund-policy">Refund</a></div>
+  <div class="nav-actions">{% if auth_enabled and authenticated %}<div class="account-actions"><span class="plan-chip" data-plan-chip>Free</span><div class="account-chip" title="{{ username }}"><span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span><span class="account-name">{{ username }}</span></div><button class="logout-btn" type="button" data-logout aria-label="Keluar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Keluar</span></button></div>{% endif %}</div>
+</nav></header>
+
+<main class="shell refund-shell">
+  <section class="page-hero refund-hero">
+    <p class="eyebrow"><span class="dot"></span>Kebijakan Refund · {{ refund_policy_date }}</p>
+    <h1>Pengajuan refund NotePreso</h1>
+    <p>Refund diajukan melalui email agar setiap permintaan memiliki alasan, identitas transaksi, dan bukti pembayaran yang dapat diverifikasi.</p>
+  </section>
+
+  <section class="refund-grid">
+    <article class="content-card refund-card">
+      <span class="refund-step">01</span>
+      <h2>Kirim email ke billing</h2>
+      <p>Kirim permintaan ke <a href="mailto:{{ refund_email }}"><strong>{{ refund_email }}</strong></a> menggunakan email yang terkait dengan akun NotePreso jika memungkinkan.</p>
+      <a class="btn primary refund-mail-btn" href="mailto:{{ refund_email }}?subject=Refund%20Request%20-%20NotePreso%20-%20%5BInvoice%2FTransaction%20ID%5D&body=Nama%3A%0AEmail%20akun%20NotePreso%3A%0AProvider%20pembayaran%20%28Xendit%2FPaddle%29%3A%0AInvoice%2FTransaction%20ID%3A%0ATanggal%20pembayaran%3A%0AJumlah%20pembayaran%3A%0AAlasan%20pengajuan%20refund%3A%0A%0ALampirkan%20invoice%20atau%20bukti%20pembayaran%20sebelum%20mengirim%20email.">Buka email refund</a>
+    </article>
+
+    <article class="content-card refund-card">
+      <span class="refund-step">02</span>
+      <h2>Data yang wajib disertakan</h2>
+      <ul class="refund-list">
+        <li>Nama dan email akun NotePreso.</li>
+        <li>Provider pembayaran: Xendit atau Paddle.</li>
+        <li>Invoice ID / Transaction ID jika tersedia.</li>
+        <li>Tanggal dan jumlah pembayaran.</li>
+        <li>Alasan pengajuan pengembalian dana yang jelas.</li>
+        <li><strong>Invoice, receipt, atau bukti pembayaran sebagai lampiran.</strong></li>
+      </ul>
+    </article>
+
+    <article class="content-card refund-card">
+      <span class="refund-step">03</span>
+      <h2>Proses peninjauan</h2>
+      <p>Permintaan diperiksa berdasarkan bukti transaksi, riwayat penggunaan layanan, kendala teknis, kemungkinan duplikasi pembayaran, dan ketentuan provider pembayaran. NotePreso dapat meminta informasi tambahan bila verifikasi belum cukup.</p>
+    </article>
+  </section>
+
+  <section class="content-card refund-policy-card">
+    <h2>Kebijakan refund</h2>
+    <div class="refund-policy-sections">
+      <div><h3>Pembelian awal</h3><p>Permintaan refund atas pembayaran pertama dapat diajukan dalam 7 hari setelah transaksi dan akan ditinjau secara kasus per kasus. Pengajuan tidak otomatis berarti refund disetujui.</p></div>
+      <div><h3>Masalah teknis serius</h3><p>Refund penuh atau sebagian dapat dipertimbangkan jika layanan gagal diberikan secara material dan masalah tidak dapat diselesaikan dalam waktu yang wajar.</p></div>
+      <div><h3>Duplikasi atau salah tagih</h3><p>Pembayaran ganda atau kesalahan penagihan yang terverifikasi dapat dikembalikan.</p></div>
+      <div><h3>Penggunaan layanan</h3><p>Karena pemrosesan AI menimbulkan biaya komputasi dan model secara langsung, penggunaan yang sudah substansial dapat menjadi faktor dalam keputusan refund, kecuali hukum yang berlaku menentukan lain.</p></div>
+      <div><h3>Perpanjangan</h3><p>Pembayaran renewal umumnya tidak dapat dikembalikan kecuali diwajibkan hukum atau disetujui sesuai kebijakan provider. Pembatalan langganan mencegah tagihan berikutnya.</p></div>
+      <div><h3>Hak konsumen</h3><p>Kebijakan ini tidak membatasi hak konsumen yang bersifat wajib berdasarkan hukum yang berlaku.</p></div>
+    </div>
+  </section>
+
+  <section class="content-card refund-provider-card">
+    <h2>Xendit & Paddle</h2>
+    <p><strong>Xendit:</strong> jika channel mendukung refund, dana dikembalikan ke metode pembayaran asli. Dukungan dan periode refund dapat berbeda menurut channel.</p>
+    <p><strong>Paddle:</strong> transaksi Paddle tunduk pada proses dan kebijakan refund Paddle sebagai Merchant of Record. Jika refund disetujui untuk transaksi Paddle, pengembalian diproses melalui Paddle dan bukan melalui transfer langsung dari NotePreso.</p>
+    <div class="info refund-note"><strong>Catatan:</strong> jangan mengirim password, OTP, nomor kartu lengkap, CVV, atau secret lain melalui email. Bukti pembayaran cukup menampilkan informasi transaksi yang diperlukan.</div>
+  </section>
+
+  <section class="content-card refund-template-card">
+    <h2>Format email yang disarankan</h2>
+    <pre class="refund-email-template">Subject: Refund Request - NotePreso - [Invoice/Transaction ID]
+
+Nama:
+Email akun NotePreso:
+Provider pembayaran: Xendit / Paddle
+Invoice / Transaction ID:
+Tanggal pembayaran:
+Jumlah pembayaran:
+Alasan pengajuan refund:
+
+Lampiran: invoice / receipt / bukti pembayaran</pre>
+    <p class="help">Permintaan tanpa alasan atau tanpa bukti pembayaran dapat ditunda sampai informasi yang diperlukan diterima.</p>
+  </section>
+</main>
+
+<footer class="footer"><div class="footer-inner"><span>NotePreso · Refund Policy {{ refund_policy_date }}</span><span><a href="/legal">Terms & Privacy</a> · <a href="/">Dashboard</a></span></div></footer>
+<script src="/static/common.js?v=1071" defer></script>
+</body>
+</html>

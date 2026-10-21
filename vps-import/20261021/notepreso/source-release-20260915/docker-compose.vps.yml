@@ -1,0 +1,76 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: ai-speaker-notes:1.0.0
+    container_name: ai-speaker-notes-v1
+    restart: unless-stopped
+
+    environment:
+      APP_NAME: AI Speaker Notes
+      APP_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+
+      PUBLIC_BASE_URL: https://aispeakernote.lensalingkungantech.com
+      FRONTEND_ORIGINS: https://aispeakernote.lensalingkungantech.com
+
+      STORAGE_DIR: /data/jobs
+
+      DATABASE_URL: postgresql+psycopg://ai_speaker_notes:${APP_DB_PASSWORD}@lensa-iot-postgres:5432/ai_speaker_notes
+
+      AUTH_ENABLED: "true"
+      AUTH_PROVIDER: keycloak
+
+      SESSION_SECRET: ${APP_SESSION_SECRET}
+      SESSION_HOURS: "8"
+
+      REQUIRE_TERMS_ACCEPTANCE: "false"
+      TERMS_VERSION: "2026-09-14"
+
+      KEYCLOAK_ISSUER: https://identity-iot.studioimpactid.com/realms/aispeaker
+      KEYCLOAK_INTERNAL_ISSUER: http://lensa-iot-keycloak:8080/realms/aispeaker
+      KEYCLOAK_CLIENT_ID: ai-speaker-notes
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      OPENAI_MODEL: gpt-5.6-sol
+      OPENAI_CHAT_MODEL: gpt-5.6-sol
+      OPENAI_REASONING_EFFORT: medium
+      OPENAI_CHAT_REASONING_EFFORT: medium
+      OPENAI_USE_VISION: "true"
+      OPENAI_BATCH_SIZE: "4"
+      OPENAI_TIMEOUT_SECONDS: "180"
+      OPENAI_MAX_ESTIMATED_JOB_COST_USD: "2.50"
+      OPENAI_MAX_SOURCE_CHARS_PER_JOB: "300000"
+
+      CHAT_MAX_MESSAGE_CHARS: "2000"
+      CHAT_MAX_TURNS_PER_JOB: "20"
+
+      SLIDE_RENDERER: libreoffice
+      RENDER_DPI: "120"
+
+      MAX_UPLOAD_MB: "50"
+      JOB_RETENTION_HOURS: "168"
+
+      MAX_CONCURRENT_JOBS: "1"
+      MAX_ACTIVE_JOBS_PER_USER: "1"
+
+    volumes:
+      - /opt/ai-speaker-notes-v1/data/jobs:/data/jobs
+
+    ports:
+      - "127.0.0.1:8082:8000"
+
+    networks:
+      - lensa-iot-net
+
+    mem_limit: 768m
+    pids_limit: 256
+
+networks:
+  lensa-iot-net:
+    external: true

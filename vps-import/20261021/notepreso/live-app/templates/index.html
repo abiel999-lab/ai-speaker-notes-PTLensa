@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#087443">
+  <title>{{ app_name }} | Lensa Lingkungan</title>
+  <link rel="stylesheet" href="/static/app.css?v=1001">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+  <link rel="shortcut icon" type="image/png" href="/static/favicon.png?v=0284">
+  <link rel="apple-touch-icon" href="/static/favicon.png?v=0284">
+<link rel="stylesheet" href="/static/languages.css?v=1901">
+</head>
+<body data-page="dashboard">
+<header class="topbar">
+  <nav class="nav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="AI Speaker Notes home"><span>AI Speaker Notes<small>v{{ version }}</small></span></a>
+    <div class="nav-links">
+      <a class="active" href="/" data-i18n="dashboard">Dashboard</a>
+      <a href="/chat" data-i18n="chatAI">Chat AI</a>
+      <a href="/how-to" data-i18n="howTo">How to Use</a>
+      <a href="/support">Support</a><a href="/legal" data-i18n="legal">Legal</a>
+    </div>
+    <div class="nav-actions">
+      
+      {% if auth_enabled %}<div class="account-actions"><span class="plan-chip" data-plan-chip>Free</span><div class="account-chip" title="{{ username }}"><span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span><span class="account-name">{{ username }}</span></div><button class="logout-btn" type="button" data-logout aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="logout">Sign out</span></button></div>{% endif %}
+    </div>
+  </nav>
+</header>
+
+<main class="shell">
+  <section class="hero">
+    <div class="hero-main">
+      <p class="eyebrow"><span class="dot"></span><span data-i18n="heroBadge">Reliable PowerPoint AI</span> &middot; v{{ version }}</p>
+      <h1 data-i18n="uploadTitle">Create fast and easy speaker notes</h1>
+      <p class="lede" data-i18n="uploadLede">Upload a PowerPoint, choose your preferred explanation style, and the system will analyze the slide structure, text, and visuals before generating notes.</p>
+    </div>
+    <aside class="hero-card">
+      <div>
+        <span class="kicker" data-i18n="qualityMode">Quality mode</span>
+        <h2>GPT Luna</h2>
+        <p data-i18n="modelDesc">Choose GPT-6 Luna or GPT-5.6 Luna; automatic batching and safety guardrails remain enabled.</p>
+      </div>
+      <div class="limit-list">
+        <div class="limit-row"><span data-i18n="aiSlidesPerJob">AI slides</span><strong data-i18n="autoBatching">Auto-batched</strong></div>
+        <div class="limit-row"><span data-i18n="visionSlidesPerJob">Vision slides</span><strong data-i18n="noFixedSlideLimit">No fixed slide cap</strong></div>
+        <div class="limit-row"><span data-i18n="uploadLimit">Upload</span><strong>&le; {{ max_upload_mb }} MB</strong></div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="capabilities" aria-label="Runtime capabilities">
+    <div class="capability"><div><span>CORE</span><strong data-i18n="packageSafeWriteBack">Package-safe write-back</strong><small data-i18n="packageSafeDesc">The original file remains untouched; the output is validated before download.</small></div></div>
+    <div class="capability"><div><span>OPENAI</span><strong data-i18n="{{ 'ready' if openai_configured else 'notConfigured' }}">{{ 'Ready' if openai_configured else 'Not configured' }}</strong><small>{{ openai_model }}</small></div></div>
+    <div class="capability"><div><span>IMAGE</span><strong data-i18n="{{ 'ready' if (openai_use_vision and renderer_available) else ('disabled' if not openai_use_vision else 'rendererMissing') }}">{{ 'Ready' if (openai_use_vision and renderer_available) else ('Disabled' if not openai_use_vision else 'Renderer missing') }}</strong>{% if renderer_available %}<small><span>{{ renderer_name }}</span> &middot; <span data-i18n="perSlideRecovery">per-slide recovery</span></small>{% else %}<small data-i18n="textOnlyFallback">Text-only fallback available</small>{% endif %}</div></div>
+  </section>
+
+  <section id="account-plan-card" class="account-plan-card" aria-label="Account plan and AI credit usage">
+    <div class="account-plan-head">
+      <div>
+        <span class="account-plan-kicker">ACCOUNT PLAN</span>
+        <div class="account-plan-title"><h2 id="account-plan-name">Free</h2><span id="account-plan-status" class="account-plan-status">Active</span></div>
+        <p id="account-plan-reset">One free preview · up to 5 slides · does not reset.</p>
+      </div>
+      <div class="account-plan-actions">
+        <button id="upgrade-plan" class="btn primary account-upgrade" type="button" disabled>Upgrade to Pro</button>
+        <button id="cancel-plan" class="btn secondary account-cancel hidden" type="button">Cancel renewal</button>
+      </div>
+    </div>
+
+    <div class="account-plan-grid">
+      <div class="account-usage-item credit-usage-item">
+        <div>
+          <span>AI Slide Credits</span>
+          <strong id="plan-credits">Pro only</strong>
+          <small id="plan-credits-note">1 credit = 1 generated slide</small>
+        </div>
+        <div class="account-usage-track account-credit-track"><span id="plan-credits-bar"></span></div>
+      </div>
+
+      <div class="account-usage-item">
+        <div>
+          <span>Top-up Credits</span>
+          <strong id="plan-topup">0</strong>
+          <small id="plan-topup-note">Additional credits for active Pro accounts</small>
+        </div>
+      </div>
+
+      <div class="account-usage-item">
+        <div>
+          <span>AI chat messages</span>
+          <strong id="plan-chat">0 / —</strong>
+        </div>
+        <div class="account-usage-track"><span id="plan-chat-bar"></span></div>
+      </div>
+
+      <div class="account-entitlement">
+        <span>Text + Vision</span>
+        <strong id="plan-vision">Checking…</strong>
+        <small id="plan-provider">Billing provider: not configured</small>
+      </div>
+    </div>
+  </section>
+
+
+  <div id="payment-provider-modal" class="payment-provider-modal hidden" role="dialog" aria-modal="true" aria-labelledby="payment-provider-title">
+    <div class="payment-provider-card">
+      <div class="payment-provider-head">
+        <div>
+          <span class="account-plan-kicker">PAYMENT</span>
+          <h3 id="payment-provider-title">Choose payment provider</h3>
+          <p>Buy 30 days of NotePreso Pro with the provider that fits you best.</p>
+        </div>
+        <button id="payment-provider-close" class="payment-provider-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div id="payment-provider-options" class="payment-provider-options"></div>
+    </div>
+  </div>
+
+
+
+  <section class="panel">
+    <div class="panel-head">
+      <div><h2 data-i18n="generateTitle">Generate speaker notes</h2><p data-i18n="generateDesc">Start with a file, then choose the language, audience, depth, and how the system analyzes visuals.</p></div>
+      <span class="step-badge"><span data-i18n="stepUpload">01 &middot; Upload & configure</span></span>
+    </div>
+    <div class="panel-body">
+      <form id="job-form" enctype="multipart/form-data">
+        <label class="drop" id="drop-zone" for="file">
+          <span class="drop-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4 4 4M5 14v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <strong data-i18n="selectFile">Choose or drag a PowerPoint file here</strong>
+          <span data-i18n="fileHint">PPTX files only. Your original file remains unchanged.</span>
+          <input id="file" name="file" type="file" accept=".ppt,.pptx,.pptm,.pps,.ppsx,.ppsm,.pot,.potx,.potm,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+          <span id="file-selected" class="file-selected hidden"></span>
+        </label>
+
+        <div class="section-title"><h3 data-i18n="quickPresets">Quick presets</h3><small data-i18n="presetHint">Opsional â€” bisa diubah lagi setelah memilih.</small></div>
+        <div class="preset-row">
+          <button class="preset" type="button" data-preset="student"><strong data-i18n="studentPreset">Mahasiswa</strong><small data-i18n="studentPresetDesc">Bahasa mudah, runtut, dan enak dipresentasikan.</small></button>
+          <button class="preset" type="button" data-preset="academic"><strong data-i18n="academicPreset">Akademik</strong><small data-i18n="academicPresetDesc">Lebih formal dan mempertahankan istilah penting.</small></button>
+          <button class="preset" type="button" data-preset="concise"><strong data-i18n="concisePreset">Concise</strong><small data-i18n="concisePresetDesc">Short notes for faster presentations.</small></button>
+        </div>
+
+        <div class="section-title"><h3 data-i18n="generationSettings">Generation settings</h3><small data-i18n="boundedInput">Strong model, bounded input.</small></div>
+        <div class="grid four">
+          <label><span data-i18n="generatorLabel">Generator</span><select id="engine" name="engine"><option value="dummy" data-i18n="engineDummy">MVP test | no AI cost</option><option value="openai" data-i18n="engineQuality" {% if not openai_configured %}disabled{% endif %} {% if openai_configured %}selected{% endif %}>OpenAI | Luna models</option></select></label>
+          <label>
+            <span data-i18n="modelLabel">AI Model</span>
+            <select id="model" name="model">
+              <option value="gpt-6-luna" selected data-i18n="model6Recommended">GPT-6 Luna · recommended</option>
+              <option value="gpt-5.6-luna" data-i18n="model56Compatibility">GPT-5.6 Luna · compatibility</option>
+            </select>
+            <span class="help" data-i18n="modelHelp">GPT-6 Luna is the default. GPT-5.6 Luna remains available for compatibility.</span>
+          </label>
+          <label><span data-i18n="languageLabel">Speaker notes language</span><input class="speaker-language-search" type="search" data-language-filter="language" aria-label="Search speaker notes languages" placeholder="Search languages, e.g. Japanese or Jawa" autocomplete="off"><select id="language" name="language" aria-label="Speaker notes language">{% with selected_language="Bahasa Indonesia" %}{% include "speaker_note_languages.html" %}{% endwith %}</select></label>
+          <label><span data-i18n="audienceLabel">Audiens</span><select id="audience" name="audience"><option value="Umum" data-i18n="audienceGeneral">Umum</option><option value="Manajemen" data-i18n="audienceManagement">Manajemen</option><option value="Teknis" data-i18n="audienceTechnical">Teknis</option><option value="Regulator" data-i18n="audienceRegulator">Regulator</option><option value="Akademisi" data-i18n="audienceAcademic">Akademisi</option><option value="Mahasiswa" data-i18n="audienceStudent">Mahasiswa</option></select></label>
+          <label><span data-i18n="depthLabel">Kedalaman</span><select id="depth" name="depth"><option value="Low" data-i18n="depthLow">Low</option><option value="Medium" selected data-i18n="depthMedium">Medium</option><option value="High" data-i18n="depthHigh">High</option></select><span class="help" data-i18n="depthHelp">Depth memengaruhi reasoning, bukan panjang notes.</span></label>
+        </div>
+
+        <div class="grid two">
+          <label><span data-i18n="lengthLabel">Jumlah kata per slide</span><select id="note-length" name="note_length"><option value="<100 kata" data-i18n="lengthUnder100">&lt;100 kata</option><option value="100-250 kata" selected data-i18n="length100250">100â€“250 kata</option><option value="250-500 kata" data-i18n="length250500">250â€“500 kata</option><option value="Custom" data-i18n="lengthCustom">Custom</option></select><span class="help" data-i18n="lengthHelp">Slide judul/transisi boleh lebih pendek.</span></label>
+          <label id="custom-word-field" class="hidden"><span data-i18n="customLimitLabel">Custom maximum words</span><input id="custom-word-limit" name="custom_word_limit" type="number" min="30" max="500" value="150" disabled><span class="help" data-i18n="customLimitHelp">Safe v1.0.0 range: 30–500 words.</span></label>
+        </div>
+
+        <label class="mode-field"><span data-i18n="instructionsLabel">Additional instructions</span><textarea id="custom-instructions" name="custom_instructions" maxlength="1500" rows="4" data-i18n-placeholder="instructionsPlaceholder" placeholder="Example: explain for first-year students; preserve technical terms; do not add facts that are not supported by the slide."></textarea><span class="help"><span id="custom-instructions-count">0</span>/1500 <span data-i18n="characters">characters</span>.</span></label>
+
+        <div class="grid two">
+          <label><span data-i18n="analysisModeLabel">AI Analysis Mode</span><select id="use-vision" name="use_vision"><option value="false" data-i18n="textOnlyFast">Text-only | fastest</option><option value="true" data-server-ready="{{ 'true' if (openai_use_vision and renderer_available) else 'false' }}" data-i18n="visionRecommended" {% if not (openai_use_vision and renderer_available) %}disabled{% endif %} {% if openai_use_vision and renderer_available %}selected{% endif %}>Text + Vision | recommended</option></select><span class="help" data-i18n="visionHelp">Vision analyzes charts and images. If one slide fails to render, the remaining slides will continue processing.</span></label>
+          <label><span data-i18n="existingNotesLabel">Existing Speaker Notes</span><select id="notes-mode" name="notes_mode"><option value="missing_only" selected data-i18n="notesMissingOnly">Fill empty notes only | safest</option><option value="append" data-i18n="notesAppend">Add to existing notes</option><option value="replace_all" data-i18n="notesReplace">Replace all notes</option></select><span class="help" data-i18n="notesHelp">Existing notes are preserved by default.</span></label>
+        </div>
+
+        <div id="replace-warning" class="warning hidden" data-i18n="replaceWarning">Replace mode will replace speaker notes in the output file. The original file remains safe.</div>
+        {% if not openai_configured %}<div class="info" data-i18n="openaiNotConfigured">OpenAI is not configured. Test mode is still available. Set OPENAI_API_KEY to enable AI.</div>{% elif openai_use_vision and not renderer_available %}<div class="warning" data-i18n="visionNotReady">Vision is not ready because no renderer was found. Text-only mode is still available.</div>{% endif %}
+
+        <div class="form-actions">
+          <p class="terms-hint"><span data-i18n="reviewNeeded">Review AI-generated results before using them.</span> <span data-i18n="termsPrefix">By processing this file, you agree to the</span> <a href="/legal">Terms & Privacy</a> ({{ terms_version }}).</p>
+          <button id="submit" class="primary" type="submit"><span data-i18n="startProcess">Process PowerPoint</span> &rarr;</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="status" class="status hidden" aria-live="polite">
+      <div class="status-row"><div><span class="status-pill" id="status-title">PROCESSING</span><strong id="status-count"></strong></div></div>
+      <div class="progress"><div id="progress-bar"></div></div>
+      <p id="status-message"></p>
+      <div id="result-metrics" class="result-grid hidden"></div>
+      <div id="warning-list" class="warning-list hidden"></div>
+      <div id="usage-summary" class="result-summary hidden"></div>
+      <div class="result-actions"><a id="download" class="download hidden" href="#" data-i18n="download">Download Result PPTX</a><a id="chat-result" class="btn secondary hidden" href="/chat" data-i18n="openChat">Open AI Chat</a><button id="retry" type="button" class="secondary hidden" data-i18n="retry">Try Again</button></div>
+    </div>
+  </section>
+
+  <section class="feature-grid">
+    <div class="feature"><span class="feature-number">01 &middot; MODEL</span><h3 data-i18n="modelStrength">High-quality model</h3><p data-i18n="modelDesc">Choose GPT-6 Luna or GPT-5.6 Luna; automatic batching and safety guardrails remain enabled.</p></div>
+    <div class="feature"><span class="feature-number">02 &middot; RELIABILITY</span><h3 data-i18n="visualSafety">Vision tahan error</h3><p data-i18n="visualDesc">Hidden slide dan kegagalan render diisolasi per slide.</p></div>
+    <div class="feature"><span class="feature-number">03 &middot; SAFETY</span><h3 data-i18n="privacySafety">Privasi & keamanan</h3><p data-i18n="privacyDesc">Macro/embedded object berisiko diblokir dan job otomatis kedaluwarsa.</p></div>
+  </section>
+
+  <section class="content-card history"><div class="section-title"><h3 data-i18n="recentJobs">Recent Jobs</h3><a class="btn ghost" href="/chat" data-i18n="openChat">Open AI Chat</a></div><div id="history-list" class="history-list"><p class="help" data-i18n="noJobs">No jobs yet.</p></div></section>
+</main>
+
+<footer class="footer"><div class="footer-inner"><span>AI Speaker Notes v{{ version }} &middot; <span data-i18n="humanReviewRequired">Human review required</span></span><span><a href="/how-to" data-i18n="howTo">How to Use</a> &middot; <a href="/legal">Terms & Privacy</a> &middot; <a href="/support#refund">Refund</a></span></div></footer>
+<script src="/static/common.js?v=1900" defer></script><script src="/static/app.js?v=1020" defer></script>
+<script src="/static/languages.js?v=1901" defer></script>
+</body></html>
+
