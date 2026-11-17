@@ -1,0 +1,157 @@
+{
+  "verified_at_utc": "2026-11-17T15:06:33.751726+00:00",
+  "public_checks": [
+    {
+      "url": "https://notepreso.com/",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://notepreso.com/pricing",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://notepreso.com/how-to",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://notepreso.com/legal",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://notepreso.com/support",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://notepreso.com/refund-policy",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://presentation.notepreso.com/",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://translation.notepreso.com/how-to",
+      "status": 200,
+      "widget_include": true,
+      "cekat_csp": true
+    },
+    {
+      "url": "https://notepreso.com/auth/login",
+      "status": 200,
+      "widget_include": false,
+      "cekat_csp": false
+    },
+    {
+      "url": "https://admin.notepreso.com/",
+      "status": 200,
+      "widget_include": false,
+      "cekat_csp": false
+    }
+  ],
+  "adapter_assets": [
+    {
+      "url": "https://notepreso.com/static/nora-support.js",
+      "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+    },
+    {
+      "url": "https://presentation.notepreso.com/assets/nora-support.js",
+      "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+    },
+    {
+      "url": "https://translation.notepreso.com/static/nora-support.js",
+      "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+    }
+  ],
+  "services": [
+    {
+      "container": "actia-notepreso-app-live-rotated",
+      "running": true,
+      "health": "healthy",
+      "image": "sha256:bb0e6061c2522009fd96f26ba974264e13e27f108c6e8e0aa80247f116805fb2"
+    },
+    {
+      "container": "notepreso-contact-ui-20261026t050754z",
+      "running": true,
+      "health": "healthy",
+      "image": "sha256:9b7121d7c1d6629bdbdcfc020905f384e19cf02d8fb32581eac41a564a9d013f"
+    },
+    {
+      "container": "actia-presentation-app",
+      "running": true,
+      "health": "healthy",
+      "image": "sha256:8b1afa67cff68a0340d9cb5da5af37d069183080b82b18d9da542d57528138c3"
+    },
+    {
+      "container": "actia-translation-app",
+      "running": true,
+      "health": "healthy",
+      "image": "sha256:28fc68b592040a9df407be367c5e6081eeb5826c191bbcc9e02e102b6490c219"
+    }
+  ],
+  "cutover": [
+    {
+      "service": "notes",
+      "container": "actia-notepreso-app-live-rotated",
+      "image": "sha256:bb0e6061c2522009fd96f26ba974264e13e27f108c6e8e0aa80247f116805fb2",
+      "https_probe": {
+        "status": 200,
+        "widget_include": true,
+        "csp_cekat": true
+      },
+      "old_container": "actia-notepreso-app-live-rotated-pre-nora-20261117",
+      "ips_preserved": true
+    },
+    {
+      "service": "contact",
+      "container": "notepreso-contact-ui-20261026t050754z",
+      "image": "sha256:9b7121d7c1d6629bdbdcfc020905f384e19cf02d8fb32581eac41a564a9d013f",
+      "https_probe": {
+        "status": 200,
+        "widget_include": true,
+        "csp_cekat": true
+      },
+      "old_container": "notepreso-contact-ui-20261026t050754z-pre-nora-20261117",
+      "ips_preserved": true
+    },
+    {
+      "service": "presentation",
+      "container": "actia-presentation-app",
+      "image": "sha256:8b1afa67cff68a0340d9cb5da5af37d069183080b82b18d9da542d57528138c3",
+      "https_probe": {
+        "status": 200,
+        "widget_include": true,
+        "csp_cekat": true
+      },
+      "old_container": "actia-presentation-app-pre-nora-20261117",
+      "ips_preserved": true
+    },
+    {
+      "service": "translation",
+      "container": "actia-translation-app",
+      "image": "sha256:28fc68b592040a9df407be367c5e6081eeb5826c191bbcc9e02e102b6490c219",
+      "https_probe": {
+        "status": 200,
+        "widget_include": true,
+        "csp_cekat": true
+      },
+      "old_container": "actia-translation-app-pre-nora-20261117",
+      "ips_preserved": true
+    }
+  ],
+  "rollback_root": "/home/actiaAdmin26/nora-production-cutover-20261117",
+  "database_migration": false
+}
