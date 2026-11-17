@@ -5,26 +5,26 @@
   },
   {
     "path": "app/app/templates/home.html",
-    "sha256": "cd4a401a3d1bfc3c08f7ff39560b3f72c89109f0d155c58721c283846b6089b7"
+    "sha256": "b184604fda236f1dfd75c11a6b71bd4a8f4ffa857a3f66791c2daf01d0868dd0"
   },
   {
     "path": "app/app/templates/pricing.html",
-    "sha256": "82109893cf77e9a40b600068e29a016075d6b8fc9906528af7bf78003146a1d1"
+    "sha256": "92943a0daa5fd3a046067ea8dd041d782f4eef97e250667e8332cd47c5a57d30"
   },
   {
     "path": "app/app/templates/how_to.html",
-    "sha256": "70983c84e5f9d1922373d387f6c55f85668c0073138dba4bed0fef14d6cb0f4b"
+    "sha256": "a3f0dcba0cffd3d4522c3bbad1da7621125b26424b657835d6c738f150ce1a7f"
   },
   {
     "path": "app/app/templates/legal.html",
-    "sha256": "cf3e322e29848ab2628df5b021b996078a2183b01896708db1a026700822f1fe"
+    "sha256": "6b07b30a22e23883bc5f2b8d743b1e0360fbd5d270bcedfb9cb9d05689785244"
   },
   {
     "path": "app/app/static/nora-support.js",
-    "sha256": "b31e72b546a35877a9e3d2bf8f2a1ffb1c5080870c727c751caff16a3ce383a3"
+    "sha256": "e6345631c5be1428a08a3df3bf2ae4723c1701af529843bee506bfbee8e17760"
   },
   {
     "path": "app/app/static/nora-support.css",
-    "sha256": "5abf6573f8f6c11c3dd2f26fb202131832c58b85dfe4799a376bb6dfe548fbcf"
+    "sha256": "9d54820f11acb55015a848e2dd494ba04a2f7bf2b74b7709c1b8369966736fa0"
   }
 ]
