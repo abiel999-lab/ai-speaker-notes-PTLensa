@@ -3,12 +3,13 @@
   'use strict';
   const script = document.currentScript;
   const preview = script?.dataset.preview === 'true' && ['localhost','127.0.0.1'].includes(location.hostname);
-  if ((!preview && location.hostname !== 'notepreso.com') || window.__npNora) return;
-  if (!['/','/pricing','/how-to','/legal','/support'].includes(location.pathname)) return;
+  const hosts=['notepreso.com','www.notepreso.com','presentation.notepreso.com','translation.notepreso.com'];
+  if ((!preview && !hosts.includes(location.hostname)) || window.__npNora) return;
+  if (/^\/(auth|login|admin|api|docs|redoc|realms)(\/|$)/.test(location.pathname)) return;
   window.__npNora = true;
   const root = document.createElement('section'); root.id='np-nora'; root.setAttribute('aria-label','NotePreso support');
   root.innerHTML=`<button id="np-nora-launch" type="button" aria-expanded="false" aria-controls="np-nora-panel">Chat with Nora</button>
-  <section id="np-nora-panel" hidden aria-labelledby="np-nora-title"><button id="np-nora-close" type="button" aria-label="Close support notice">×</button><h2 id="np-nora-title">Nora | NotePreso Support</h2><p>Get help from our AI assistant. Human support is available when an agent can respond.</p><p>Starting chat connects your browser to Cekat.AI. Cekat processes your messages and chat identifiers; our support team can review the conversation. Name and phone number are not required for general questions. Do not share passwords, payment details, or confidential documents.</p><p>Chat preferences and history may be remembered by Cekat in this browser. <a href="/legal#support-chat">Privacy details</a>. The chat has an EN language selector.</p><label><input type="checkbox" id="np-nora-consent"> I agree to connect to Cekat.AI for support.</label><button type="button" id="np-nora-start" disabled>Start chat</button><p id="np-nora-status" role="status"></p><p><a href="/support">Contact support instead</a></p></section>`;
+  <section id="np-nora-panel" hidden aria-labelledby="np-nora-title"><button id="np-nora-close" type="button" aria-label="Close support notice">×</button><h2 id="np-nora-title">Nora | NotePreso Support</h2><p>Get help from our AI assistant. Human support is available when an agent can respond.</p><p>Starting chat connects your browser to Cekat.AI. Cekat processes your messages and chat identifiers; our support team can review the conversation. Name and phone number are not required for general questions. Do not share passwords, payment details, or confidential documents.</p><p>Chat preferences and history may be remembered by Cekat in this browser. <a href="https://notepreso.com/legal#support-chat">Privacy details</a>. The chat has an EN language selector.</p><label><input type="checkbox" id="np-nora-consent"> I agree to connect to Cekat.AI for support.</label><button type="button" id="np-nora-start" disabled>Start chat</button><p id="np-nora-status" role="status"></p><p><a href="https://notepreso.com/support">Contact support instead</a></p></section>`;
   document.body.append(root);
   const launcher=root.querySelector('#np-nora-launch'), panel=root.querySelector('#np-nora-panel'), start=root.querySelector('#np-nora-start'), status=root.querySelector('#np-nora-status');
   let loading=false, loaded=false, timer;

@@ -76,6 +76,18 @@ export async function createApp(cfg) {
             },
         },
     });
+    app.addHook("onSend", async (req, reply, payload) => {
+        if (req.hostname === "presentation.notepreso.com" && String(reply.getHeader("content-type") || "").includes("text/html") && !/^\/(auth|login|admin|api)(\/|$)/.test(req.url)) {
+            const parts = String(reply.getHeader("content-security-policy") || "").split(";").map(p => p.trim().split(/\s+/)).filter(p => p[0]);
+            for (const [directive, origin] of [["script-src", "https://live.cekat.ai"], ["frame-src", "https://live.cekat.ai"]]) {
+                let entry = parts.find(p => p[0] === directive);
+                if (!entry) { entry = [directive, ...(parts.find(p => p[0] === "default-src")?.slice(1) || [])]; parts.push(entry); }
+                if (!entry.includes(origin)) { const n=entry.indexOf("'none'"); if(n>=0)entry.splice(n,1); entry.push(origin); }
+            }
+            reply.header("content-security-policy", parts.map(p=>p.join(" ")).join("; "));
+        }
+        return payload;
+    });
     const identity = await registerOidc(app, repo, cfg);
     const rateRedis = cfg.redis ? new Redis({ ...redisConnection(cfg.redis), enableOfflineQueue: true, commandTimeout: 5000 }) : undefined;
     rateRedis?.on("error", () => { });

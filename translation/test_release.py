@@ -16,11 +16,11 @@ class AccessTests(unittest.TestCase):
   token,who=m.SESSIONS.issue(owner or self.owner,subject=owner or self.owner,terms_version='translation-v1')
   self.client.cookies.set(m.COOKIE,token);return who
  def test_guest_cannot_upload_read_or_download(self):
-  self.assertIn('Sign in to translate',self.client.get('/').text)
+  r=self.client.get('/',follow_redirects=False);self.assertEqual(r.status_code,303);self.assertTrue(r.headers['location'].startswith('https://notepreso.com/auth/translation/connect'))
   for method,url in [('get','/api/jobs'),('get','/api/jobs/'+self.owner+'/result'),('post','/api/jobs')]:self.assertEqual(getattr(self.client,method)(url).status_code,401)
  def test_free_has_no_workspace_upload_or_download(self):
   self.plan='free';who=self.login()
-  self.assertIn('PRO ACCESS',self.client.get('/').text)
+  r=self.client.get('/',follow_redirects=False);self.assertEqual(r.status_code,303);self.assertEqual(r.headers['location'],'https://notepreso.com/pricing')
   self.assertEqual(self.client.get('/api/jobs').status_code,403)
   self.assertEqual(self.client.post('/api/jobs',content=b'bad',headers={'Origin':m.ORIGIN,'X-CSRF-Token':who.csrf}).status_code,403)
   self.assertEqual(self.client.get('/api/jobs/'+self.owner+'/result').status_code,403)

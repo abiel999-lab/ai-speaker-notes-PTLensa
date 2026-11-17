@@ -273,12 +273,10 @@ async def request_and_security_middleware(request: Request, call_next):
         origins={"script-src": "https://www.googletagmanager.com https://connect.facebook.net", "connect-src": "https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://www.facebook.com", "img-src": "https://www.google-analytics.com https://www.facebook.com"}
         response.headers["Content-Security-Policy"]="; ".join(part.strip()+" "+origins.get(part.strip().split(" ")[0],"") for part in csp.split(";") if part.strip())
 
-    # Optional Nora widget: exact apex host and public document routes only.
-    if request.url.hostname == "notepreso.com" and request.url.path in {"/", "/pricing", "/how-to", "/legal"}:
-        csp = response.headers["Content-Security-Policy"]
-        csp = csp.replace("script-src 'self'", "script-src 'self' https://live.cekat.ai")
-        csp += "; frame-src https://live.cekat.ai; style-src-attr 'unsafe-inline'"
-        response.headers["Content-Security-Policy"] = csp
+    # Restrict Cekat permission to first-party user HTML; auth/API remain unchanged.
+    from app.core.support_widget import eligible, extend_csp
+    if eligible(request.url.hostname, request.url.path, response.headers.get("content-type", "")):
+        response.headers["Content-Security-Policy"] = extend_csp(response.headers["Content-Security-Policy"])
 
     response.headers["Cache-Control"] = "no-store"
 

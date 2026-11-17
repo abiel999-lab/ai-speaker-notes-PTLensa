@@ -144,6 +144,9 @@ async def guard(request,call_next):
  response=await call_next(request)
  response.headers.update({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY'})
  response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+ from nora_policy import eligible, extend_csp
+ if eligible(request.url.hostname,request.url.path,response.headers.get('content-type','')):
+  response.headers['Content-Security-Policy']=extend_csp(response.headers['Content-Security-Policy'])
  if who and request.url.path!='/api/auth/logout' and response.status_code<400:
   renewed=SESSIONS.renew(request.cookies.get(COOKIE))
   if renewed:response.set_cookie(COOKIE,renewed,max_age=30*86400,secure=True,httponly=True,samesite='lax',path='/')

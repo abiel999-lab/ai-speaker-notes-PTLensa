@@ -1,0 +1,146 @@
+[
+  {
+    "path": "app/app/core/support_widget.py",
+    "sha256": "22ae348e18dc92b0b58bae70f5e5f7ed7cdb3887f26789a3cdb71eb4abe0c0bd"
+  },
+  {
+    "path": "app/app/main.py",
+    "sha256": "d2d5e2c864ac4186c846e9274f5fa76512ff1684132652b2c2ac4046d10b1638"
+  },
+  {
+    "path": "app/app/static/nora-support.css",
+    "sha256": "2af439683443ecaf5eb1d58f004c583c6b8019c284008e8a751960f8f3df74e7"
+  },
+  {
+    "path": "app/app/static/nora-support.js",
+    "sha256": "5ca1731969ecb05c224e9d24a61b94a39f73f08b98f559a9030e83fdde0ab5e2"
+  },
+  {
+    "path": "app/app/static/p24-notes-404.html",
+    "sha256": "673b47bc8db91c7dc614df5fd83b1dc2981c41d4377419304d5b12c28c51e1b7"
+  },
+  {
+    "path": "app/app/static/p24-presentation-404.html",
+    "sha256": "ab7d00df2247674c7a95baa995f32b7c39be75d664dd9f1cfe148c7b89575b84"
+  },
+  {
+    "path": "app/app/static/refund-policy.html",
+    "sha256": "b35d149fbaa94ea0cfc55520e8cb304327b0caba9f943fea0b32cc7034e76da0"
+  },
+  {
+    "path": "app/app/templates/app.html",
+    "sha256": "12969cebe94e2e098b8f985760323a1e090c84f4f67fc7e9e544e756e86a7ac3"
+  },
+  {
+    "path": "app/app/templates/chat.html",
+    "sha256": "30e3429644c23a46a403f329e1a0d8d9c7fcd9c9265362cae82f5807c2c600f5"
+  },
+  {
+    "path": "app/app/templates/home.html",
+    "sha256": "b184604fda236f1dfd75c11a6b71bd4a8f4ffa857a3f66791c2daf01d0868dd0"
+  },
+  {
+    "path": "app/app/templates/how_to.html",
+    "sha256": "a3f0dcba0cffd3d4522c3bbad1da7621125b26424b657835d6c738f150ce1a7f"
+  },
+  {
+    "path": "app/app/templates/index.html",
+    "sha256": "85a0a95bddb9729a372dd20ccfafc60d420e2f0e8a17ff842e62e6462628c618"
+  },
+  {
+    "path": "app/app/templates/legal.html",
+    "sha256": "6b07b30a22e23883bc5f2b8d743b1e0360fbd5d270bcedfb9cb9d05689785244"
+  },
+  {
+    "path": "app/app/templates/paddle_checkout.html",
+    "sha256": "f857db06634e644841e61fac5989647a3906d53e396a3f87a5a1061163f81b9b"
+  },
+  {
+    "path": "app/app/templates/pricing.html",
+    "sha256": "92943a0daa5fd3a046067ea8dd041d782f4eef97e250667e8332cd47c5a57d30"
+  },
+  {
+    "path": "app/app/templates/refund_policy.html",
+    "sha256": "353e9ff951eb1a6c29c86784c4225c3547e01b1ffd9484b0798c3ff9f305aec9"
+  },
+  {
+    "path": "app/app/templates/support.html",
+    "sha256": "af05afb0bec54282922df838d6d0c8e8707a2a3db09977c39ba44c89a861d86d"
+  },
+  {
+    "path": "docs/NORA-INTEGRATION.md",
+    "sha256": "2b85f3e456d1a015702a2243c0b2b230bd6f541f8434fd3f2f8b84c9b9fc42ee"
+  },
+  {
+    "path": "docs/NORA-STAGING-RESULT.md",
+    "sha256": "419d7098863ba05da2c74d930e30a5deb469dfad177326e2d8a7935855d189d7"
+  },
+  {
+    "path": "docs/NORA-SUITE-RESULT.md",
+    "sha256": "91db62f7983e670d894a5f5ff28ce7f8ff086d1fbb98c263791e70cca20bd4c3"
+  },
+  {
+    "path": "docs/nora-backend-checks.json",
+    "sha256": "338c0ebce06f4dc7191873729ba9e4ec3e81eedec51ace77f0839657fa6b260c"
+  },
+  {
+    "path": "docs/nora-candidate-manifest.json",
+    "sha256": "1f90eefe1b37c069251a623bb3d63ab3002cfb1c8810b1478ca2aaed87ce3849"
+  },
+  {
+    "path": "docs/nora-followup-backup.json",
+    "sha256": "11685720e22665d63b1290f2eeadfc7e8108314992b5c206df478aa228fd328e"
+  },
+  {
+    "path": "presentation/runtime-app/dist/index.html",
+    "sha256": "80175101b702af9b66b9c1bdc7134b35a835aa6ca5ac1510cf3a8f8e10dcca95"
+  },
+  {
+    "path": "presentation/runtime-app/server-dist/server/app.js",
+    "sha256": "7dd3059ba219c9a1a321d584d60e48939ef055a91e772969cdff06ba966288e4"
+  },
+  {
+    "path": "presentation/runtime-app/server-dist/server/token-pricing.js",
+    "sha256": "4001ec9693d69b7758d0fc014438f56b8cf3673911d0f16b250d63cfaba2938a"
+  },
+  {
+    "path": "translation/guide.html",
+    "sha256": "6a3d532aea23b97b717f635cb34349189d0d829e4599a9b44353ca9a7df9c017"
+  },
+  {
+    "path": "translation/nora_policy.py",
+    "sha256": "22ae348e18dc92b0b58bae70f5e5f7ed7cdb3887f26789a3cdb71eb4abe0c0bd"
+  },
+  {
+    "path": "translation/production.html",
+    "sha256": "12f59651d6fea65249a7f8786828b260a6750d21527de85982fab75cf17d9604"
+  },
+  {
+    "path": "translation/production_app.py",
+    "sha256": "f4fbf86f2660ad6531e6c63c952def02d7897d59543f18b01e2a436ed142acc3"
+  },
+  {
+    "path": "translation/static/nora-support.css",
+    "sha256": "2af439683443ecaf5eb1d58f004c583c6b8019c284008e8a751960f8f3df74e7"
+  },
+  {
+    "path": "translation/static/nora-support.js",
+    "sha256": "5ca1731969ecb05c224e9d24a61b94a39f73f08b98f559a9030e83fdde0ab5e2"
+  },
+  {
+    "path": "translation/test_release.py",
+    "sha256": "66b32be545433f63d8f83765ddc211246cb1aab71238dff6977fc88bbb2f0493"
+  },
+  {
+    "path": "website-support/app/contact_sidecar.py",
+    "sha256": "2c24b94cd6c3fc03a388f762c24ef2da41ac04e016ce8259da07c40e256f2386"
+  },
+  {
+    "path": "website-support/app/core/support_widget.py",
+    "sha256": "22ae348e18dc92b0b58bae70f5e5f7ed7cdb3887f26789a3cdb71eb4abe0c0bd"
+  },
+  {
+    "path": "website-support/app/templates/support.html",
+    "sha256": "07676527298bee6f6082cc34dcbb19140473db97cbbe20129b2dc3df402f21e1"
+  }
+]
