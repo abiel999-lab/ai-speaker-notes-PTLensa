@@ -12,7 +12,7 @@
   <section id="np-nora-panel" hidden aria-labelledby="np-nora-title"><button id="np-nora-close" type="button" aria-label="Close support notice">×</button><h2 id="np-nora-title">Nora | NotePreso Support</h2><p>Get help from our AI assistant. Human support is available when an agent can respond.</p><p>Starting chat connects your browser to Cekat.AI. Cekat processes your messages and chat identifiers; our support team can review the conversation. Name and phone number are not required for general questions. Do not share passwords, payment details, or confidential documents.</p><p>Chat preferences and history may be remembered by Cekat in this browser. <a href="https://notepreso.com/legal#support-chat">Privacy details</a>. The chat has an EN language selector.</p><label><input type="checkbox" id="np-nora-consent"> I agree to connect to Cekat.AI for support.</label><button type="button" id="np-nora-start" disabled>Start chat</button><p id="np-nora-status" role="status"></p><p><a href="https://notepreso.com/support">Contact support instead</a></p></section>`;
   document.body.append(root);
   const launcher=root.querySelector('#np-nora-launch'), panel=root.querySelector('#np-nora-panel'), start=root.querySelector('#np-nora-start'), status=root.querySelector('#np-nora-status');
-  let loading=false, loaded=false, timer;
+  let loading=false, loaded=false, failed=false, timer;
   launcher.addEventListener('click',()=>{panel.hidden=!panel.hidden; launcher.setAttribute('aria-expanded',String(!panel.hidden)); if(!panel.hidden)root.querySelector('#np-nora-close').focus();});
   function close(){panel.hidden=true;launcher.setAttribute('aria-expanded','false');launcher.focus();}
   root.querySelector('#np-nora-close').addEventListener('click',close);
@@ -20,7 +20,7 @@
   root.querySelector('#np-nora-consent').addEventListener('change',e=>{start.disabled=!e.target.checked||loading;});
   // Validate the vendor's legacy toggle event before its own listener receives it.
   window.addEventListener('message',e=>{if(e.data?.action==='toggleChat' && (e.origin!=='https://live.cekat.ai'||e.source!==document.getElementById('iframe1')?.contentWindow))e.stopImmediatePropagation();});
-  function fail(){clearTimeout(timer);loading=false;start.disabled=true;status.textContent='Chat could not be loaded. Please use Contact support instead, or reload this page to try again.';}
+  function fail(){clearTimeout(timer);loading=false;failed=true;document.getElementById('iframe2-chat-container')?.remove();start.disabled=true;status.textContent='Chat could not be loaded. Please use Contact support instead, or reload this page to try again.';}
   start.addEventListener('click',()=>{
     if(loading||loaded||!root.querySelector('#np-nora-consent').checked)return;
     if(window.mychat||document.getElementById('iframe1')){fail();return;}
@@ -31,6 +31,7 @@
     const vendor=document.createElement('script'); vendor.async=true;vendor.src=window.mychat.server;vendor.referrerPolicy='no-referrer';
     vendor.onerror=fail;
     vendor.onload=()=>{
+      if(failed){document.getElementById('iframe2-chat-container')?.remove();return;}
       const frame=document.getElementById('iframe1');if(!frame){fail();return;}
       frame.title='Nora — NotePreso support chat';
       // This is an iframe navigation check, not proof the upstream chat API is healthy.
@@ -39,6 +40,6 @@
     timer=setTimeout(fail,15000);document.head.append(vendor);
   });
   // Keep both launchers away from the existing analytics cookie banner.
-  const sync=()=>{const banner=document.querySelector('.np-cookie-consent');const hide=!!banner&&!banner.hidden&&getComputedStyle(banner).display!=='none';root.classList.toggle('np-nora-obscured',hide);document.getElementById('iframe2-chat-container')?.classList.toggle('np-nora-obscured',hide);};
+  const sync=()=>{if(failed)document.getElementById('iframe2-chat-container')?.remove();const banner=document.querySelector('.np-cookie-consent');const hide=!!banner&&!banner.hidden&&getComputedStyle(banner).display!=='none';root.classList.toggle('np-nora-obscured',hide);document.getElementById('iframe2-chat-container')?.classList.toggle('np-nora-obscured',hide);};
   new MutationObserver(sync).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','class']});sync();
 })();

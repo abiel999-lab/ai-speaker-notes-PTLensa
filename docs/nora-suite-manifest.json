@@ -13,7 +13,7 @@
   },
   {
     "path": "app/app/static/nora-support.js",
-    "sha256": "5ca1731969ecb05c224e9d24a61b94a39f73f08b98f559a9030e83fdde0ab5e2"
+    "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
   },
   {
     "path": "app/app/static/p24-notes-404.html",
@@ -68,6 +68,10 @@
     "sha256": "af05afb0bec54282922df838d6d0c8e8707a2a3db09977c39ba44c89a861d86d"
   },
   {
+    "path": "docs/NORA-ACCEPTANCE-UPDATE.md",
+    "sha256": "9f3c99e5b555ec5edf1bfaac2709d92a612a65605b30714eec86fb6541bdc9ae"
+  },
+  {
     "path": "docs/NORA-INTEGRATION.md",
     "sha256": "2b85f3e456d1a015702a2243c0b2b230bd6f541f8434fd3f2f8b84c9b9fc42ee"
   },
@@ -92,8 +96,20 @@
     "sha256": "11685720e22665d63b1290f2eeadfc7e8108314992b5c206df478aa228fd328e"
   },
   {
+    "path": "presentation/runtime-app/dist/assets/nora-support.css",
+    "sha256": "2af439683443ecaf5eb1d58f004c583c6b8019c284008e8a751960f8f3df74e7"
+  },
+  {
+    "path": "presentation/runtime-app/dist/assets/nora-support.js",
+    "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+  },
+  {
     "path": "presentation/runtime-app/dist/index.html",
     "sha256": "80175101b702af9b66b9c1bdc7134b35a835aa6ca5ac1510cf3a8f8e10dcca95"
+  },
+  {
+    "path": "presentation/runtime-app/nora-oidc-test.mjs",
+    "sha256": "ff133f35e9d6ee6d8693938054698dbf51ac1ddf12e10ab9451f65890aba5deb"
   },
   {
     "path": "presentation/runtime-app/server-dist/server/app.js",
@@ -125,7 +141,7 @@
   },
   {
     "path": "translation/static/nora-support.js",
-    "sha256": "5ca1731969ecb05c224e9d24a61b94a39f73f08b98f559a9030e83fdde0ab5e2"
+    "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
   },
   {
     "path": "translation/test_release.py",
