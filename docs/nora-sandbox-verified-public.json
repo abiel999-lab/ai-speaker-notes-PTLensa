@@ -1,0 +1,12 @@
+{
+  "sandbox": true,
+  "transaction_id": "txn_01m7mct1kt0v097ste37dx1qan",
+  "status": "completed",
+  "currency": "USD",
+  "total_minor": "1110",
+  "subscription_id": "sub_01m7md2jxa3nyde5cp876kt24e",
+  "completed_at": "2026-11-17T09:23:12.712841Z",
+  "paid_verified": true,
+  "subscription_status": "canceled",
+  "test_cleanup_complete": true
+}

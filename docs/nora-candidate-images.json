@@ -1,0 +1,182 @@
+{
+  "built_at_utc": "2026-11-17T09:31:23.911898+00:00",
+  "production_unchanged": true,
+  "candidates": [
+    {
+      "service": "notes",
+      "container": "actia-notepreso-app-live-rotated",
+      "base_image_id": "sha256:9c010b47a0e7669627d3308087b1a402957cc47988b27af0909598a1b2844398",
+      "candidate_tag": "notepreso-nora-candidate:notes-0901b06",
+      "candidate_image_id": "sha256:af20f14cbd1e315cc556323f56b853d48d317127c76d927eb3e98588a4b86fee",
+      "revision": "0901b06353a9fe8f707986306e5e75ca7e42d2b9",
+      "overlay_files": [
+        {
+          "path": "app/app/core/support_widget.py",
+          "sha256": "22ae348e18dc92b0b58bae70f5e5f7ed7cdb3887f26789a3cdb71eb4abe0c0bd"
+        },
+        {
+          "path": "app/app/main.py",
+          "sha256": "d2d5e2c864ac4186c846e9274f5fa76512ff1684132652b2c2ac4046d10b1638"
+        },
+        {
+          "path": "app/app/static/nora-support.css",
+          "sha256": "2af439683443ecaf5eb1d58f004c583c6b8019c284008e8a751960f8f3df74e7"
+        },
+        {
+          "path": "app/app/static/nora-support.js",
+          "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+        },
+        {
+          "path": "app/app/static/p24-notes-404.html",
+          "sha256": "673b47bc8db91c7dc614df5fd83b1dc2981c41d4377419304d5b12c28c51e1b7"
+        },
+        {
+          "path": "app/app/static/p24-presentation-404.html",
+          "sha256": "ab7d00df2247674c7a95baa995f32b7c39be75d664dd9f1cfe148c7b89575b84"
+        },
+        {
+          "path": "app/app/static/refund-policy.html",
+          "sha256": "b35d149fbaa94ea0cfc55520e8cb304327b0caba9f943fea0b32cc7034e76da0"
+        },
+        {
+          "path": "app/app/templates/app.html",
+          "sha256": "12969cebe94e2e098b8f985760323a1e090c84f4f67fc7e9e544e756e86a7ac3"
+        },
+        {
+          "path": "app/app/templates/chat.html",
+          "sha256": "30e3429644c23a46a403f329e1a0d8d9c7fcd9c9265362cae82f5807c2c600f5"
+        },
+        {
+          "path": "app/app/templates/home.html",
+          "sha256": "b184604fda236f1dfd75c11a6b71bd4a8f4ffa857a3f66791c2daf01d0868dd0"
+        },
+        {
+          "path": "app/app/templates/how_to.html",
+          "sha256": "a3f0dcba0cffd3d4522c3bbad1da7621125b26424b657835d6c738f150ce1a7f"
+        },
+        {
+          "path": "app/app/templates/index.html",
+          "sha256": "85a0a95bddb9729a372dd20ccfafc60d420e2f0e8a17ff842e62e6462628c618"
+        },
+        {
+          "path": "app/app/templates/legal.html",
+          "sha256": "6b07b30a22e23883bc5f2b8d743b1e0360fbd5d270bcedfb9cb9d05689785244"
+        },
+        {
+          "path": "app/app/templates/paddle_checkout.html",
+          "sha256": "f857db06634e644841e61fac5989647a3906d53e396a3f87a5a1061163f81b9b"
+        },
+        {
+          "path": "app/app/templates/pricing.html",
+          "sha256": "92943a0daa5fd3a046067ea8dd041d782f4eef97e250667e8332cd47c5a57d30"
+        },
+        {
+          "path": "app/app/templates/refund_policy.html",
+          "sha256": "353e9ff951eb1a6c29c86784c4225c3547e01b1ffd9484b0798c3ff9f305aec9"
+        },
+        {
+          "path": "app/app/templates/support.html",
+          "sha256": "af05afb0bec54282922df838d6d0c8e8707a2a3db09977c39ba44c89a861d86d"
+        }
+      ],
+      "syntax_check": "passed",
+      "live_container_id": "a8a0b0cb0f3a11ff9e34dc502cee54b4d4ca72184f207efeaffaddd173773503",
+      "private_rollback_config": "/home/actiaAdmin26/nora-private-backup-20261117/notes-before-container-inspect.json"
+    },
+    {
+      "service": "contact",
+      "container": "notepreso-contact-ui-20261026t050754z",
+      "base_image_id": "sha256:22c0f56d60ba62c4a08651adecc8c00ed4098f299a9542238e109fcd070d14b3",
+      "candidate_tag": "notepreso-nora-candidate:contact-0901b06",
+      "candidate_image_id": "sha256:8bb6d9ba7e5ea015ecd83cf1fb648e12645ffdb889b96dbdcd20df25488ee0ea",
+      "revision": "0901b06353a9fe8f707986306e5e75ca7e42d2b9",
+      "overlay_files": [
+        {
+          "path": "website-support/app/contact_sidecar.py",
+          "sha256": "2c24b94cd6c3fc03a388f762c24ef2da41ac04e016ce8259da07c40e256f2386"
+        },
+        {
+          "path": "website-support/app/core/support_widget.py",
+          "sha256": "22ae348e18dc92b0b58bae70f5e5f7ed7cdb3887f26789a3cdb71eb4abe0c0bd"
+        },
+        {
+          "path": "website-support/app/templates/support.html",
+          "sha256": "07676527298bee6f6082cc34dcbb19140473db97cbbe20129b2dc3df402f21e1"
+        }
+      ],
+      "syntax_check": "passed",
+      "live_container_id": "c37b6b0b51c2dd8526e9a1e8ad4ade15c6563f86729141a4a7be967c1652e690",
+      "private_rollback_config": "/home/actiaAdmin26/nora-private-backup-20261117/contact-before-container-inspect.json"
+    },
+    {
+      "service": "presentation",
+      "container": "actia-presentation-app",
+      "base_image_id": "sha256:71c1cc58fdad8d015562ce7c37d0d1040b64d89142b113b69324a4f7a311d3f8",
+      "candidate_tag": "notepreso-nora-candidate:presentation-0901b06",
+      "candidate_image_id": "sha256:1a698beeddefe1a058f85161e0c53d4136275aa4d0791a8c5e1a739ff21fdda1",
+      "revision": "0901b06353a9fe8f707986306e5e75ca7e42d2b9",
+      "overlay_files": [
+        {
+          "path": "presentation/runtime-app/dist/assets/nora-support.css",
+          "sha256": "2af439683443ecaf5eb1d58f004c583c6b8019c284008e8a751960f8f3df74e7"
+        },
+        {
+          "path": "presentation/runtime-app/dist/assets/nora-support.js",
+          "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+        },
+        {
+          "path": "presentation/runtime-app/dist/index.html",
+          "sha256": "80175101b702af9b66b9c1bdc7134b35a835aa6ca5ac1510cf3a8f8e10dcca95"
+        },
+        {
+          "path": "presentation/runtime-app/server-dist/server/app.js",
+          "sha256": "7dd3059ba219c9a1a321d584d60e48939ef055a91e772969cdff06ba966288e4"
+        },
+        {
+          "path": "presentation/runtime-app/server-dist/server/token-pricing.js",
+          "sha256": "4001ec9693d69b7758d0fc014438f56b8cf3673911d0f16b250d63cfaba2938a"
+        }
+      ],
+      "syntax_check": "passed",
+      "live_container_id": "5f0011aebba6281b9b4d44a5423fa27a5e6fcf6e79900f1e0ab3da876bb42ee9",
+      "private_rollback_config": "/home/actiaAdmin26/nora-private-backup-20261117/presentation-before-container-inspect.json"
+    },
+    {
+      "service": "translation",
+      "container": "actia-translation-app",
+      "base_image_id": "sha256:3ce9f1839883c11c7baea05214346eb5e3ddcb438643ebd8762971ef9880080f",
+      "candidate_tag": "notepreso-nora-candidate:translation-0901b06",
+      "candidate_image_id": "sha256:594190189b64aec22f2a7c89543719528efca0cd26e7fcf0f94fe97e005002a2",
+      "revision": "0901b06353a9fe8f707986306e5e75ca7e42d2b9",
+      "overlay_files": [
+        {
+          "path": "translation/guide.html",
+          "sha256": "6a3d532aea23b97b717f635cb34349189d0d829e4599a9b44353ca9a7df9c017"
+        },
+        {
+          "path": "translation/nora_policy.py",
+          "sha256": "22ae348e18dc92b0b58bae70f5e5f7ed7cdb3887f26789a3cdb71eb4abe0c0bd"
+        },
+        {
+          "path": "translation/production.html",
+          "sha256": "12f59651d6fea65249a7f8786828b260a6750d21527de85982fab75cf17d9604"
+        },
+        {
+          "path": "translation/production_app.py",
+          "sha256": "f4fbf86f2660ad6531e6c63c952def02d7897d59543f18b01e2a436ed142acc3"
+        },
+        {
+          "path": "translation/static/nora-support.css",
+          "sha256": "2af439683443ecaf5eb1d58f004c583c6b8019c284008e8a751960f8f3df74e7"
+        },
+        {
+          "path": "translation/static/nora-support.js",
+          "sha256": "eddaf7d02ff4ef3755a511f45dd3cac0b2bbf681ec36e9687efc5282a5e7b0e5"
+        }
+      ],
+      "syntax_check": "passed",
+      "live_container_id": "aecf53cf9df3ad5c341071d0bcc665e1bb199d1c263db2e17e7432a47a6bec1a",
+      "private_rollback_config": "/home/actiaAdmin26/nora-private-backup-20261117/translation-before-container-inspect.json"
+    }
+  ]
+}
