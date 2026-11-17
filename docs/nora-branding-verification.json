@@ -1,0 +1,20 @@
+[
+  {
+    "host": "notepreso.com",
+    "label": "Chatbot Support",
+    "theme": "#12b5c9",
+    "short_notice": true
+  },
+  {
+    "host": "presentation.notepreso.com",
+    "label": "Chatbot Support",
+    "theme": "#12b5c9",
+    "short_notice": true
+  },
+  {
+    "host": "translation.notepreso.com",
+    "label": "Chatbot Support",
+    "theme": "#12b5c9",
+    "short_notice": true
+  }
+]
