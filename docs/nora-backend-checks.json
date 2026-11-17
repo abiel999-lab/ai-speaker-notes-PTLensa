@@ -1,0 +1,56 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "nora_include": true,
+    "cekat_csp": true
+  },
+  {
+    "path": "/pricing",
+    "status": 200,
+    "nora_include": true,
+    "cekat_csp": true
+  },
+  {
+    "path": "/how-to",
+    "status": 200,
+    "nora_include": true,
+    "cekat_csp": true
+  },
+  {
+    "path": "/legal",
+    "status": 200,
+    "nora_include": true,
+    "cekat_csp": true
+  },
+  {
+    "path": "/auth/login",
+    "status": 303,
+    "nora_include": false,
+    "cekat_csp": false
+  },
+  {
+    "path": "/app",
+    "status": 303,
+    "nora_include": false,
+    "cekat_csp": false
+  },
+  {
+    "path": "/paddle/checkout",
+    "status": 303,
+    "nora_include": false,
+    "cekat_csp": false
+  },
+  {
+    "path": "/api/v1/auth/me",
+    "status": 200,
+    "nora_include": false,
+    "cekat_csp": false
+  },
+  {
+    "path": "/static/nora-support.js",
+    "status": 200,
+    "nora_include": false,
+    "cekat_csp": false
+  }
+]
