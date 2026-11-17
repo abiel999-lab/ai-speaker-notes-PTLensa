@@ -1,0 +1,30 @@
+[
+  {
+    "path": "app/app/main.py",
+    "sha256": "0ab34415d4046d515495bd277f1aa7ede51f50674d235730c8edb4669c47b4db"
+  },
+  {
+    "path": "app/app/templates/home.html",
+    "sha256": "cd4a401a3d1bfc3c08f7ff39560b3f72c89109f0d155c58721c283846b6089b7"
+  },
+  {
+    "path": "app/app/templates/pricing.html",
+    "sha256": "82109893cf77e9a40b600068e29a016075d6b8fc9906528af7bf78003146a1d1"
+  },
+  {
+    "path": "app/app/templates/how_to.html",
+    "sha256": "70983c84e5f9d1922373d387f6c55f85668c0073138dba4bed0fef14d6cb0f4b"
+  },
+  {
+    "path": "app/app/templates/legal.html",
+    "sha256": "cf3e322e29848ab2628df5b021b996078a2183b01896708db1a026700822f1fe"
+  },
+  {
+    "path": "app/app/static/nora-support.js",
+    "sha256": "b31e72b546a35877a9e3d2bf8f2a1ffb1c5080870c727c751caff16a3ce383a3"
+  },
+  {
+    "path": "app/app/static/nora-support.css",
+    "sha256": "5abf6573f8f6c11c3dd2f26fb202131832c58b85dfe4799a376bb6dfe548fbcf"
+  }
+]

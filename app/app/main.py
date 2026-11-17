@@ -273,6 +273,13 @@ async def request_and_security_middleware(request: Request, call_next):
         origins={"script-src": "https://www.googletagmanager.com https://connect.facebook.net", "connect-src": "https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://www.facebook.com", "img-src": "https://www.google-analytics.com https://www.facebook.com"}
         response.headers["Content-Security-Policy"]="; ".join(part.strip()+" "+origins.get(part.strip().split(" ")[0],"") for part in csp.split(";") if part.strip())
 
+    # Optional Nora widget: exact apex host and public document routes only.
+    if request.url.hostname == "notepreso.com" and request.url.path in {"/", "/pricing", "/how-to", "/legal"}:
+        csp = response.headers["Content-Security-Policy"]
+        csp = csp.replace("script-src 'self'", "script-src 'self' https://live.cekat.ai")
+        csp += "; frame-src https://live.cekat.ai; style-src-attr 'unsafe-inline'"
+        response.headers["Content-Security-Policy"] = csp
+
     response.headers["Cache-Control"] = "no-store"
 
     logger.info(
