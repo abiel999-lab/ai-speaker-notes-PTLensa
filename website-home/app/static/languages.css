@@ -1,0 +1,27 @@
+.speaker-language-search {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  border: 1px solid #c9dfd5;
+  border-radius: 7px;
+  background: #fff;
+  color: #16382b;
+  font: inherit;
+  font-size: 12px;
+}
+.speaker-language-search:focus-visible {
+  outline: 2px solid #087443;
+  outline-offset: 2px;
+}
+.speaker-language-match-count {
+  display: block;
+  margin: 4px 0;
+  color: #52685e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.speaker-language-match-count:empty { display: none; }

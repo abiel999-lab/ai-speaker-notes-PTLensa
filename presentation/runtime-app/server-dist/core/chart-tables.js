@@ -1,0 +1,13 @@
+import{wrapText,textHeight}from'./layout.js';
+const number=s=>/^-?\d+(?:\.\d+)?%?$/.test(s.trim())?Number(s.trim().replace('%','')):NaN;
+export function tableChartData(rows){if(!rows||rows.length<3||rows.length>12||rows[0].length<2)return null;const header=rows[0],data=rows.slice(1);if(data.some(r=>r.length!==header.length))return null;
+ // Matrix entries and totals are not category series; require explicit semantic headers.
+ if(header.some(h=>/predicted|actual|予測|実際/i.test(h)))return null;
+ const numeric=header.map((h,i)=>i>0&&data.every(r=>Number.isFinite(number(r[i])))?i:-1).filter(i=>i>0);if(!numeric.length)return null;
+ let cols=[],type='bar';if(/epoch|エポック/i.test(header[0])&&numeric.every(i=>/loss|損失/i.test(header[i]))){cols=numeric;type='line';}
+ else if(/threshold|しきい値/i.test(header[0])&&numeric.every(i=>/precision|recall|percent|適合|再現/i.test(header[i]))){cols=numeric;type='line';}
+ else if(header.some(h=>/percent|percentage|パーセント|割合|%/i.test(h))){cols=numeric.filter(i=>/percent|percentage|パーセント|割合|%/i.test(header[i]));}
+ else if(numeric.length===1&&header.length===2&&/loss|ms|MB|kWh|USD|IDR|NTU|mg\/L|kg|L\/h|損失/i.test(header[numeric[0]]))cols=numeric;
+ if(!cols.length)return null;return{type,unit:cols.length===1?header[cols[0]]:/loss|損失/i.test(header[cols[0]])?'Loss':'Percent',labels:data.map(r=>r[0]),series:cols.map(i=>({name:header[i],labels:data.map(r=>r[0]),values:data.map(r=>number(r[i]))}))};}
+export function reserveStructuredChart(slide){const tables=slide.objects.filter(o=>o.type==='table');if(tables.length!==1)return null;const table=tables[0],chart=tableChartData(table.rows);if(!chart)return null;const leftWidth=table.rows[0].length>=4?7.05:6.1;const items=slide.objects.filter(o=>['text','table'].includes(o.type));if(items.some(o=>!o.sourceId))return null;
+ for(const size of[20,19,18,17,16,15,14]){let y=.55,placed=[];for(const[i,o]of items.entries()){if(o.type==='table'){const width=leftWidth/o.rows[0].length;const cellLines=o.rows.map(row=>row.map(s=>wrapText(s,width-.18,size)));const rowHeights=cellLines.map(r=>Math.max(...r.map(v=>textHeight(v.length,size)))+.16);const h=rowHeights.reduce((a,b)=>a+b,0)*1.14+.12;placed.push({...o,x:.65,y,w:leftWidth,h,fontSize:size,cellLines,rowHeights});y+=h+.17;}else{const font=i===0?Math.min(o.fontSize||30,30):size;const lines=o.text.split('\n').flatMap(v=>wrapText(v,leftWidth,font,!!o.bold)),h=textHeight(lines.length,font)*1.18+.1;placed.push({...o,x:.65,y,w:leftWidth,h,fontSize:font,lines});y+=h+.15;}}if(y>6.55)continue;return{slide:{...slide,objects:placed},chart:{...chart,region:{x:leftWidth+.95,y:1.3,w:11.6-leftWidth,h:4.9}}};}return null;}

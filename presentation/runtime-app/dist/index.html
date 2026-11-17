@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#F7F9FC" />
+  <meta name="description" content="Create PowerPoint presentations from your source material or a reviewed AI draft. Choose a design, review the slides, and download your presentation." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+  <link rel="icon" type="image/png" href="/notepreso-presentation-favicon-v1.png" />
+  <title>NotePreso | Presentation</title>
+  <script type="module" crossorigin src="/assets/notepreso-workspace-import-recovery.js?v=document-quality-20261109"></script>
+  <link rel="stylesheet" crossorigin href="/assets/notepreso-presentation-v1.css">
+<style>
+.generation-options{min-width:260px;width:100%;box-sizing:border-box}
+.np-model-control select{display:block;width:100%;min-width:0;box-sizing:border-box;font:inherit;font-size:14px;min-height:44px;padding:10px 32px 10px 12px;color:#172B4D;background:#fff;border:1px solid #ccd9e9;border-radius:8px}
+.np-model-control p{line-height:1.55;overflow-wrap:anywhere;margin:10px 0}
+.design-step{grid-template-columns:minmax(0,1fr) minmax(260px,300px)}
+@media(max-width:900px){.generation-options{min-width:0}.design-step{grid-template-columns:1fr}}
+</style><style>
+.app-shell button,dialog button,input[type=file]::file-selector-button{font:inherit;font-size:14px;font-weight:600;min-height:42px;padding:10px 16px;border:1px solid #C7D7EA;border-radius:10px;background:#FFFFFF;color:#0C4275;cursor:pointer;transition:background .15s,box-shadow .15s,transform .15s}
+.app-shell button:hover:not(:disabled),dialog button:hover:not(:disabled),input[type=file]::file-selector-button:hover{background:#EDF5FF;border-color:#5B93CC;box-shadow:0 3px 10px #0B3B6514}
+.app-shell button:focus-visible,dialog button:focus-visible,input[type=file]:focus-visible{outline:3px solid #82B8F1;outline-offset:3px}
+.app-shell button:disabled,dialog button:disabled{cursor:not-allowed;opacity:.5;box-shadow:none}
+.app-shell .button.primary,dialog .button.primary{background:#0B4D82;color:#FFFFFF;border-color:#0B4D82}
+.app-shell .button.primary:hover:not(:disabled),dialog .button.primary:hover:not(:disabled){background:#073B67;color:#FFFFFF}
+.app-shell .icon-button{padding:9px;min-width:42px}.app-shell .text-button{background:transparent;border-color:transparent;box-shadow:none;padding:8px 10px}
+.app-shell input[type=file]{max-width:100%;font:inherit;font-size:13px;color:#52657B}.app-shell input[type=file]::file-selector-button{margin-right:12px}
+.np-credit-dialog{border:1px solid #D5E1EF;border-radius:18px;box-shadow:0 24px 80px #001D3A33;padding:28px;width:min(480px,calc(100vw - 40px));color:#172B4D;font-family:Inter,Arial,sans-serif}
+.np-credit-dialog::backdrop{background:#082B5277;backdrop-filter:blur(3px)}.np-credit-dialog h2{margin:0 0 14px;font-size:25px}.np-credit-dialog p{line-height:1.65;margin:10px 0 20px}.np-credit-dialog button{min-width:110px}
+</style><style id="np-shared-credit-style">
+.np-shared-account{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px clamp(16px,4vw,76px);background:#F3F8FE;border-bottom:1px solid #D7E4F1;color:#173858;font:15px/1.5 Inter,Arial,sans-serif}
+.np-credit-summary{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap}.np-credit-summary strong{background:#DCEBFA;color:#104D80;padding:3px 12px;border-radius:999px;font-size:14px}.np-credit-summary>span{font-weight:600}.np-credit-summary small{font-size:13px;color:#52657B}.np-credit-summary [role=status]{font-size:13px;font-weight:400}.np-credit-actions{display:flex;gap:10px;flex-shrink:0;align-items:center}.np-credit-actions button,.np-credit-add{font:600 14px Inter,Arial,sans-serif;border-radius:9px;padding:10px 14px;border:1px solid #BDD2E6;cursor:pointer;text-decoration:none;color:#124D80;background:#fff}.np-credit-add{color:#fff;background:#0B4D82;border-color:#0B4D82}.np-credit-actions button:focus-visible,.np-credit-add:focus-visible{outline:3px solid #82B8F1;outline-offset:3px}.np-credit-actions button:disabled{opacity:.5;cursor:wait}
+@media(max-width:680px){.np-shared-account{align-items:flex-start;flex-direction:column;gap:10px}.np-credit-summary{gap:6px 12px}.np-credit-summary small{flex-basis:100%}}
+</style><style id="np-workspace-nav-v2">.app-shell .user-topnav-links button,.app-shell .user-topnav-links a{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:#526176;padding:10px 4px;white-space:nowrap;font-size:15px;font-weight:600;min-height:40px}.app-shell .user-topnav-links [aria-current=page]{color:#0B4D82!important;box-shadow:inset 0 -2px #0B4D82!important}.app-shell .user-topnav-links :focus-visible{outline:3px solid #82B8F1;outline-offset:3px}.user-topnav-inner{gap:18px;flex-wrap:wrap}.user-topnav-links{gap:18px;flex-wrap:nowrap}.workspace-brand{flex-shrink:0}.user-topnav-actions{margin-left:auto;white-space:nowrap}.user-topnav-actions .account-menu-trigger{max-width:240px}@media(max-width:1320px){.user-topnav-links{order:3;width:100%;overflow-x:auto;padding-bottom:5px}.user-topnav-inner{row-gap:4px}}@media(max-width:680px){.user-topnav-links{justify-content:flex-start;gap:20px}.user-topnav-actions{gap:8px}.user-topnav-actions .account-menu-trigger{max-width:140px}.user-topnav-actions .account-signout{padding:9px}.workspace-brand{max-width:180px}}</style><style id="np-presentation-spacing-v3">.app-shell .user-topnav-inner{box-sizing:border-box!important;width:calc(100% - 48px)!important;max-width:1460px!important;min-height:82px!important;padding:12px 0!important;margin:auto!important;display:grid!important;grid-template-columns:210px minmax(0,1fr) auto!important;align-items:center!important;gap:16px 28px!important}.app-shell .user-topnav-links{display:flex!important;justify-content:center!important;align-items:center!important;gap:28px!important;white-space:nowrap!important;flex-wrap:nowrap!important;width:auto!important;order:initial!important;padding:0!important;overflow:visible!important}.app-shell .user-topnav-links>a,.app-shell .user-topnav-links>button{font-size:15px!important;line-height:1.4!important;padding:12px 0!important;min-height:44px!important;flex-shrink:0!important;margin:0!important}.app-shell .workspace-brand{min-width:0!important;max-width:210px!important}.app-shell .user-topnav-actions{display:flex!important;align-items:center!important;gap:12px!important;flex-wrap:nowrap!important;margin:0!important;white-space:nowrap!important}.app-shell .account-signout,.app-shell .user-create-button{white-space:nowrap!important}.app-shell .account-menu-name{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:1250px){.app-shell .user-topnav-inner{grid-template-columns:210px minmax(0,1fr)!important;gap:6px 24px!important}.app-shell .user-topnav-actions{grid-row:1!important;grid-column:2!important;justify-content:flex-end!important}.app-shell .user-topnav-links{grid-row:2!important;grid-column:1/-1!important;gap:36px!important;padding:4px 0!important;justify-content:center!important}}@media(max-width:680px){.app-shell .user-topnav-inner{width:calc(100% - 28px)!important;grid-template-columns:155px minmax(0,1fr)!important;gap:8px!important}.app-shell .user-topnav-links{justify-content:flex-start!important;overflow-x:auto!important;gap:26px!important}.app-shell .user-topnav-actions{gap:8px!important}.app-shell .user-topnav-actions .account-menu-trigger{max-width:130px!important}.app-shell .user-create-button{padding:9px!important}.app-shell .workspace-brand{max-width:155px!important}}</style><style id="np-nav-complete-v4">
+.app-shell .user-topnav-inner>.workspace-brand{grid-column:1!important;grid-row:1!important;order:0!important}
+.app-shell .user-topnav-inner>.user-topnav-links{grid-column:2!important;grid-row:1!important;order:0!important}
+.app-shell .user-topnav-inner>.user-topnav-actions{grid-column:3!important;grid-row:1!important;order:0!important}
+.np-presentation-apps{position:relative;flex-shrink:0;color:#526176;font:600 15px/1.4 Inter,Arial,sans-serif}
+.np-presentation-apps>summary{list-style:none;cursor:pointer;padding:12px 0;min-height:44px;box-sizing:border-box}
+.np-presentation-apps>summary::-webkit-details-marker{display:none}.np-presentation-apps>summary::after{content:'â–¾';margin-left:6px}
+.np-presentation-apps:not([open])>.np-presentation-apps-dropdown{display:none!important}
+.np-presentation-apps[open]>.np-presentation-apps-dropdown{display:flex!important;flex-direction:column;gap:4px;position:absolute;top:calc(100% + 8px);right:0;min-width:190px;background:#fff;padding:8px;border:1px solid #D7E3EF;border-radius:12px;box-shadow:0 12px 36px #17385820;z-index:100}
+.app-shell .np-presentation-apps-dropdown>a{display:block!important;padding:12px 14px!important;color:#18304F!important;text-decoration:none!important;white-space:nowrap;font:600 15px/1.4 Inter,Arial,sans-serif;border-radius:8px!important}
+.app-shell .np-presentation-apps-dropdown>a:hover{background:#EDF5FF!important}.np-presentation-apps summary:focus-visible,.np-presentation-apps-dropdown a:focus-visible{outline:3px solid #82B8F1;outline-offset:3px}
+@media(max-width:1250px){.app-shell .user-topnav-inner>.user-topnav-actions{grid-row:1!important;grid-column:2!important}.app-shell .user-topnav-inner>.user-topnav-links{grid-row:2!important;grid-column:1/-1!important}}
+@media(max-width:680px){.app-shell .user-topnav-inner>.user-topnav-links{overflow:visible!important;flex-wrap:wrap!important;gap:2px 20px!important}}
+</style><style id="np-apps-size-fix">.app-shell .user-topnav-links .np-presentation-apps>summary{font-size:15px!important;font-weight:600!important;line-height:1.4!important;padding:12px 0!important}.np-presentation-apps>summary::after{font-size:11px!important}</style><link rel="stylesheet" href="/assets/notepreso-workspace-v9.css">
+<link rel="stylesheet" href="/assets/site-chrome.css?v=audit-closeout-1"><link rel="stylesheet" href="/assets/readability-audit.css?v=1">
+<link rel="canonical" href="https://presentation.notepreso.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NotePreso">
+<meta property="og:url" content="https://presentation.notepreso.com/">
+<meta property="og:title" content="Presentation Generator | NotePreso">
+<meta property="og:description" content="Create an editable PowerPoint from your source material or an AI draft you review.">
+<meta property="og:image" content="https://notepreso.com/static/notepreso-share-v1.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="NotePreso speaker notes and PowerPoint decks">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Presentation Generator | NotePreso">
+<meta name="twitter:description" content="Create an editable PowerPoint from your source material or an AI draft you review.">
+<meta name="twitter:image" content="https://notepreso.com/static/notepreso-share-v1.png">
+<link rel="stylesheet" href="/assets/import-recovery.css?v=audit-copy-1">  <link rel="stylesheet" href="/assets/presentation-workflow-rework.css">
+<link rel="stylesheet" href="/assets/np-analytics-v1.css">
+<script src="/assets/np-analytics-v1.js" defer></script>
+</head><body><div id="root"></div><script type="module" src="/assets/notepreso-shared-account-ai-credits-phase04.js"></script><script src="/assets/site-chrome.js?v=audit-closeout-1" defer></script></body></html>

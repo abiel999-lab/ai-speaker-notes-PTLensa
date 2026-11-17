@@ -1,0 +1,188 @@
+import JSZip from "jszip";
+import { XMLParser } from "fast-xml-parser";
+import type { Scene, SourceDocument, FidelityReport } from "./types.js";
+import { WIDTH, HEIGHT } from "./layout.js";
+const arr = (x: any): any[] =>
+  x === undefined ? [] : Array.isArray(x) ? x : [x];
+function contentReport(
+  doc: SourceDocument,
+  entries: { id: string; text: string }[],
+  exportVerified: boolean,
+): FidelityReport {
+  const expected = doc.blocks.map((b) => b.id);
+  const map = new Map<string, string>();
+  const order: string[] = [];
+  const extra: string[] = [];
+  for (const e of entries) {
+    if (!expected.includes(e.id)) extra.push(e.id);
+    if (order.at(-1) !== e.id) order.push(e.id);
+    map.set(e.id, (map.get(e.id) || "") + e.text);
+  }
+  const missing = expected.filter((id) => !map.has(id));
+  const changed = doc.blocks
+    .filter((b) => map.has(b.id) && map.get(b.id) !== b.text)
+    .map((b) => b.id);
+  const duplicate = order.filter((id, i) => order.indexOf(id) !== i);
+  const orderValid = JSON.stringify(order) === JSON.stringify(expected);
+  return {
+    passed:
+      !missing.length &&
+      !changed.length &&
+      !extra.length &&
+      !duplicate.length &&
+      orderValid,
+    sourceHash: doc.sha256,
+    blocks: doc.blocks.length,
+    characters: doc.blocks.reduce((n, b) => n + b.text.length, 0),
+    missing,
+    changed,
+    extra,
+    duplicate,
+    orderValid,
+    exportVerified,
+  };
+}
+export function validateScene(doc: SourceDocument, scene: Scene) {
+  const entries = scene.slides.flatMap((s) =>
+    s.objects
+      .filter((o) => ["text", "table"].includes(o.type))
+      .map((o) => ({
+        id: o.sourceId || "UNMAPPED",
+        text:
+          o.type === "table"
+            ? o.rows!.map((r) => r.join("\t")).join("\n")
+            : o.text || "",
+      })),
+  );
+  // A table split across slides keeps a source newline between native rows.
+  for (let i = 1; i < entries.length; i++)
+    if (
+      entries[i].id === entries[i - 1].id &&
+      doc.blocks.find((b) => b.id === entries[i].id)?.kind === "table"
+    )
+      entries[i].text = "\n" + entries[i].text;
+  const report = contentReport(doc, entries, false);
+  const contentObjects = scene.slides.flatMap((slide, slideIndex) =>
+    slide.objects
+      .filter((object) => ["text", "table", "image"].includes(object.type))
+      .map((object) => ({ ...object, slideIndex })),
+  );
+  const overflow = contentObjects.filter(
+    (object) =>
+      object.x < 0 ||
+      object.y < 0 ||
+      object.x + object.w > WIDTH + 0.02 ||
+      object.y + object.h > HEIGHT + 0.02,
+  ).length;
+  let overlaps = 0;
+  for (let i = 0; i < contentObjects.length; i++)
+    for (let j = i + 1; j < contentObjects.length; j++) {
+      const a = contentObjects[i];
+      const b = contentObjects[j];
+      if (a.slideIndex !== b.slideIndex || a.sourceId === b.sourceId || a.backgroundImage || b.backgroundImage) continue;
+      const intersectionWidth =
+        Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+      const intersectionHeight =
+        Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      if (intersectionWidth > 0.03 && intersectionHeight > 0.03) overlaps++;
+    }
+  const sizes = contentObjects
+    .map((object) => object.fontSize)
+    .filter((value): value is number => typeof value === "number");
+  const minimumFontSize = sizes.length ? Math.min(...sizes) : 0;
+  report.quality = {
+    status:
+      overflow || overlaps
+        ? "blocked"
+        : minimumFontSize && minimumFontSize < 14
+          ? "warning"
+          : "verified",
+    overflow,
+    overlaps,
+    minimumFontSize: Math.round(minimumFontSize * 10) / 10,
+  };
+  if (report.quality.status === "blocked") report.passed = false;
+  if (scene.sourceHash !== doc.sha256) report.passed = false;
+  return report;
+}
+function paragraphText(tx: any): string {
+  return arr(tx?.["a:p"])
+    .map(
+      (p) =>
+        arr(p?.["a:r"])
+          .map((r) =>
+            typeof r["a:t"] === "object"
+              ? (r["a:t"]["#text"] ?? "")
+              : (r["a:t"] ?? ""),
+          )
+          .join("") +
+        arr(p?.["a:fld"])
+          .map((r) => r["a:t"] ?? "")
+          .join(""),
+    )
+    .join("\n");
+}
+export async function verifyPptx(
+  doc: SourceDocument,
+  bytes: Buffer,
+): Promise<FidelityReport> {
+  const zip = await JSZip.loadAsync(bytes);
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    parseTagValue: false,
+    trimValues: false,
+  });
+  const entries: { id: string; text: string }[] = [];
+  const files = Object.keys(zip.files)
+    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort(
+      (a, b) =>
+        Number(a.match(/slide(\d+)/)![1]) - Number(b.match(/slide(\d+)/)![1]),
+    );
+  for (const file of files) {
+    const xml = await zip.file(file)!.async("string");
+    const tree = parser.parse(xml)["p:sld"]["p:cSld"]["p:spTree"];
+    // Exporter emits source-bearing objects in source order; collect using shape IDs.
+    const onSlide: { pos: number; id: string; text: string }[] = [];
+    for (const shape of arr(tree["p:sp"])) {
+      const nv = shape["p:nvSpPr"]?.["p:cNvPr"];
+      const name = nv?.["@_name"] || "";
+      const text = paragraphText(shape["p:txBody"]);
+      if (text) {
+        const m = name.match(/^vb-(b\d+)-(\d+)$/);
+        onSlide.push({
+          pos: Number(nv?.["@_id"]),
+          id: m?.[1] || "UNMAPPED",
+          text,
+        });
+      }
+    }
+    for (const frame of arr(tree["p:graphicFrame"])) {
+      const nv = frame["p:nvGraphicFramePr"]?.["p:cNvPr"];
+      const table = frame["a:graphic"]?.["a:graphicData"]?.["a:tbl"];
+      if (!table) continue;
+      const rows = arr(table["a:tr"])
+        .map((r) =>
+          arr(r["a:tc"])
+            .map((c) => paragraphText(c["a:txBody"]))
+            .join("\t"),
+        )
+        .join("\n");
+      const m = (nv?.["@_name"] || "").match(/^vb-(b\d+)-(\d+)$/);
+      onSlide.push({
+        pos: Number(nv?.["@_id"]),
+        id: m?.[1] || "UNMAPPED",
+        text: rows,
+      });
+    }
+    entries.push(...onSlide.sort((a, b) => a.pos - b.pos));
+  }
+  for (let i = 1; i < entries.length; i++)
+    if (
+      entries[i].id === entries[i - 1].id &&
+      doc.blocks.find((b) => b.id === entries[i].id)?.kind === "table"
+    )
+      entries[i].text = "\n" + entries[i].text;
+  return contentReport(doc, entries, true);
+}

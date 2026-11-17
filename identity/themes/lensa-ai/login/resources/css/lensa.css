@@ -1,0 +1,136 @@
+:root {
+    --lensa-green: #16865e;
+    --lensa-green-dark: #0e6848;
+    --lensa-green-soft: #eaf5ef;
+    --lensa-blue: #149fda;
+    --lensa-ink: #101a16;
+    --lensa-copy: #293832;
+    --lensa-muted: #728078;
+    --lensa-line: #dfe7e2;
+    --lensa-field: #f8faf9;
+    --lensa-white: #ffffff;
+    --lensa-aside: #111916;
+    --lensa-danger: #b42318;
+}
+html.login-pf, html.login-pf body { width: 100%; min-height: 100%; margin: 0; background: #ffffff; }
+html.login-pf body {
+    min-height: 100vh; color: var(--lensa-ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+.lensa-auth { min-height: 100vh; display: grid; grid-template-columns: minmax(420px, 44%) minmax(0, 56%); background: #ffffff; }
+.lensa-auth__brand {
+    position: relative; min-height: 100vh; padding: 54px clamp(40px, 5vw, 86px) 46px;
+    display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; color: #ffffff;
+    background:
+        radial-gradient(circle at 15% 12%, rgba(20, 159, 218, 0.20), transparent 26%),
+        radial-gradient(circle at 82% 78%, rgba(22, 134, 94, 0.18), transparent 30%),
+        linear-gradient(145deg, #101915 0%, #14231c 58%, #0d1512 100%);
+}
+.lensa-auth__brand::before, .lensa-auth__brand::after { content: ""; position: absolute; pointer-events: none; }
+.lensa-auth__brand::before {
+    inset: 0; opacity: 0.25;
+    background-image: linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 80%, transparent 100%);
+}
+.lensa-auth__brand::after {
+    width: 380px; height: 380px; right: -160px; bottom: -120px; border: 1px solid rgba(255,255,255,0.08); border-radius: 50%;
+    box-shadow: 0 0 0 62px rgba(255,255,255,0.025), 0 0 0 128px rgba(255,255,255,0.018);
+}
+.lensa-auth__brand-top, .lensa-auth__brand-copy, .lensa-auth__brand-footer { position: relative; z-index: 1; }
+.lensa-auth__logo { display: block; width: 100px; max-width: 75vw; height: auto; }
+.lensa-auth__logo--light { filter: drop-shadow(0 2px 10px rgba(0,0,0,0.16)); }
+.lensa-auth__brand-copy { max-width: 520px; padding: 72px 0 36px; }
+.lensa-auth__eyebrow, .lensa-auth__secure-label { color: #43c28f; font-size: 0.73rem; line-height: 1; font-weight: 800; letter-spacing: 0.17em; }
+.lensa-auth__brand-copy h2 { margin: 20px 0 18px; max-width: 500px; color: #ffffff; font-size: clamp(2.1rem, 3.4vw, 3.7rem); line-height: 1.06; font-weight: 720; letter-spacing: -0.045em; }
+.lensa-auth__brand-copy p { margin: 0; max-width: 480px; color: rgba(255,255,255,0.69); font-size: 1rem; line-height: 1.72; }
+.lensa-auth__capabilities { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 9px; }
+.lensa-auth__capabilities span { padding: 8px 12px; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.72); font-size: 0.76rem; font-weight: 600; }
+.lensa-auth__brand-footer { display: flex; align-items: center; gap: 9px; color: rgba(255,255,255,0.46); font-size: 0.78rem; letter-spacing: 0.02em; }
+.lensa-auth__status-dot { width: 7px; height: 7px; border-radius: 50%; background: #41c48f; box-shadow: 0 0 0 5px rgba(65,196,143,0.09); }
+.lensa-auth__main { position: relative; min-width: 0; min-height: 100vh; padding: 32px clamp(36px, 6vw, 96px) 28px; display: flex; flex-direction: column; background: #ffffff; }
+.lensa-auth__main-top { min-height: 36px; display: flex; justify-content: flex-end; align-items: flex-start; }
+.lensa-auth__mobile-brand { display: none; }
+.lensa-auth__locale { position: relative; z-index: 5; }
+#kc-current-locale-link { min-height: 36px; padding: 0 12px; border: 1px solid var(--lensa-line); border-radius: 9px; background: #ffffff; color: var(--lensa-copy); font-size: 0.82rem; font-weight: 600; }
+#language-switch1 { min-width: 150px; margin: 7px 0 0; padding: 6px; border: 1px solid var(--lensa-line); border-radius: 12px; background: #ffffff; box-shadow: 0 14px 36px rgba(16, 26, 22, 0.12); list-style: none; }
+#language-switch1 a { display: block; padding: 9px 10px; border-radius: 8px; }
+.lensa-auth__content { width: min(100%, 460px); margin: auto; padding: 38px 0 48px; }
+.lensa-auth__secure-label { margin-bottom: 16px; color: var(--lensa-green); }
+#kc-page-title { margin: 0; color: var(--lensa-ink); font-size: clamp(2rem, 3vw, 2.65rem); line-height: 1.12; font-weight: 720; letter-spacing: -0.04em; }
+.lensa-auth__subtitle { margin: 14px 0 0; color: var(--lensa-muted); font-size: 0.96rem; line-height: 1.7; }
+.lensa-auth__required { margin: 0 0 10px; color: var(--lensa-muted); font-size: 0.8rem; }
+.lensa-auth__attempted-user { margin: 14px 0 4px; padding: 11px 13px; display: flex; justify-content: space-between; gap: 16px; border: 1px solid var(--lensa-line); border-radius: 11px; background: var(--lensa-field); color: var(--lensa-copy); font-size: 0.88rem; }
+.lensa-auth__body { margin-top: 30px; }
+#kc-content-wrapper, #kc-form, #kc-form-wrapper, form { width: 100%; }
+.pf-v5-c-form__group { margin-bottom: 18px; }
+.pf-v5-c-form__label-text, .pf-v5-c-check__label, label { color: var(--lensa-copy); font-size: 0.88rem; font-weight: 650; }
+.pf-v5-c-form-control, input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="tel"], select, textarea {
+    color: var(--lensa-ink); box-shadow: none; outline: none; transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+.pf-v5-c-form-control:hover, input:hover, select:hover, textarea:hover { border-color: #b8c7c0; }
+.pf-v5-c-form-control:focus, .pf-v5-c-form-control:focus-within, input:focus, select:focus, textarea:focus { border-color: var(--lensa-green); background: #ffffff; box-shadow: 0 0 0 3px rgba(22,134,94,0.12); }
+.pf-v5-c-input-group, .pf-v5-c-input-group__item, .pf-v5-c-form-control > input { min-width: 0; }
+.pf-v5-c-button.pf-m-primary, #kc-login, #kc-continue, #kc-register, input[type="submit"] {
+    min-height: 50px; border: 0; border-radius: 10px; background: var(--lensa-green); color: #ffffff; font-size: 0.91rem; font-weight: 730;
+    box-shadow: 0 8px 20px rgba(22,134,94,0.14); transition: background .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+.pf-v5-c-button.pf-m-primary:hover, #kc-login:hover, #kc-continue:hover, #kc-register:hover, input[type="submit"]:hover { background: var(--lensa-green-dark); box-shadow: 0 10px 24px rgba(22,134,94,0.18); }
+.pf-v5-c-button.pf-m-primary:active, #kc-login:active, #kc-continue:active, #kc-register:active, input[type="submit"]:active { transform: translateY(1px); }
+.pf-v5-c-button.pf-m-secondary, .pf-v5-c-button.pf-m-link, button[type="button"] { border-radius: 9px; }
+#kc-form-options, #kc-form-options .pf-v5-c-form__helper-text { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--lensa-green); }
+a, .pf-v5-c-button.pf-m-link { color: var(--lensa-green); text-decoration: none; font-weight: 600; }
+a:hover, .pf-v5-c-button.pf-m-link:hover { color: var(--lensa-green-dark); text-decoration: underline; }
+.pf-v5-c-alert { margin-bottom: 22px; border-radius: 10px; box-shadow: none; }
+.lensa-auth__secondary-action, .lensa-auth__info { margin-top: 18px; text-align: center; color: var(--lensa-muted); font-size: 0.88rem; }
+.lensa-auth__info { padding-top: 18px; border-top: 1px solid #edf1ef; }
+.lensa-auth__footer { margin-top: 30px; display: flex; align-items: center; justify-content: space-between; gap: 18px; color: #9aa49f; font-size: 0.75rem; }
+.lensa-auth__footer > * { margin: 0; }
+.select-auth-container, .pf-v5-c-data-list, #kc-otp-login-form, #kc-totp-settings-form, #kc-recovery-codes-list, #kc-webauthn-settings-form { width: 100%; }
+.pf-v5-c-data-list { overflow: hidden; border: 1px solid var(--lensa-line); border-radius: 12px; }
+.pf-v5-c-data-list__item { border-bottom: 1px solid #edf1ef; background: #ffffff; }
+.pf-v5-c-data-list__item:last-child { border-bottom: 0; }
+.pf-v5-c-data-list__item:hover { background: #f8fbf9; }
+.pf-v5-c-tile { border: 1px solid var(--lensa-line); border-radius: 10px; background: #ffffff; }
+.pf-v5-c-tile.pf-m-selected { border-color: var(--lensa-green); box-shadow: 0 0 0 2px rgba(22,134,94,0.10); }
+#kc-totp-secret-key, #kc-recovery-codes-list { padding: 14px; border: 1px solid var(--lensa-line); border-radius: 10px; background: #f7faf8; }
+#kc-totp-settings ol, #kc-totp-settings ul, #kc-content-wrapper ol, #kc-content-wrapper ul { padding-left: 20px; color: var(--lensa-copy); line-height: 1.65; }
+#kc-totp-secret-qr-code, img#kc-totp-secret-qr-code { max-width: 220px; height: auto; margin: 18px auto; padding: 10px; border: 1px solid var(--lensa-line); border-radius: 12px; background: #ffffff; }
+#kc-oauth, #kc-terms-text, #kc-info-message { color: var(--lensa-copy); line-height: 1.7; }
+#kc-oauth h3, #kc-terms-text h2, #kc-info-message h2 { color: var(--lensa-ink); }
+body[data-page-id*="register"] .lensa-auth__content,
+body[data-page-id*="login-config-totp"] .lensa-auth__content,
+body[data-page-id*="login-update-profile"] .lensa-auth__content,
+body[data-page-id*="login-oauth-grant"] .lensa-auth__content { padding-top: 24px; padding-bottom: 36px; }
+@media (max-width: 980px) {
+    .lensa-auth { display: block; }
+    .lensa-auth__brand { display: none; }
+    .lensa-auth__main { min-height: 100vh; padding: 24px 26px 30px; }
+    .lensa-auth__mobile-brand { display: block; margin: 8px 0 20px; }
+    .lensa-auth__logo { width: 205px; }
+    .lensa-auth__main-top { position: absolute; top: 24px; right: 26px; }
+    .lensa-auth__content { width: min(100%, 460px); padding-top: 50px; }
+}
+@media (max-width: 560px) {
+    .lensa-auth__main { padding: 18px 18px 24px; }
+    .lensa-auth__mobile-brand { margin-top: 6px; }
+    .lensa-auth__logo { width: 180px; }
+    .lensa-auth__main-top { top: 18px; right: 18px; }
+    .lensa-auth__content { padding-top: 42px; }
+    #kc-page-title { font-size: 1.85rem; }
+    .lensa-auth__subtitle { font-size: 0.92rem; }
+    .lensa-auth__footer { align-items: flex-start; flex-direction: column; }
+}
+
+/* Social provider icon sizing */
+#kc-social-providers svg.google {
+    width: 20px !important;
+    height: 20px !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    flex: 0 0 20px !important;
+    display: block;
+}

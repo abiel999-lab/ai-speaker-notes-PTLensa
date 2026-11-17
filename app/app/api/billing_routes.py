@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
 
 class CheckoutRequest(BaseModel):
     provider: str | None = None
+    product: str = "pro"
 
 
 class CheckoutResponse(BaseModel):
@@ -27,10 +29,27 @@ class CheckoutResponse(BaseModel):
     provider: str
 
 
+def sandbox_account_allowed(email: str | None) -> bool:
+    """Allow only exact emails explicitly designated for Sandbox testing."""
+    raw = ",".join((
+        os.environ.get("NOTEPRESO_SANDBOX_TEST_EMAIL", ""),
+        os.environ.get("NOTEPRESO_SANDBOX_TEST_EMAILS", ""),
+    ))
+    allowed = {value.strip().casefold() for value in raw.split(",") if value.strip()}
+    return bool(email and email.strip().casefold() in allowed)
+
+
 @router.post("/checkout", response_model=CheckoutResponse)
 def create_checkout(request: Request, payload: CheckoutRequest | None = None) -> CheckoutResponse:
     _reject_cross_site_browser_request(request)
     identity = _require_api_access(request, mutate=True)
+    settings = request.app.state.settings
+    if settings.paddle_available and settings.paddle_environment.strip().lower() == "sandbox":
+        provider = (payload.provider if payload else None)
+        provider = (provider or settings.default_payment_provider or "").strip().lower()
+        if provider == "paddle":
+            if not sandbox_account_allowed(identity.email):
+                raise HTTPException(status_code=403, detail="Sandbox checkout is limited to the designated test account.")
     billing = getattr(request.app.state, "billing", None)
     if billing is None:
         raise HTTPException(status_code=503, detail="Payment checkout is not configured yet.")
@@ -41,6 +60,7 @@ def create_checkout(request: Request, payload: CheckoutRequest | None = None) ->
             email=identity.email,
             display_name=identity.display_name,
             provider=payload.provider if payload else None,
+            product=payload.product if payload else "pro",
         )
     except (BillingError, XenditError, StripeError, PaddleError) as exc:
         raise HTTPException(status_code=getattr(exc, "status_code", 502), detail=str(exc)) from exc

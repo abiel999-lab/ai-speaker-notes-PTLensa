@@ -16,4 +16,5 @@ class NotesGenerator(Protocol):
         rendered_slides: dict[int, Path] | None = None,
         artifact_dir: Path | None = None,
         status: Callable[[str], None] | None = None,
+        slide_progress: Callable[[int], None] | None = None,
     ) -> NotesGenerationResult: ...

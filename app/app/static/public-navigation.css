@@ -1,0 +1,16 @@
+.home-footer .footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 48px;
+  min-width: 0;
+}
+.home-footer .footer-links > div {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.home-footer .footer-links a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
+}

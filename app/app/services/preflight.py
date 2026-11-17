@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.model_policy import estimated_provider_cost
+
 import math
 from dataclasses import dataclass
 
@@ -115,7 +117,7 @@ def estimate_openai_job(
     }[options.note_length]
     estimated_output = 700 + target_count * per_slide_output
     total = estimated_input + estimated_output
-    cost = settings.estimated_openai_cost_usd(
+    cost = estimated_provider_cost(settings,
         model=options.model.value,
         input_tokens=estimated_input,
         output_tokens=estimated_output,

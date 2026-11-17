@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07130f">
+  <meta name="description" content="Turn PowerPoint slides into presentation-ready speaker notes with NotePreso.">
+  <title>NotePreso | AI Speaker Notes for PowerPoint</title>
+  <link rel="stylesheet" href="/static/home.css?v=original-v3">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+<link rel="stylesheet" href="/static/languages.css?v=1901">
+</head>
+<body data-authenticated="{{ 'true' if authenticated else 'false' }}" data-preview-slides="{{ free_preview_slides }}">
+  <header class="site-header" id="site-header">
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="np-brand" href="/" aria-label="NotePreso home">
+        <span class="np-logo"><img src="/static/notepreso-brand-v2.png" alt="NotePreso"></span>
+      </a>
+      <div class="site-links">
+        <a href="#product">Product</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="/pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        
+      </div>
+      <div class="site-actions">
+        {% if authenticated %}
+          <a class="text-link" href="/app">Open app</a>
+          <a class="nav-cta" href="/app">Workspace <span aria-hidden="true">→</span></a>
+        {% else %}
+          <a class="text-link" href="/auth/login?return_to=/app">Log in</a>
+          <button class="nav-cta" type="button" data-scroll-upload>Try NotePreso <span aria-hidden="true">→</span></button>
+        {% endif %}
+      </div>
+      <button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span></button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero-section" id="product">
+      <div class="hero-glow hero-glow-one" aria-hidden="true"></div>
+      <div class="hero-glow hero-glow-two" aria-hidden="true"></div>
+      <div class="hero-copy">
+        <div class="hero-badge">PowerPoint in, speaker notes out</div>
+        <h1>Prepare the explanation<br><span>behind your slides</span></h1>
+        <p class="hero-lede">Turn your PowerPoint into a draft of speaker notes tailored to your audience, then review, refine and rehearse</p>
+        <div class="ai-model-note">
+          <span class="ai-model-spark" aria-hidden="true">✦</span>
+          <div>
+            <strong>Powered by OpenAI GPT-6 Luna</strong>
+            <span>AI-assisted presentation analysis and speaker-note generation</span>
+          </div>
+        </div>
+        <div class="hero-proof">
+          <span>Free preview: up to {{ free_preview_slides }} slides</span>
+          <span class="proof-divider"></span>
+          <span>No credit card required</span>
+        </div>
+      </div>
+
+      <div class="hero-stage" aria-label="NotePreso product preview">
+        <section class="try-card" id="try-card">
+          <div class="try-card-head">
+            <div>
+              <span class="section-kicker">TRY IT ON YOUR DECK</span>
+              <h2>Start with your PowerPoint</h2>
+            </div>
+            
+          </div>
+
+          <form id="home-preview-form" novalidate>
+            <label class="home-drop" id="home-drop" for="home-file">
+              <input id="home-file" name="file" type="file" accept=".ppt,.pptx,.pptm,.pps,.ppsx,.ppsm,.pot,.potx,.potm,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation">
+              <span class="home-drop-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3v11m0-11L8 7m4-4 4 4M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
+              </span>
+              <span class="home-drop-copy">
+                <strong id="home-file-title">Drop your PowerPoint here</strong>
+                <small id="home-file-meta">or click to browse your files</small>
+              </span>
+              <span class="browse-chip">Browse</span>
+            </label>
+
+            <div class="home-options">
+              <label><span>Speaker notes language</span><input class="speaker-language-search" type="search" data-language-filter="home-language" aria-label="Search speaker notes languages" placeholder="Search languages, e.g. Japanese or Jawa" autocomplete="off"><select name="language" id="home-language" aria-label="Speaker notes language">{% with selected_language="English" %}{% include "speaker_note_languages.html" %}{% endwith %}</select></label>
+              <label><span>Audience</span><select name="audience" id="home-audience"><option value="Umum" selected>General</option><option value="Manajemen">Management</option><option value="Teknis">Technical</option><option value="Regulator">Regulator</option><option value="Akademisi">Academic</option><option value="Mahasiswa">Student</option></select></label>
+              <label><span>Depth</span><select name="depth" id="home-depth"><option value="Low">Light</option><option value="Medium" selected>Balanced</option><option value="High">Detailed</option></select></label>
+              <label><span>Note length</span><select name="note_length" id="home-note-length"><option value="<100 kata">Concise</option><option value="100-250 kata" selected>Standard</option><option value="250-500 kata">Detailed</option></select></label>
+            </div>
+
+            <label class="instruction-field"><span>Optional instruction</span><textarea name="custom_instructions" id="home-instructions" maxlength="200" rows="2" placeholder="e.g. Explain charts clearly and keep transitions natural."></textarea><small><span id="home-instructions-count">0</span>/200</small></label>
+
+            <input type="hidden" name="notes_mode" value="missing_only">
+            <input type="hidden" name="engine" value="openai">
+            <input type="hidden" name="model" value="gpt-6-luna">
+            <input type="hidden" name="use_vision" value="false">
+
+            <div class="try-actions">
+              <button id="home-generate" class="generate-button" type="submit" {% if not openai_configured %}disabled{% endif %}>
+                <span>Generate speaker notes</span><span aria-hidden="true">→</span>
+              </button>
+              <p>Free accounts can process {{ free_weekly_presentations }} PPT files per week, up to {{ free_preview_slides }} generated slides each</p>
+            </div>
+          </form>
+
+          <div class="home-job hidden" id="home-job" aria-live="polite">
+            <div class="home-job-top"><div><span id="home-job-state">Preparing</span><strong id="home-job-title">Your presentation</strong></div><span id="home-job-count"></span></div>
+            <div class="home-job-progress"><span id="home-job-bar"></span></div>
+            <p id="home-job-message">Getting everything ready…</p>
+            <div class="home-job-result hidden" id="home-job-result">
+              <div><span>Generated</span><strong id="home-job-generated">0</strong><small>speaker-note slides</small></div>
+              <div><span>Remaining</span><strong id="home-job-remaining">0</strong><small>slides to unlock</small></div>
+            </div>
+            <div class="home-job-actions hidden" id="home-job-actions">
+              <a class="secondary-action" id="home-download" href="#">Download preview</a>
+              <a class="primary-action" id="home-unlock" href="/pricing">Unlock full presentation <span aria-hidden="true">→</span></a>
+            </div>
+          </div>
+        </section>
+
+        <aside class="product-window" aria-label="Animated NotePreso application demonstration">
+          <div class="window-bar"><div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div><span>Quarterly-Review.pptx</span><span class="window-status"><i></i> Animated example</span></div>
+          <div class="product-layout">
+            <div class="slide-rail" aria-hidden="true"><div class="rail-slide active"><span>01</span><i></i></div><div class="rail-slide"><span>02</span><i></i></div><div class="rail-slide"><span>03</span><i></i></div></div>
+            <div class="slide-canvas">
+              <div class="scan-line" aria-hidden="true"></div>
+              <span class="slide-label">Q3 PERFORMANCE</span>
+              <h3>Revenue grew<br><strong>18.4%</strong> YoY</h3>
+              <div class="mini-chart" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><i></i></div>
+              <div class="slide-metrics"><span><b>+18.4%</b><small>Revenue</small></span><span><b>+7.2%</b><small>Margin</small></span></div>
+            </div>
+            <div class="notes-pane">
+              <div class="notes-pane-head"><div><span>AI SPEAKER NOTES</span><strong id="demo-stage">Analyzing slide context</strong></div><span class="spark-icon">✦</span></div>
+              <div class="analysis-steps" aria-hidden="true"><span class="done">Structure</span><span class="done">Chart</span><span id="demo-step">Narrative</span></div>
+              <div class="typed-note"><span id="demo-note"></span><i class="type-cursor"></i></div>
+              <div class="note-footer"><span id="demo-progress-label">Slide 04 of 18</span><div><i id="demo-progress"></i></div></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="Product principles">
+      <div><strong>Your original stays untouched</strong><span>NotePreso writes to a generated copy</span></div>
+      <div><strong>Built for real presentations</strong><span>Audience, depth and note length stay configurable</span></div>
+      <div><strong>Human review stays in the loop</strong><span>Generated notes are designed to be reviewed before presenting</span></div>
+    </section>
+
+    <section class="story-section" id="how-it-works">
+      <div class="section-heading"><span class="section-kicker">HOW IT WORKS</span><h2>Prepare your explanation in four steps</h2><p>Start with your deck, set the context and review the generated notes</p></div>
+      <div class="steps-grid">
+        <article class="step-card reveal"><span>01</span><div class="step-visual upload-visual"><i></i><b>PPTX</b><em>ready</em></div><h3>Bring your PowerPoint</h3><p>Choose your presentation and settings, then sign in before processing begins</p></article>
+        <article class="step-card reveal"><span>02</span><div class="step-visual controls-visual"><i></i><i></i><i></i></div><h3>Set your audience and depth</h3><p>Choose the language, audience and level of explanation your presentation needs</p></article>
+        <article class="step-card reveal"><span>03</span><div class="step-visual analyze-visual"><b>✦</b><i></i></div><h3>Generate a notes draft</h3><p>Get a starting point for each processed slide, shaped around your settings</p></article>
+        <article class="step-card reveal"><span>04</span><div class="step-visual ready-visual"><b>✓</b><i></i></div><h3>Review, refine, rehearse</h3><p>Open the generated copy, check names and figures, adapt the wording and rehearse aloud</p></article>
+      </div>
+    </section>
+
+    <section class="before-after-section">
+      <div class="section-heading compact"><span class="section-kicker">WHAT CHANGES</span><h2>Prepare the explanation your audience needs</h2></div>
+      <div class="before-after-grid reveal">
+        <div class="deck-card before"><div class="deck-top"><span>BEFORE</span><small>Slide 08</small></div><div class="fake-slide"><h4>Regional performance</h4><div class="fake-bars"><i></i><i></i><i></i><i></i></div><p>APAC · EMEA · Americas</p></div><div class="empty-notes"><span>Speaker notes</span><p>No notes on this slide</p></div></div>
+        <div class="transform-arrow" aria-hidden="true">→</div>
+        <div class="deck-card after"><div class="deck-top"><span>WITH NOTEPRESO</span><small>Slide 08</small></div><div class="fake-slide"><h4>Regional performance</h4><div class="fake-bars"><i></i><i></i><i></i><i></i></div><p>APAC · EMEA · Americas</p></div><div class="filled-notes"><span>Speaker notes</span><p>Start with APAC, where growth is strongest. Then contrast EMEA’s steadier trajectory before closing with the Americas…</p></div></div>
+      </div>
+    </section>
+
+    <section class="feature-section">
+      <div class="section-heading"><span class="section-kicker">BUILT FOR PRESENTING</span><h2>Adjust the explanation to your audience</h2></div>
+      <div class="feature-cards">
+        <article class="feature-card reveal"><span class="feature-icon">Aa</span><h3>Language & audience</h3><p>Shape the explanation for general, management, technical, regulatory, academic or student audiences</p></article>
+        <article class="feature-card reveal"><span class="feature-icon">↕</span><h3>Depth & note length</h3><p>Keep notes concise for quick delivery or increase detail when the presentation needs more explanation</p></article>
+        <article class="feature-card reveal"><span class="feature-icon">✦</span><h3>Custom instructions</h3><p>Add relevant context or a specific instruction for this presentation</p></article>
+        <article class="feature-card reveal"><span class="feature-icon">P</span><h3>Notes in your PowerPoint</h3><p>Generated speaker notes are written to a copy of the presentation, while the original remains unchanged</p></article>
+      </div>
+    </section>
+
+    <section class="pricing-teaser reveal">
+      <div><span class="section-kicker">START SMALL</span><h2>Review a preview<br>Choose the plan that fits your needs</h2><p>Your account gets {{ free_weekly_presentations }} free PPT previews per week, with up to {{ free_preview_slides }} generated slides per PPT. Full presentation processing is available with Pro</p></div>
+      <div class="teaser-card"><div class="teaser-row"><span>Free preview</span><strong>{{ free_preview_slides }} slides</strong></div><div class="teaser-row"><span>Credit card</span><strong>Not required</strong></div><div class="teaser-row"><span>Full deck</span><strong>Pro</strong></div><a href="/pricing">See pricing <span aria-hidden="true">→</span></a></div>
+    </section>
+
+    <section class="faq-section" id="faq">
+      <div class="section-heading compact"><span class="section-kicker">FAQ</span><h2>Questions before you begin</h2></div>
+      <div class="faq-list">
+        <details><summary>What happens when I try NotePreso without an account?<span>+</span></summary><p>You can select a PowerPoint and configure the preview on the homepage. NotePreso does not start processing the file until you sign in or create an account</p></details>
+        <details><summary>How much can I try for free?<span>+</span></summary><p>Each Free account can process {{ free_weekly_presentations }} PPT files per week, with speaker notes for up to {{ free_preview_slides }} eligible slides per PPT. The quota resets every Monday at 00:00 WIB</p></details>
+        <details><summary>What happens after the free preview?<span>+</span></summary><p>You can review or download the preview output. Use another free preview while your weekly quota remains; Pro provides full-deck processing according to your available credits</p></details>
+        <details><summary>Does NotePreso change my original PowerPoint?<span>+</span></summary><p>No. Processing uses a working copy and produces a separate result file. The original upload is not overwritten</p></details>
+        <details><summary>Can I still use the full workspace?<span>+</span></summary><p>Yes. After signing in, the workspace provides the full generation controls, presentation history and the account plan area</p></details>
+      </div>
+    </section>
+
+    <section class="final-cta reveal">
+      <div class="final-orb" aria-hidden="true"></div><span class="section-kicker">YOUR NEXT DECK</span><h2>Your expertise<br>Clearly spoken</h2><button type="button" data-scroll-upload>Try NotePreso <span aria-hidden="true">→</span></button><p>{{ free_weekly_presentations }} free PPT previews per week · up to {{ free_preview_slides }} slides per PPT. No credit card required</p>
+    </section>
+  </main>
+
+  <footer class="home-footer"><div class="footer-brand"><a class="np-brand" href="/"><span class="np-logo"><img src="/static/notepreso-brand-v2.png" alt="NotePreso"></span></a><p>AI speaker notes for the PowerPoint you already have</p></div><div class="footer-links"><div><strong>Product</strong><a href="#how-it-works">How it works</a><a href="/pricing">Pricing</a><a href="/app">Workspace</a></div><div><strong>Support</strong><a href="/support">Support</a><a href="/how-to">How to use</a><a href="/legal">Terms & Privacy</a></div></div><div class="footer-bottom"><span>NotePreso · v{{ version }}</span><span>by Actia Carbon</span></div></footer>
+
+  <div class="auth-modal hidden" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="auth-backdrop" data-auth-close></div>
+    <div class="auth-card">
+      <button class="auth-close" type="button" aria-label="Close" data-auth-close>×</button>
+      <div class="auth-icon" aria-hidden="true">✦</div>
+      <span class="section-kicker">ONE STEP BEFORE PROCESSING</span>
+      <h2 id="auth-title">Continue with NotePreso</h2>
+      <p>Sign in or create an account before NotePreso processes your presentation</p>
+      <div class="auth-file"><span class="auth-file-icon">P</span><div><strong id="auth-file-name">Your presentation</strong><small>Ready to process · file has not been uploaded yet</small></div></div>
+      <button class="auth-primary" id="auth-signin" type="button">Sign in to continue <span>→</span></button>
+      <button class="auth-secondary" id="auth-register" type="button">Create an account</button>
+      <div class="auth-preview-note"><span>Free preview</span><strong>{{ free_weekly_presentations }} PPT per week · up to {{ free_preview_slides }} slides each</strong></div>
+    </div>
+  </div>
+
+  <div class="limit-modal hidden" id="limit-modal" role="dialog" aria-modal="true" aria-labelledby="limit-title">
+    <div class="auth-backdrop" data-limit-close></div>
+    <div class="auth-card limit-card">
+      <button class="auth-close" type="button" aria-label="Close" data-limit-close>×</button>
+      <div class="auth-icon lock" aria-hidden="true">↗</div>
+      <span class="section-kicker">READY FOR THE FULL DECK?</span>
+      <h2 id="limit-title">Your free preview has been used</h2>
+      <p>Choose a Pro option to process the complete presentation and create more speaker-note decks</p>
+      <a class="auth-primary link-button" id="limit-pricing" href="/pricing">View pricing <span>→</span></a>
+      <button class="auth-secondary" type="button" data-limit-close>Maybe later</button>
+    </div>
+  </div>
+
+  <script src="/static/home.js?v=original-v3" defer></script>
+<script src="/static/languages.js?v=1901" defer></script>
+</body>
+</html>

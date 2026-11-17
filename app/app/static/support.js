@@ -27,3 +27,36 @@ document.addEventListener('click', (event) => {
     supportLogout();
   }
 });
+
+
+// NOTEPRESO MAILTO-ONLY SUPPORT 2026-10-01
+document.addEventListener("DOMContentLoaded", () => {
+  const button = document.querySelector("[data-copy-support-email]");
+  const status = document.getElementById("support-copy-status");
+
+  if (!button) return;
+
+  button.addEventListener("click", async () => {
+    const email = button.dataset.copySupportEmail || "";
+
+    if (!email) return;
+
+    try {
+      await navigator.clipboard.writeText(email);
+
+      button.textContent = "Email copied";
+      if (status) {
+        status.textContent = `${email} copied to clipboard.`;
+      }
+
+      window.setTimeout(() => {
+        button.textContent = "Copy email address";
+        if (status) status.textContent = "";
+      }, 2500);
+    } catch (_) {
+      if (status) {
+        status.textContent = `Copy this address: ${email}`;
+      }
+    }
+  });
+});

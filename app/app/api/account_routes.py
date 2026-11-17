@@ -12,4 +12,13 @@ router = APIRouter(prefix="/api/v1/account", tags=["account"])
 def account_plan(request: Request) -> dict[str, object]:
     _reject_cross_site_browser_request(request)
     identity = _require_api_access(request)
-    return request.app.state.entitlements.account_snapshot(identity.owner_key)
+
+    entitlements = request.app.state.entitlements
+    snapshot = entitlements.account_snapshot(identity.owner_key)
+
+    # Keep credit composition at the HTTP boundary instead of nesting
+    # credit_snapshot() inside account_snapshot(). This avoids recursive
+    # entitlement calls while keeping one frontend account endpoint.
+    snapshot["credits"] = entitlements.credit_snapshot(identity.owner_key)
+
+    return snapshot

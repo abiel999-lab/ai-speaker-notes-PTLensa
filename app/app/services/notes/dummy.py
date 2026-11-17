@@ -18,6 +18,7 @@ class DummyNotesGenerator:
         rendered_slides: dict[int, Path] | None = None,
         artifact_dir: Path | None = None,
         status: Callable[[str], None] | None = None,
+        slide_progress: Callable[[int], None] | None = None,
     ) -> NotesGenerationResult:
         notes: dict[int, str] = {}
         for slide in deck.slides:
@@ -29,6 +30,8 @@ class DummyNotesGenerator:
                 "Catatan ini dibuat oleh DummyNotesGenerator untuk memvalidasi pipeline "
                 "PPTX → parse → generate → write-back → download sebelum AI diaktifkan."
             )
+            if slide_progress is not None:
+                slide_progress(len(notes))
         return NotesGenerationResult(
             notes=notes,
             provider="dummy",

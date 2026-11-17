@@ -1,0 +1,6 @@
+#limit-modal [hidden],#status [hidden]{display:none!important}
+#limit-reset{font-size:14px;color:#34536a;line-height:1.5}
+#limit-file{font-size:13px;color:#526176;overflow-wrap:anywhere;line-height:1.5}
+.preview-limit-panel p{font-size:14px;line-height:1.5;overflow-wrap:anywhere;color:#34536a}
+.preview-limit-panel .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin:4px 8px 4px 0;max-width:100%;white-space:normal}
+#limit-modal .auth-card h2{font-size:28px;line-height:1.15;letter-spacing:-.025em}

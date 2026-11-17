@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import posixpath
+import gc
 import shutil
 import xml.etree.ElementTree as ET
 import zipfile
@@ -35,6 +36,21 @@ class PptxNotesWriter:
     """
 
     def write(
+        self,
+        input_path: Path,
+        notes_by_slide: dict[int, str],
+        output_path: Path,
+        *,
+        mode: NotesMode,
+    ) -> None:
+        try:
+            self._write(input_path, notes_by_slide, output_path, mode=mode)
+        finally:
+            # python-pptx packages contain cycles holding every embedded image.
+            # Release them between stages/retries, before LibreOffice starts again.
+            gc.collect()
+
+    def _write(
         self,
         input_path: Path,
         notes_by_slide: dict[int, str],
@@ -81,6 +97,10 @@ class PptxNotesWriter:
             shutil.copy2(input_path, output_path)
             return
 
+        # Do not retain a second complete presentation while building scaffolding.
+        presentation = slide = frame = None
+        gc.collect()
+
         template_path: Path | None = None
         try:
             # Only missing notes slides require python-pptx to generate the
@@ -99,6 +119,8 @@ class PptxNotesWriter:
                     # writer below repairs/adds a body placeholder directly.
                     _ = template.slides[number - 1].notes_slide
                 template.save(template_path)
+                template = _ = None
+                gc.collect()
 
             self._build_preserved_package(
                 input_path=input_path,
@@ -447,12 +469,24 @@ class PptxNotesWriter:
 
         for line in lines:
             paragraph = ET.SubElement(body_tx, f"{{{_A_NS_URI}}}p")
-            if line:
+            # python-pptx represents a DrawingML soft line break as U+000B.
+            # Serializing it as literal XML makes otherwise valid decks unreadable,
+            # especially in append mode. Preserve it with its actual OOXML element.
+            for index, segment in enumerate(line.split("\v")):
+                if index:
+                    ET.SubElement(paragraph, f"{{{_A_NS_URI}}}br")
+                if not segment:
+                    continue
+                segment = "".join(
+                    c if (c in "\t\r" or 0x20 <= ord(c) <= 0xD7FF
+                          or 0xE000 <= ord(c) <= 0xFFFD or 0x10000 <= ord(c) <= 0x10FFFF)
+                    else "\uFFFD" for c in segment
+                )
                 run = ET.SubElement(paragraph, f"{{{_A_NS_URI}}}r")
                 text_node = ET.SubElement(run, f"{{{_A_NS_URI}}}t")
-                if line[:1].isspace() or line[-1:].isspace():
+                if segment[:1].isspace() or segment[-1:].isspace():
                     text_node.set(f"{{{_XML_NS_URI}}}space", "preserve")
-                text_node.text = line
+                text_node.text = segment
 
         return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 

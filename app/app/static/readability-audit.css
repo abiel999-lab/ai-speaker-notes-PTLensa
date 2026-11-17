@@ -1,0 +1,10 @@
+/* Customer-facing text on light surfaces */
+body[data-preview-slides] :is(.empty-notes p, .empty-notes span, .filled-notes span,
+  .instruction-field small, .instruction-field > span, .step-card > span,
+  .home-drop-copy small, .trust-strip article span, .trust-strip > div span,
+  .home-options label > span, .teaser-row > span, .slide-canvas .slide-metrics small) {
+  color: #465c75;
+}
+body[data-preview-slides] .note-footer > span { color: #acbed0; }
+body[data-page="dashboard"] :is(.account-plan-status, .step-badge) { color: #075b66; }
+body[data-page="howto"] .docs-callout .section-kicker { color: #075b66; }

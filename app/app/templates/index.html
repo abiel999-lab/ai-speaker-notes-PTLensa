@@ -7,9 +7,10 @@
   <meta name="theme-color" content="#087443">
   <title>{{ app_name }} | Lensa Lingkungan</title>
   <link rel="stylesheet" href="/static/app.css?v=1001">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
-  <link rel="shortcut icon" type="image/png" href="/static/favicon.png?v=0284">
-  <link rel="apple-touch-icon" href="/static/favicon.png?v=0284">
+  <link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
+  
+  <link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
+<link rel="stylesheet" href="/static/languages.css?v=1901">
 </head>
 <body data-page="dashboard">
 <header class="topbar">
@@ -55,22 +56,50 @@
     <div class="capability"><div><span>IMAGE</span><strong data-i18n="{{ 'ready' if (openai_use_vision and renderer_available) else ('disabled' if not openai_use_vision else 'rendererMissing') }}">{{ 'Ready' if (openai_use_vision and renderer_available) else ('Disabled' if not openai_use_vision else 'Renderer missing') }}</strong>{% if renderer_available %}<small><span>{{ renderer_name }}</span> &middot; <span data-i18n="perSlideRecovery">per-slide recovery</span></small>{% else %}<small data-i18n="textOnlyFallback">Text-only fallback available</small>{% endif %}</div></div>
   </section>
 
-  <section id="account-plan-card" class="account-plan-card" aria-label="Account plan and monthly usage">
+  <section id="account-plan-card" class="account-plan-card" aria-label="Account plan and AI credit usage">
     <div class="account-plan-head">
       <div>
         <span class="account-plan-kicker">ACCOUNT PLAN</span>
         <div class="account-plan-title"><h2 id="account-plan-name">Free</h2><span id="account-plan-status" class="account-plan-status">Active</span></div>
-        <p id="account-plan-reset">Monthly usage resets automatically.</p>
+        <p id="account-plan-reset">One free preview · up to 5 slides · does not reset.</p>
       </div>
       <div class="account-plan-actions">
         <button id="upgrade-plan" class="btn primary account-upgrade" type="button" disabled>Upgrade to Pro</button>
         <button id="cancel-plan" class="btn secondary account-cancel hidden" type="button">Cancel renewal</button>
       </div>
     </div>
+
     <div class="account-plan-grid">
-      <div class="account-usage-item"><div><span>Presentations</span><strong id="plan-presentations">0 / —</strong></div><div class="account-usage-track"><span id="plan-presentations-bar"></span></div></div>
-      <div class="account-usage-item"><div><span>AI chat messages</span><strong id="plan-chat">0 / —</strong></div><div class="account-usage-track"><span id="plan-chat-bar"></span></div></div>
-      <div class="account-entitlement"><span>Text + Vision</span><strong id="plan-vision">Checking…</strong><small id="plan-provider">Billing provider: not configured</small></div>
+      <div class="account-usage-item credit-usage-item">
+        <div>
+          <span>AI Slide Credits</span>
+          <strong id="plan-credits">Pro only</strong>
+          <small id="plan-credits-note">1 credit = 1 generated slide</small>
+        </div>
+        <div class="account-usage-track account-credit-track"><span id="plan-credits-bar"></span></div>
+      </div>
+
+      <div class="account-usage-item">
+        <div>
+          <span>Top-up Credits</span>
+          <strong id="plan-topup">0</strong>
+          <small id="plan-topup-note">Additional credits for active Pro accounts</small>
+        </div>
+      </div>
+
+      <div class="account-usage-item">
+        <div>
+          <span>AI chat messages</span>
+          <strong id="plan-chat">0 / —</strong>
+        </div>
+        <div class="account-usage-track"><span id="plan-chat-bar"></span></div>
+      </div>
+
+      <div class="account-entitlement">
+        <span>Text + Vision</span>
+        <strong id="plan-vision">Checking…</strong>
+        <small id="plan-provider">Billing provider: not configured</small>
+      </div>
     </div>
   </section>
 
@@ -124,7 +153,7 @@
             </select>
             <span class="help" data-i18n="modelHelp">GPT-6 Luna is the default. GPT-5.6 Luna remains available for compatibility.</span>
           </label>
-          <label><span data-i18n="languageLabel">Language</span><select id="language" name="language"><option value="Bahasa Indonesia" data-i18n="languageIndonesian">Indonesian</option><option value="English" data-i18n="languageEnglish">English</option></select></label>
+          <label><span data-i18n="languageLabel">Speaker notes language</span><input class="speaker-language-search" type="search" data-language-filter="language" aria-label="Search speaker notes languages" placeholder="Search languages, e.g. Japanese or Jawa" autocomplete="off"><select id="language" name="language" aria-label="Speaker notes language">{% with selected_language="Bahasa Indonesia" %}{% include "speaker_note_languages.html" %}{% endwith %}</select></label>
           <label><span data-i18n="audienceLabel">Audiens</span><select id="audience" name="audience"><option value="Umum" data-i18n="audienceGeneral">Umum</option><option value="Manajemen" data-i18n="audienceManagement">Manajemen</option><option value="Teknis" data-i18n="audienceTechnical">Teknis</option><option value="Regulator" data-i18n="audienceRegulator">Regulator</option><option value="Akademisi" data-i18n="audienceAcademic">Akademisi</option><option value="Mahasiswa" data-i18n="audienceStudent">Mahasiswa</option></select></label>
           <label><span data-i18n="depthLabel">Kedalaman</span><select id="depth" name="depth"><option value="Low" data-i18n="depthLow">Low</option><option value="Medium" selected data-i18n="depthMedium">Medium</option><option value="High" data-i18n="depthHigh">High</option></select><span class="help" data-i18n="depthHelp">Depth memengaruhi reasoning, bukan panjang notes.</span></label>
         </div>
@@ -172,6 +201,7 @@
 </main>
 
 <footer class="footer"><div class="footer-inner"><span>AI Speaker Notes v{{ version }} &middot; <span data-i18n="humanReviewRequired">Human review required</span></span><span><a href="/how-to" data-i18n="howTo">How to Use</a> &middot; <a href="/legal">Terms & Privacy</a> &middot; <a href="/support#refund">Refund</a></span></div></footer>
-<script src="/static/common.js?v=1020" defer></script><script src="/static/app.js?v=1020" defer></script>
+<script src="/static/common.js?v=1900" defer></script><script src="/static/app.js?v=1020" defer></script>
+<script src="/static/languages.js?v=1901" defer></script>
 </body></html>
 

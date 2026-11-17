@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NotePreso · Paddle Checkout</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script defer src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script defer src="/static/paddle-checkout.js?v=1850"></script>
+</head>
+<body class="paddle-checkout-page" data-paddle-environment="{{ paddle_environment|e }}" data-paddle-client-token="{{ paddle_client_token|e }}" data-return-url="{{ return_url|e }}">
+  <main class="paddle-checkout-shell">
+    <section class="paddle-checkout-layout">
+      <div class="paddle-checkout-card">
+        <span class="account-plan-kicker">SECURE CHECKOUT</span>
+        <h1>NotePreso Pro</h1>
+        <p id="paddle-checkout-status">Loading Paddle Checkout…</p>
+        <p class="muted">After successful payment, NotePreso verifies your purchase and opens your workspace automatically. Credits are never granted until payment is confirmed.</p>
+        <a class="btn secondary" href="/app">Back to workspace</a>
+      </div>
+      <div class="paddle-inline-wrap" aria-label="Paddle secure payment form">
+        <div class="paddle-inline-checkout"></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

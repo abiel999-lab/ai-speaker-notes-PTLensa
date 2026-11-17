@@ -94,8 +94,8 @@ class StripePaymentClient:
         access_days = self.settings.stripe_pro_access_days
         data: dict[str, str] = {
             "mode": "payment",
-            "success_url": f"{base}/?billing=success",
-            "cancel_url": f"{base}/?billing=cancelled",
+            "success_url": f"{base}/pricing?billing=success",
+            "cancel_url": f"{base}/pricing?billing=cancelled",
             "client_reference_id": reference_id,
             "line_items[0][quantity]": "1",
             "line_items[0][price_data][currency]": "idr",

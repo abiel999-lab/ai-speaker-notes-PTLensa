@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import re
+import zipfile
 from pathlib import Path
 from typing import Protocol
 
@@ -16,18 +18,27 @@ def _make_hidden_slides_renderable(source: Path, target: Path) -> int:
     """Save a temporary PPTX with hidden-slide flags removed for visual rendering.
 
     LibreOffice omits hidden slides from PDF export, which shifts every subsequent page.
-    python-pptx rewrites a temporary rendering copy only; the uploaded file and final output
-    remain untouched. The temp copy is disposable and never returned to the user.
+    Stream unchanged package members so rendering never loads all embedded media
+    into a second python-pptx package. Only hidden flags on slide roots change.
+    The uploaded file and final output remain untouched.
     """
-    from pptx import Presentation
-
-    presentation = Presentation(source)
     hidden_count = 0
-    for slide in presentation.slides:
-        if slide._element.get("show") == "0":  # noqa: SLF001 - OOXML flag has no public API
-            slide._element.attrib.pop("show", None)
-            hidden_count += 1
-    presentation.save(target)
+    root_tag = re.compile(rb'<(?:[A-Za-z_][\w.-]*:)?sld\b[^>]*>')
+    hidden_flag = re.compile(rb'\s+show\s*=\s*([\x22\x27])(?:0|false)\1')
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(target, 'w') as output:
+        for info in original.infolist():
+            if re.fullmatch(r'ppt/slides/slide[0-9]+\.xml', info.filename):
+                payload = original.read(info)
+                match = root_tag.search(payload)
+                if match:
+                    updated, count = hidden_flag.subn(b'', match.group())
+                    if count:
+                        payload = payload[:match.start()] + updated + payload[match.end():]
+                        hidden_count += 1
+                output.writestr(info, payload)
+            else:
+                with original.open(info) as src, output.open(info, 'w') as dst:
+                    shutil.copyfileobj(src, dst, length=1024 * 1024)
     return hidden_count
 
 

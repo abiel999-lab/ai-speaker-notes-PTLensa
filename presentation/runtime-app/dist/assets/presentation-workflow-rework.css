@@ -1,0 +1,42 @@
+#workflow.workflow-section {
+  display: block;
+  max-width: 1184px;
+  margin-inline: auto;
+  padding: clamp(38px, 6vw, 76px) clamp(16px, 4vw, 46px);
+}
+
+#workflow .section-title {
+  max-width: 42rem;
+  margin: 0 0 26px;
+}
+
+#workflow .section-title h2 {
+  max-width: 25ch;
+  font-size: clamp(27px, 4vw, 42px);
+  line-height: 1.12;
+  letter-spacing: -.03em;
+}
+
+#workflow .workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+#workflow .workflow-grid article {
+  min-width: 0;
+  padding: clamp(18px, 2.2vw, 26px);
+  border: 1px solid #dbe4eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+#workflow .workflow-grid article > div { color: #076a75; margin-bottom: 12px; }
+#workflow .workflow-grid h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.25; }
+#workflow .workflow-grid p { margin: 0; color: #4b6077; font-size: 15px; line-height: 1.6; }
+
+@media (max-width: 720px) {
+  #workflow .workflow-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.np-document-workspace [hidden]{display:none!important}

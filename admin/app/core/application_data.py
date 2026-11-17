@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import time
+import calendar
+import hashlib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import create_engine, inspect, text
@@ -267,8 +269,11 @@ class ApplicationDataReader:
             subscription_rows = conn.execute(
                 text(
                     "SELECT s.plan, s.status, s.provider, s.provider_subscription_id, "
-                    "s.current_period_start, s.current_period_end, s.cancel_at_period_end "
+                    "s.current_period_start, s.current_period_end, s.cancel_at_period_end, "
+                    "m.starts_at AS manual_starts_at, m.ends_at AS manual_ends_at, "
+                    "m.revoked_at AS manual_revoked_at "
                     "FROM subscriptions s JOIN users u ON u.subject=s.owner "
+                    "LEFT JOIN manual_access_grants m ON m.owner=s.owner "
                     f"{users_where}"
                 )
             ).mappings().all()
@@ -335,6 +340,7 @@ class ApplicationDataReader:
 
         if "subscriptions" in self.tables:
             joins.append("LEFT JOIN subscriptions s ON s.owner=u.subject")
+            joins.append("LEFT JOIN manual_access_grants m ON m.owner=u.subject")
             subscription_expr = (
                 "s.plan AS subscription_plan_raw, "
                 "s.status AS subscription_status_raw, "
@@ -342,7 +348,10 @@ class ApplicationDataReader:
                 "s.provider_subscription_id AS subscription_provider_id_raw, "
                 "s.current_period_start AS subscription_period_start_raw, "
                 "s.current_period_end AS subscription_period_end_raw, "
-                "s.cancel_at_period_end AS subscription_cancel_raw"
+                "s.cancel_at_period_end AS subscription_cancel_raw, "
+                "m.starts_at AS manual_starts_at, "
+                "m.ends_at AS manual_ends_at, "
+                "m.revoked_at AS manual_revoked_at"
             )
         else:
             subscription_expr = (
@@ -352,7 +361,10 @@ class ApplicationDataReader:
                 "NULL AS subscription_provider_id_raw, "
                 "NULL AS subscription_period_start_raw, "
                 "NULL AS subscription_period_end_raw, "
-                "NULL AS subscription_cancel_raw"
+                "NULL AS subscription_cancel_raw, "
+                "NULL AS manual_starts_at, "
+                "NULL AS manual_ends_at, "
+                "NULL AS manual_revoked_at"
             )
 
         join_sql = " ".join(joins)
@@ -389,6 +401,9 @@ class ApplicationDataReader:
                     "current_period_start": item.get("subscription_period_start_raw"),
                     "current_period_end": item.get("subscription_period_end_raw"),
                     "cancel_at_period_end": item.get("subscription_cancel_raw"),
+                    "manual_starts_at": item.get("manual_starts_at"),
+                    "manual_ends_at": item.get("manual_ends_at"),
+                    "manual_revoked_at": item.get("manual_revoked_at"),
                 }
 
             for key in [
@@ -454,9 +469,12 @@ class ApplicationDataReader:
             with self.engine.connect() as conn:
                 row = conn.execute(
                     text(
-                        "SELECT plan, status, provider, provider_subscription_id, "
-                        "current_period_start, current_period_end, cancel_at_period_end "
-                        "FROM subscriptions WHERE owner=:owner LIMIT 1"
+                        "SELECT s.plan, s.status, s.provider, s.provider_subscription_id, "
+                        "s.current_period_start, s.current_period_end, s.cancel_at_period_end, "
+                        "m.starts_at AS manual_starts_at, m.ends_at AS manual_ends_at, "
+                        "m.revoked_at AS manual_revoked_at "
+                        "FROM subscriptions s LEFT JOIN manual_access_grants m ON m.owner=s.owner "
+                        "WHERE s.owner=:owner LIMIT 1"
                     ),
                     {"owner": owner},
                 ).mappings().first()
@@ -464,6 +482,210 @@ class ApplicationDataReader:
             self._mark_unavailable(exc)
             return subscription_view(None)
         return subscription_view(dict(row) if row is not None else None)
+
+    @staticmethod
+    def _manual_credit_period(start: datetime, end: datetime, now: datetime) -> tuple[datetime, datetime]:
+        """Mirror the user app's UTC month intervals anchored at grant start."""
+        def add_month(base: datetime, count: int) -> datetime:
+            year, off = divmod(base.year * 12 + base.month - 1 + count, 12)
+            month = off + 1
+            return base.replace(year=year, month=month,
+                                day=min(base.day, calendar.monthrange(year, month)[1]))
+        count = max(0, (now.year - start.year) * 12 + now.month - start.month)
+        while count and add_month(start, count) > now:
+            count -= 1
+        while add_month(start, count + 1) <= now:
+            count += 1
+        return add_month(start, count), min(end, add_month(start, count + 1))
+
+    def _credit_manual_grant_if_eligible(
+        self, conn, owner: str, now: datetime, starts_at: datetime, ends_at: datetime,
+        allowance: int,
+    ) -> bool:
+        """Immediately credit first/renewed manual cycle, not an active Paddle one.
+
+        Uses the same idempotency key and owner-row lock as the user app.
+        Billing records, topup balances, and historical ledger events are kept.
+        """
+        if not {'credit_wallets', 'credit_ledger'}.issubset(self.tables):
+            raise RuntimeError('Credit wallet / ledger unavailable; refusing manual grant')
+        current = conn.execute(text(
+            'SELECT plan, status, provider, current_period_end FROM subscriptions '
+            'WHERE owner=:owner FOR UPDATE'
+        ), {'owner': owner}).mappings().first()
+        if current is None:
+            raise RuntimeError('Account subscription missing during credit grant')
+        paid_end = current.get('current_period_end')
+        if paid_end is not None and paid_end.tzinfo is None:
+            paid_end = paid_end.replace(tzinfo=timezone.utc)
+        paid_effective = bool(
+            str(current.get('provider') or '').lower() not in ('', 'manual')
+            and str(current.get('plan') or '').lower() == 'pro'
+            and str(current.get('status') or '').lower() in ('active', 'trialing', 'past_due')
+            and (paid_end is None or paid_end > now)
+        )
+        if paid_effective:
+            return False  # Avoid touching Paddle's credit cycle.
+        start, end = self._manual_credit_period(starts_at, ends_at, now)
+        owner_hash = hashlib.sha256(owner.encode('utf-8')).hexdigest()[:24]
+        key = f'manual-cycle:{owner_hash}:{start.isoformat()}'[:255]
+        conn.execute(text(
+            'INSERT INTO credit_wallets '
+            '(owner, monthly_credits, topup_credits, period_start, period_end, created_at, updated_at) '
+            'VALUES (:owner, 0, 0, NULL, NULL, :now, :now) ON CONFLICT(owner) DO NOTHING'
+        ), {'owner': owner, 'now': now})
+        wallet = conn.execute(text(
+            'SELECT monthly_credits, topup_credits FROM credit_wallets WHERE owner=:owner FOR UPDATE'
+        ), {'owner': owner}).mappings().one()
+        credited = conn.execute(text(
+            'SELECT 1 FROM credit_ledger WHERE owner=:owner AND '
+            "(idempotency_key=:key OR (event_type='monthly_reset' AND period_start=:start)) LIMIT 1"
+        ), {'owner': owner, 'key': key, 'start': start}).first()
+        if credited:
+            return False
+        after_monthly = int(wallet['monthly_credits']) + int(allowance)
+        topup = int(wallet['topup_credits'])
+        conn.execute(text(
+            'UPDATE credit_wallets SET monthly_credits=:balance, period_start=:start, '
+            'period_end=:end, updated_at=:now WHERE owner=:owner'
+        ), {'owner': owner, 'balance': after_monthly, 'start': start, 'end': end, 'now': now})
+        conn.execute(text(
+            'INSERT INTO credit_ledger (owner, monthly_delta, topup_delta, '
+            'monthly_balance_after, topup_balance_after, event_type, idempotency_key, '
+            'job_id, payment_reference, period_start, period_end, metadata_json, created_at) '
+            "VALUES (:owner, :credits, 0, :monthly, :topup, 'manual_cycle_grant', :key, "
+            "NULL, NULL, :start, :end, CAST(:metadata AS jsonb), :now)"
+        ), {'owner': owner, 'credits': int(allowance), 'monthly': after_monthly,
+            'topup': topup, 'key': key, 'start': start, 'end': end,
+            'metadata': json.dumps({'source': 'admin_manual_pro', 'carry_forward': True}),
+            'now': now})
+        return True
+
+    def set_manual_plan(
+        self,
+        owner: str,
+        *,
+        plan: str,
+        days: int = 30,
+        monthly_credits: int = 1000,
+    ) -> dict[str, Any]:
+        """Grant/revoke a separate entitlement without altering external billing.
+
+        Credits are added idempotently for a true new month, never removed on
+        revocation or duplicated by toggling. External billing stays intact.
+        """
+        owner = str(owner or "").strip()
+        plan = str(plan or "").strip().lower()
+        if not owner:
+            raise ValueError("owner is required")
+        if plan not in {"free", "pro"}:
+            raise ValueError("plan must be 'free' or 'pro'")
+        if not 1 <= int(days) <= 3660:
+            raise ValueError("days must be between 1 and 3660")
+        if not 0 <= int(monthly_credits) <= 10_000_000:
+            raise ValueError("monthly_credits is outside the allowed range")
+        if not self._ensure_schema() or "manual_access_grants" not in self.tables:
+            raise RuntimeError("Manual grant table is not ready; restart user app first")
+
+        now = datetime.now(timezone.utc)
+        period_end = now + timedelta(days=int(days))
+        try:
+            with self.engine.begin() as conn:
+                # A login should have created a free subscription row. If
+                # absent, create the minimal row; no existing provider data is changed.
+                conn.execute(text(
+                    "INSERT INTO subscriptions (owner, plan, status, provider, "
+                    "provider_customer_id, provider_subscription_id, "
+                    "current_period_start, current_period_end, cancel_at_period_end, "
+                    "created_at, updated_at) VALUES "
+                    "(:owner, 'free', 'active', NULL, NULL, NULL, NULL, NULL, false, :now, :now) "
+                    "ON CONFLICT (owner) DO NOTHING"
+                ), {"owner": owner, "now": now})
+
+                # Match the worker's owner lock before touching grants or wallets.
+                # Concurrent admin saves must share one cycle anchor.
+                conn.execute(text('SELECT owner FROM subscriptions WHERE owner=:owner FOR UPDATE'), {'owner': owner})
+                credited_now = False
+                if plan == "pro":
+                    existing = conn.execute(text(
+                        'SELECT starts_at, ends_at FROM manual_access_grants '
+                        'WHERE owner=:owner FOR UPDATE'
+                    ), {'owner': owner}).mappings().first()
+                    if existing is not None:
+                        prior_end = existing['ends_at']
+                        if prior_end is not None and prior_end.tzinfo is None:
+                            prior_end = prior_end.replace(tzinfo=timezone.utc)
+                    else:
+                        prior_end = None
+                    # Reactivating the SAME still-valid grant keeps its cycle
+                    # anchor, so Free->Pro->Free->Pro never mints twice.
+                    if existing is not None and prior_end is not None and prior_end > now:
+                        start_at = existing['starts_at']
+                        if start_at.tzinfo is None:
+                            start_at = start_at.replace(tzinfo=timezone.utc)
+                        end_at = max(prior_end, period_end)
+                    else:
+                        start_at, end_at = now, period_end
+                    conn.execute(text(
+                        "INSERT INTO manual_access_grants "
+                        "(owner, starts_at, ends_at, monthly_credits, revoked_at, created_at, updated_at) "
+                        "VALUES (:owner, :start, :end, :credits, NULL, :now, :now) "
+                        "ON CONFLICT (owner) DO UPDATE SET "
+                        "starts_at=:start, ends_at=:end, monthly_credits=:credits, "
+                        "revoked_at=NULL, updated_at=:now"
+                    ), {'owner': owner, 'now': now, 'start': start_at, 'end': end_at,
+                        'credits': int(monthly_credits)})
+                    # Immediate, additive and ledger-idempotent credit allocation.
+                    credited_now = self._credit_manual_grant_if_eligible(
+                        conn, owner, now, start_at, end_at, int(monthly_credits)
+                    )
+                    # Historical manual rows can otherwise outlive the new grant.
+                    # Expire only a legacy MANUAL row, never an external provider.
+                    conn.execute(text(
+                        "UPDATE subscriptions SET current_period_end=:now, updated_at=:now "
+                        "WHERE owner=:owner AND provider='manual' "
+                        "AND provider_customer_id IS NULL AND provider_subscription_id IS NULL "
+                        "AND plan='pro' AND (current_period_end IS NULL OR current_period_end>:now)"
+                    ), {"owner": owner, "now": now})
+                else:
+                    # 'Free' on this form means revoke the manual grant ONLY.
+                    # A paid Paddle subscription keeps its paid access.
+                    conn.execute(text(
+                        "UPDATE manual_access_grants SET revoked_at=:now, updated_at=:now "
+                        "WHERE owner=:owner AND revoked_at IS NULL"
+                    ), {"owner": owner, "now": now})
+                    conn.execute(text(
+                        "UPDATE subscriptions SET current_period_end=:now, updated_at=:now "
+                        "WHERE owner=:owner AND provider='manual' "
+                        "AND provider_customer_id IS NULL AND provider_subscription_id IS NULL "
+                        "AND plan='pro' AND (current_period_end IS NULL OR current_period_end>:now)"
+                    ), {"owner": owner, "now": now})
+
+                row = conn.execute(text(
+                    "SELECT s.plan, s.status, s.provider, s.provider_subscription_id, "
+                    "s.current_period_start, s.current_period_end, s.cancel_at_period_end, "
+                    "m.starts_at AS manual_starts_at, m.ends_at AS manual_ends_at, "
+                    "m.revoked_at AS manual_revoked_at "
+                    "FROM subscriptions s LEFT JOIN manual_access_grants m ON m.owner=s.owner "
+                    "WHERE s.owner=:owner LIMIT 1"
+                ), {"owner": owner}).mappings().first()
+
+                wallet = None
+                if "credit_wallets" in self.tables:
+                    wallet = conn.execute(text(
+                        "SELECT monthly_credits, topup_credits, period_start, period_end "
+                        "FROM credit_wallets WHERE owner=:owner LIMIT 1"
+                    ), {"owner": owner}).mappings().first()
+        except SQLAlchemyError as exc:
+            self._mark_unavailable(exc)
+            raise
+
+        self._invalidate_cache()
+        result = subscription_view(dict(row) if row is not None else None)
+        result["credits"] = dict(wallet) if wallet is not None else None
+        result["credit_cycle_pending"] = False
+        result["manual_credit_added"] = credited_now
+        return result
 
     def user_job_counts(self) -> dict[str, int]:
         _, job_counts, _ = self.directory_snapshot(limit=5000)

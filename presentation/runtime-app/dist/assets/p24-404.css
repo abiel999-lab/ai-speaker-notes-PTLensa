@@ -1,0 +1,11 @@
+  * {box-sizing:border-box}
+  body {margin:0;min-height:100svh;background:#f4f7fb;color:#172b4d;font:1rem/1.55 system-ui,sans-serif;display:grid;place-items:center;padding:24px}
+  main {width:min(100%,640px);padding:clamp(24px,7vw,60px);border:1px solid #d3deeb;background:#fff;border-radius:24px;box-shadow:0 16px 48px #172b4d12}
+  .brand {font-weight:750;color:#172b4d;text-decoration:none}
+  .code {color:#075b66;letter-spacing:.12em;font-size:.875rem;font-weight:750;margin:36px 0 6px}
+  h1 {font-size:clamp(2rem,7vw,3rem);line-height:1.1;margin:0}
+  .explain {color:#465c75;margin:16px 0 24px}
+  nav {display:flex;flex-wrap:wrap;gap:12px}
+  nav a {border:1px solid #c7d5e5;border-radius:10px;padding:11px 16px;text-decoration:none;font-weight:650;color:#172b4d}
+  nav a:first-child {background:#075b66;border-color:#075b66;color:#fff}
+  a:focus-visible {outline:3px solid #1260a0;outline-offset:4px}

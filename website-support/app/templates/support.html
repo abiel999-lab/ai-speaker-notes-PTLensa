@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#172B4D">
+  <title>Support | {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=workspace-blue-1"><link rel="stylesheet" href="/static/information-pages.css?v=readability-1">
+  
+  
+  
+
+<style>
+.np-contact {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: clamp(22px, 4vw, 42px);
+  margin: 28px 0;
+  box-shadow: 0 12px 36px rgba(15,23,42,.045);
+}
+.np-contact-heading { margin-bottom: 25px; }
+.np-contact-heading h2 {
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  margin: 10px 0;
+}
+.np-contact-heading p { color: #64748b; }
+.np-contact-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 19px;
+}
+.np-contact-wide { grid-column: 1 / -1; }
+.np-contact-prefill { margin: 0; color: #465c75; font-size: .9rem; line-height: 1.5; }
+.np-contact-field { display: flex; flex-direction: column; gap: 8px; }
+.np-contact-field label { font-weight: 600; font-size: .94rem; }
+.np-contact-field label span { color: #64748b; font-weight: 400; }
+.np-contact-field input,
+.np-contact-field select,
+.np-contact-field textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: white;
+  color: #0f172a;
+  font: inherit;
+  padding: 13px 14px;
+}
+.np-contact-field :is(input,select,textarea):focus-visible {
+  outline: 2px solid #087F8C;
+  outline-offset: 2px;
+}
+.np-contact-field textarea { resize: vertical; }
+.np-contact-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.np-contact-bottom p { color: #64748b; font-size: .86rem; }
+.np-contact-bottom button {
+  background: #087F8C;
+  color: white;
+  border: 0;
+  border-radius: 10px;
+  padding: 14px 22px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.np-contact-bottom button:hover { background: #172B4D; }
+.np-contact-notice, .np-contact-error {
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.np-contact-notice { background: #E7F3F5; color: #155963; }
+.np-contact-error { background: #fff1f2; color: #9f1239; }
+.np-contact-hp {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+@media (max-width: 680px) {
+  .np-contact-form { grid-template-columns: 1fr; }
+  .np-contact-bottom { flex-direction: column; align-items: stretch; }
+  .np-contact-bottom button { width: 100%; }
+}
+
+.np-contact{border-color:#DCE4EE;box-shadow:none}
+.np-contact-heading p{font-size:16px;line-height:1.8;color:#526176}
+.np-contact-field label{font-size:16px}
+.np-contact-field input,.np-contact-field select,.np-contact-field textarea{font-size:16px;line-height:1.5}
+.np-contact-bottom p{font-size:15px;line-height:1.7}
+.np-contact-bottom button{background:#172B4D;min-height:48px;font-size:16px}
+.np-contact-bottom button:hover{background:#203958}
+.np-contact-notice,.np-contact-error{font-size:16px;line-height:1.7}
+</style>
+
+<link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
+
+<style>
+.site-nav{gap:20px}
+.site-links a[aria-current=page]{color:#087F8C}
+.docs-user{display:flex;align-items:center;gap:14px;min-width:0}
+.docs-user-name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#526176}
+.docs-signout{border:1px solid #C9D6E5;background:#fff;color:#172B4D;border-radius:10px;padding:10px 13px;font:inherit;font-size:14px;cursor:pointer}
+.docs-signout:focus-visible{outline:3px solid #087F8C;outline-offset:3px}
+@media(max-width:760px){.docs-user{width:100%;justify-content:space-between}.docs-user-name{max-width:65vw}}
+</style>
+
+<link rel="stylesheet" href="/static/site-chrome.css?v=audit-closeout-1">
+<link rel="canonical" href="https://notepreso.com/support">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NotePreso">
+<meta property="og:url" content="https://notepreso.com/support">
+<meta property="og:title" content="Support | NotePreso">
+<meta property="og:description" content="Get help with your NotePreso account, presentations, billing, or refunds.">
+<meta property="og:image" content="https://notepreso.com/static/notepreso-share-v1.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="NotePreso speaker notes and PowerPoint decks">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Support | NotePreso">
+<meta name="twitter:description" content="Get help with your NotePreso account, presentations, billing, or refunds.">
+<meta name="twitter:image" content="https://notepreso.com/static/notepreso-share-v1.png">
+</head>
+<body data-page="support">
+
+<header class="topbar">
+  <nav class="nav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="NotePreso home"><span class="workspace-logo"><img src="/static/notepreso-brand-v2.png" alt="NotePreso"></span></a>
+    <div class="nav-links">
+      <a href="/app" data-i18n="dashboard">Workspace</a>
+      <a href="/chat" data-i18n="chatAI">Chat</a>
+      <a href="/how-to" data-i18n="howTo">Guide</a>
+      <a class="active" href="/support">Help</a><a href="/legal" data-i18n="legal">Legal</a>
+    </div>
+    <div class="nav-actions">
+      
+      {% if auth_enabled and authenticated %}<div class="account-actions"><span class="plan-chip" data-plan-chip>Free</span><div class="account-chip" title="{{ username }}"><span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span><span class="account-name">{{ username }}</span></div><button class="logout-btn" type="button" data-logout aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="logout">Sign out</span></button></div>{% else %}<a class="btn secondary" href="/auth/login?return_to=%2Fsupport">Sign in</a>{% endif %}
+    </div>
+  </nav>
+</header>
+
+
+
+<main class="docs-main">
+
+  <section class="support-clean-hero">
+    <p class="eyebrow"><span class="dot"></span>NOTEPRESO SUPPORT</p>
+
+    <h1>Help with your account and presentations</h1>
+
+    <p>
+      Send us a message for product or account help. For a payment or refund, use the link in your Paddle receipt or <a href="https://paddle.net">Paddle support</a>.
+    </p>
+  </section>
+
+  
+<section class="np-contact" aria-labelledby="np-contact-title">
+  <div class="np-contact-heading">
+    <span class="support-label">CONTACT SUPPORT</span>
+    <h2 id="np-contact-title">Send us a message</h2>
+    <p>Tell us how we can help. Our team will reply by email.</p>
+    <p>NotePreso is operated by PT ACTIA BERSAMA SEJAHTERA (Actia Carbon).</p>
+  </div>
+
+  {% if status == "sent" %}
+  <div class="np-contact-notice" role="status">
+    Your request has been submitted.
+    Reference: <strong>{{ reference }}</strong>
+  </div>
+  {% elif status == "invalid" %}
+  <div class="np-contact-error" role="alert">{{ error_message }}</div>
+  {% elif status == "rate_limited" %}
+  <div class="np-contact-error" role="alert">
+    Too many requests. Please try again later.
+  </div>
+  {% elif status == "smtp_failed" %}
+  <div class="np-contact-error" role="alert">
+    We could not send your message. Please use the email options below.
+  </div>
+  {% endif %}
+
+  <form action="/support" method="post" class="np-contact-form"{% if not status %} data-support-prefill{% endif %}>
+    <p id="np-prefill-note" class="np-contact-wide np-contact-prefill" hidden>
+      We filled in the contact details available from your account. You can edit them before sending.
+    </p>
+    <div class="np-contact-field">
+      <label for="np-name">Full name</label>
+      <input id="np-name" name="name" type="text"
+        value="{{ form.name }}" maxlength="120"
+        autocomplete="name" required>
+    </div>
+
+    <div class="np-contact-field">
+      <label for="np-email">Email address</label>
+      <input id="np-email" name="email" type="email"
+        value="{{ form.email }}" maxlength="254"
+        autocomplete="email" required>
+    </div>
+
+    <div class="np-contact-field np-contact-wide">
+      <label for="np-type">How can we help?</label>
+      <select id="np-type" name="request_type" required>
+        {% for value, label in request_types.items() %}
+        <option value="{{ value }}"
+          {% if form.request_type == value %}selected{% endif %}>
+          {{ label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="np-contact-field np-contact-wide">
+      <label for="np-transaction">
+        Transaction or invoice ID <span>(Optional)</span>
+      </label>
+      <input id="np-transaction" name="transaction_id"
+        value="{{ form.transaction_id }}" maxlength="120">
+    </div>
+
+    <div class="np-contact-field np-contact-wide">
+      <label for="np-message">Your message</label>
+      <textarea id="np-message" name="message"
+        minlength="10" maxlength="5000" rows="6"
+        placeholder="Describe your question or issue..."
+        required>{{ form.message }}</textarea>
+    </div>
+
+    <div class="np-contact-hp" aria-hidden="true">
+      <label for="np-website">Website</label>
+      <input id="np-website" name="website" type="text"
+        tabindex="-1" autocomplete="off">
+    </div>
+
+    <div class="np-contact-wide np-contact-bottom">
+      <p>Please do not include passwords or payment card details.</p>
+      <button type="submit">Send message</button>
+    </div>
+  </form>
+</section>
+
+<section class="support-contact-panel">
+
+    <div class="support-contact-intro">
+      <div class="support-contact-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 6.5h16v11H4z"></path>
+          <path d="m4 7 8 6 8-6"></path>
+        </svg>
+      </div>
+
+      <div>
+        <span class="support-label">EMAIL ALTERNATIVE</span>
+        <h2>{{ support_email }}</h2>
+        <p>
+          If you cannot use the form, email us directly or copy the address.
+        </p>
+      </div>
+    </div>
+
+    <div class="support-contact-actions">
+
+      <a
+        class="support-action-primary"
+        href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to={{ support_email }}&amp;su=NotePreso%20Support%20Request"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open Gmail
+        <span aria-hidden="true">↗</span>
+      </a>
+
+      <button
+        class="support-action-secondary"
+        id="support-copy-email"
+        type="button"
+        data-copy-support-email="{{ support_email }}"
+      >
+        Copy email address
+      </button>
+
+      <a
+        class="support-default-mail"
+        href="{{ mailto_url }}"
+      >
+        Use default email app
+      </a>
+
+      <p
+        class="support-copy-status"
+        id="support-copy-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+
+    </div>
+
+  </section>
+
+  <section class="support-quick-info">
+
+    <article id="refund">
+      <span class="support-info-number">01</span>
+      <div>
+        <span class="support-label">REFUNDS</span>
+        <h3>Include your transaction ID</h3>
+        <p>Read the <a href="/refund-policy">Refund Policy</a> for eligibility and request steps. All payments are handled by Paddle; request payment help through the link in your receipt or <a href="https://paddle.net">Paddle support</a>. Include your transaction or invoice reference when contacting us.</p>
+      </div>
+    </article>
+
+    <article>
+      <span class="support-info-number">02</span>
+      <div>
+        <span class="support-label">SECURITY</span>
+        <h3>Keep sensitive information private</h3>
+        <p>
+          Never send passwords, API keys, verification codes,
+          or payment card details.
+        </p>
+      </div>
+    </article>
+
+  <article><span class="support-info-number">03</span><div><span class="support-label">TECHNICAL HELP</span><h3>Tell us what happened</h3><p>Include the job reference, the error message and the steps you followed; a screenshot can help explain the issue.</p></div></article></section>
+
+<section class="docs-section docs-callout"><div><h2>Looking for a quick answer?</h2><p>Read the user guide, compare plans or check the refund policy.</p></div><div><a class="docs-secondary" href="/how-to">User guide →</a> <a class="docs-secondary" href="/refund-policy">Refund policy →</a></div></section></main>
+
+
+<footer class="footer"><div class="footer-inner"><span>NotePreso &middot; <span data-i18n="humanReviewRequired">Human review required</span></span><span><a href="/how-to" data-i18n="howTo">Guide</a> &middot; <a href="/legal">Terms & Privacy</a> &middot; <a href="/refund-policy">Refund</a></span></div></footer>
+
+<script src="/static/support.js?v=1001" defer></script>
+<script src="/static/support-prefill-v1.js" defer></script>
+<script src="/static/common.js?v=audit-copy-1" defer></script><script src="/static/support-account-v1.js" defer></script>
+<script src="/static/site-chrome.js?v=audit-closeout-1" defer></script></body>
+</html>

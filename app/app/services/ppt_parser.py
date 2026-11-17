@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import gc
 
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -18,6 +19,15 @@ class PptxParser:
     """
 
     def parse(self, path: Path) -> PresentationDeck:
+        try:
+            return self._parse(path)
+        finally:
+            # Package relationships form cycles retaining large media blobs.
+            # A parsed manifest contains only text/metadata, so collect the package
+            # before conversion, validation or the next preflight/retry starts.
+            gc.collect()
+
+    def _parse(self, path: Path) -> PresentationDeck:
         presentation = Presentation(path)
         slides: list[SlideContent] = []
 

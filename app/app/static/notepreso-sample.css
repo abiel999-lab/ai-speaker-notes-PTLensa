@@ -1,0 +1,72 @@
+.np-notes-sample {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dce0e6;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.np-notes-sample header {
+  padding: 22px 24px 16px;
+}
+
+.np-notes-sample h2 {
+  margin: 6px 0;
+  font-size: clamp(21px, 2.25vw, 27px);
+  line-height: 1.2;
+}
+
+.np-notes-sample p {
+  margin: 0;
+  color: #465364;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.np-notes-sample img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.np-notes-sample-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+.np-notes-sample-comparison > div {
+  padding: 16px 24px;
+}
+
+.np-notes-sample-comparison > div + div {
+  border-left: 1px solid #dce0e6;
+  background: #f4f7fb;
+}
+
+.np-notes-sample-comparison h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.np-notes-sample-comparison a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  color: #1a487d;
+  font-size: 15px;
+  font-weight: 650;
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .np-notes-sample-comparison {
+    grid-template-columns: 1fr;
+  }
+
+  .np-notes-sample-comparison > div + div {
+    border-top: 1px solid #dce0e6;
+    border-left: 0;
+  }
+}

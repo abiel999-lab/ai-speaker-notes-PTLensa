@@ -34,6 +34,7 @@ class SessionIdentity:
     subject: str | None = None
     email: str | None = None
     display_name: str | None = None
+    email_verified: bool = False
 
     @property
     def owner_key(self) -> str:
@@ -61,6 +62,7 @@ class SessionManager:
         subject: str | None = None,
         email: str | None = None,
         display_name: str | None = None,
+        email_verified: bool = False,
     ) -> tuple[str, SessionIdentity]:
         now = int(time.time())
         identity = SessionIdentity(
@@ -71,6 +73,7 @@ class SessionManager:
             subject=subject,
             email=email,
             display_name=display_name,
+            email_verified=email_verified,
         )
         payload = {
             "u": identity.username,
@@ -81,10 +84,22 @@ class SessionManager:
             "s": identity.subject,
             "e": identity.email,
             "n": identity.display_name,
+            "ev": identity.email_verified,
         }
         encoded = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
         signature = _b64url_encode(hmac.new(self._secret, encoded.encode("ascii"), hashlib.sha256).digest())
         return f"{encoded}.{signature}", identity
+
+    def renew(self, token: str | None) -> str | None:
+        identity = self.parse(token)
+        if identity is None or identity.expires_at > int(time.time()) + self.max_age_seconds // 2:
+            return None
+        # Preserve CSRF and identity so other open tabs remain usable.
+        payload = json.loads(_b64url_decode(token.split(".", 1)[0]))
+        payload["exp"] = int(time.time()) + self.max_age_seconds
+        encoded = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        signature = _b64url_encode(hmac.new(self._secret, encoded.encode("ascii"), hashlib.sha256).digest())
+        return f"{encoded}.{signature}"
 
     def parse(self, token: str | None) -> SessionIdentity | None:
         if not token or "." not in token:
@@ -106,7 +121,7 @@ class SessionManager:
             return None
         if expires_at < int(time.time()):
             return None
-        return SessionIdentity(username, csrf, terms_version, expires_at, subject, email, display_name)
+        return SessionIdentity(username, csrf, terms_version, expires_at, subject, email, display_name, payload.get("ev") is True)
 
 
 class LoginRateLimiter:

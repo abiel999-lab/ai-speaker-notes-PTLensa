@@ -6,6 +6,7 @@ import time
 import traceback
 from pathlib import Path
 
+from app.core.entitlements import EntitlementService
 from app.core.job_store import FileJobStore
 from app.domain.models import JobStatus
 from app.services.integrity import IntegrityCheckError
@@ -24,10 +25,12 @@ class JobProcessor:
         store: FileJobStore,
         pipeline: PresentationPipeline,
         *,
+        entitlements: EntitlementService | None = None,
         max_concurrent_jobs: int = 2,
     ) -> None:
         self.store = store
         self.pipeline = pipeline
+        self.entitlements = entitlements
         self._slots = threading.BoundedSemaphore(max_concurrent_jobs)
         self._registry_lock = threading.Lock()
         self._job_locks: dict[str, threading.Lock] = {}
@@ -59,6 +62,8 @@ class JobProcessor:
                 job.status = JobStatus.processing
                 job.message = "Processing"
                 job.error = None
+                job.generated_notes_count = 0
+                job.target_slide_count = 0
                 job.attempt_count += 1
                 self.store.save(job)
 
@@ -72,12 +77,24 @@ class JobProcessor:
                     current_job.message = message
                     self.store.save(current_job)
 
+                latest_slide_progress = (0, 0)
+
+                def update_slides(done: int, total: int) -> None:
+                    nonlocal latest_slide_progress
+                    if (done, total) == latest_slide_progress:
+                        return
+                    current_job = self.store.get(job_id)
+                    current_job.generated_notes_count = done
+                    current_job.target_slide_count = total
+                    self.store.save(current_job)
+                    latest_slide_progress = (done, total)
+
                 result = None
                 max_internal_retries = int(self.pipeline.settings.job_internal_retries)
                 for internal_attempt in range(max_internal_retries + 1):
                     try:
                         result = self.pipeline.process(
-                            input_path, output_path, job.options, update
+                            input_path, output_path, job.options, update, slide_progress=update_slides
                         )
                         break
                     except (AIConfigurationError, AICostGuardrailError, AIInputGuardrailError):
@@ -129,6 +146,10 @@ class JobProcessor:
                 job.hidden_slide_count = result.hidden_slide_count
                 job.image_dominant_slide_count = result.image_dominant_slide_count
                 job.external_image_count = result.external_image_count
+                job.slide_count = result.slide_count
+                job.target_slide_count = result.target_slide_count
+                job.remaining_unprocessed_slides = result.remaining_unprocessed_slides
+                job.preview_limited = result.preview_limited
                 suffix = ""
                 if result.provider == "openai":
                     vision = (
@@ -154,11 +175,18 @@ class JobProcessor:
                 warning_suffix = ""
                 if result.warnings:
                     warning_suffix = " Warning: " + result.warnings[0]
+                completion_prefix = "Free preview completed. " if job.options.target_slide_limit is not None else "Completed. "
+                remaining = (
+                    f" {result.remaining_unprocessed_slides} eligible slide(s) remain locked until Pro."
+                    if result.remaining_unprocessed_slides
+                    else ""
+                )
                 job.message = (
-                    "Completed. "
-                    f"Existing notes: {result.existing_notes_count}; "
+                    completion_prefix
+                    + f"Existing notes: {result.existing_notes_count}; "
                     f"generated: {result.generated_notes_count}; "
                     f"preserved: {result.preserved_existing_notes_count}."
+                    + remaining
                     + suffix
                     + warning_suffix
                 )
@@ -190,7 +218,54 @@ class JobProcessor:
 
             job.status = JobStatus.failed
             job.error = public_error
-            job.message = "Automatic processing stopped after multiple recovery attempts; AI checkpoints are preserved for retry."
+            job.message = (
+                "Automatic processing stopped after multiple recovery attempts; "
+                "AI checkpoints are preserved for retry."
+            )
+
+            # A permanent failed paid attempt must not consume customer credits.
+            # Internal recovery attempts above do NOT pass through this block, so
+            # they never create repeated refunds.
+            if (
+                self.entitlements is not None
+                and job.owner
+                and job.credit_required > 0
+                and job.credit_reservation_key
+                and not job.credit_refunded
+            ):
+                refund_key = (
+                    f"slide-refund:{job.id}:attempt-{job.attempt_count}"
+                )
+
+                try:
+                    self.entitlements.refund_slide_credits(
+                        job.owner,
+                        reservation_key=job.credit_reservation_key,
+                        idempotency_key=refund_key,
+                        metadata={
+                            "reason": "permanent_job_failure",
+                            "attempt_count": job.attempt_count,
+                        },
+                    )
+
+                    # An idempotent duplicate refund also means the reservation
+                    # has already been restored, so mark the job accordingly.
+                    job.credit_refunded = True
+                    job.credit_refund_key = refund_key
+                    job.message += " Reserved AI Slide Credits were restored."
+
+                except Exception as refund_exc:
+                    # Never hide the original processing failure. Leave
+                    # credit_refunded=False so Retry reuses the still-active
+                    # reservation instead of charging the account again.
+                    logger.exception(
+                        "credit_refund_failed job_id=%s reservation=%s error_type=%s error=%s",
+                        job.id,
+                        job.credit_reservation_key,
+                        type(refund_exc).__name__,
+                        refund_exc,
+                    )
+
             self.store.save(job)
         finally:
             job_lock.release()

@@ -47,9 +47,19 @@ def subscription_view(raw: dict[str, Any] | None, *, now: datetime | None = None
         and status in _ACTIVE_STATUSES
         and (period_end is None or period_end > current_time)
     )
-    effective_plan = "pro" if pro_is_effective else "free"
+    manual_start = _as_utc(source.get("manual_starts_at"))
+    manual_end = _as_utc(source.get("manual_ends_at"))
+    manual_revoked = _as_utc(source.get("manual_revoked_at"))
+    manual_active = bool(
+        manual_revoked is None and manual_start and manual_end
+        and manual_start <= current_time < manual_end
+    )
+    manual_in_effect = bool(manual_active and not pro_is_effective)
+    effective_plan = "pro" if pro_is_effective or manual_active else "free"
 
-    if status == "pending_payment":
+    if manual_in_effect:
+        state = "active"
+    elif status == "pending_payment":
         state = "pending"
     elif raw_plan == "pro" and period_end is not None and period_end <= current_time:
         state = "expired"
@@ -75,15 +85,19 @@ def subscription_view(raw: dict[str, Any] | None, *, now: datetime | None = None
     return {
         "plan": effective_plan,
         "plan_name": "Pro" if effective_plan == "pro" else "Free",
-        "subscription_plan": raw_plan,
-        "subscription_status": status,
-        "billing_provider": str(provider).strip().lower() if provider else None,
-        "provider_subscription_id": str(provider_subscription_id).strip() if provider_subscription_id else None,
-        "current_period_start": period_start,
-        "current_period_end": period_end,
-        "valid_until": period_end,
-        "cancel_at_period_end": cancel_at_period_end,
-        "auto_renew": auto_renew,
+        "subscription_plan": "pro" if manual_in_effect else raw_plan,
+        "subscription_status": "active" if manual_in_effect else status,
+        "billing_provider": "manual" if manual_in_effect else (str(provider).strip().lower() if provider else None),
+        "provider_subscription_id": None if manual_in_effect else (str(provider_subscription_id).strip() if provider_subscription_id else None),
+        "current_period_start": manual_start if manual_in_effect else period_start,
+        "current_period_end": manual_end if manual_in_effect else period_end,
+        "valid_until": manual_end if manual_in_effect else period_end,
+        "cancel_at_period_end": False if manual_in_effect else cancel_at_period_end,
+        "auto_renew": False if manual_in_effect else auto_renew,
+        "manual_starts_at": manual_start,
+        "manual_ends_at": manual_end,
+        "manual_revoked_at": manual_revoked,
+        "manual_active": manual_active,
         "billing_state": state,
         "is_paid": effective_plan == "pro",
         "has_subscription_record": bool(raw),

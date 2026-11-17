@@ -1,3 +1,12 @@
+function apiErrorMessage(payload,status){
+  const fallback=status===401?'Your admin session expired. Sign in again before retrying.':status===403?'This action is not allowed. Refresh the page and try again.':status>=500?'The service could not complete the request. Please try again.':`Request failed (${status})`;
+  if(status>=500)return fallback;
+  const detail=payload?.detail;
+  if(typeof detail==='string')return detail.slice(0,400);
+  if(Array.isArray(detail))return detail.map(item=>{const field=Array.isArray(item?.loc)?item.loc.filter(x=>x!=='body').join('.'):'';return typeof item?.msg==='string'?`${field?field+': ':''}${item.msg}`:'';}).filter(Boolean).join('; ').slice(0,600)||fallback;
+  return typeof detail?.message==='string'?detail.message.slice(0,400):fallback;
+}
+function profileFormBody(){return {username:document.querySelector('#form-username').value.trim(),email:document.querySelector('#form-email').value.trim()||null,first_name:document.querySelector('#form-first-name').value.trim()||null,last_name:document.querySelector('#form-last-name').value.trim()||null,email_verified:document.querySelector('#form-email-verified').checked};}
 (()=>{
 'use strict';
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||'';
@@ -32,7 +41,7 @@ const billingStateLabel=value=>({active:t('Paid · Active'),expiring:t('Paid · 
 function billingCountsFromUsers(items=[]){const pro=items.filter(u=>u.plan==='pro').length;return {users:items.length,pro_users:pro,free_users:Math.max(0,items.length-pro),expiring_pro:items.filter(u=>u.billing_state==='expiring').length,expired_subscriptions:items.filter(u=>u.billing_state==='expired').length,pending_payments:items.filter(u=>u.billing_state==='pending').length,past_due_subscriptions:items.filter(u=>u.billing_state==='past_due').length};}
 function planBadge(user){const plan=user?.plan==='pro'?'pro':'free';return el('span',`plan-badge ${plan}`,plan==='pro'?t('PRO'):t('FREE'));}
 
-async function api(path,options={}){const {timeoutMs=6000,...fetchOptions}=options;const headers={'Accept':'application/json','X-Requested-With':'fetch',...(fetchOptions.headers||{})};if(fetchOptions.body)headers['Content-Type']='application/json';if(fetchOptions.method&&fetchOptions.method!=='GET')headers['X-CSRF-Token']=csrf;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{const res=await fetch(path,{...fetchOptions,headers,signal:controller.signal});let payload={};try{payload=await res.json();}catch{}if(!res.ok)throw new Error(payload.detail||`Request failed (${res.status})`);return payload;}catch(err){if(err?.name==='AbortError')throw new Error(t('Request timed out. Check the database tunnel or Keycloak connection.'));throw err;}finally{clearTimeout(timer);}}
+async function api(path,options={}){const {timeoutMs=6000,...fetchOptions}=options;const headers={'Accept':'application/json','X-Requested-With':'fetch',...(fetchOptions.headers||{})};if(fetchOptions.body)headers['Content-Type']='application/json';if(fetchOptions.method&&fetchOptions.method!=='GET')headers['X-CSRF-Token']=csrf;const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{const res=await fetch(path,{...fetchOptions,headers,signal:controller.signal});let payload={};try{payload=await res.json();}catch{}if(!res.ok)throw new Error(apiErrorMessage(payload,res.status));return payload;}catch(err){if(err?.name==='AbortError')throw new Error(t('Request timed out. Reopen the user to check the current state before retrying.'));throw err;}finally{clearTimeout(timer);}}
 
 function showAlert(message){if(!runtimeAlert)return;runtimeAlert.textContent=message||'';runtimeAlert.classList.toggle('hidden',!message);}
 function setManagementStatus(ready,message=''){if(!managementStatus)return;managementStatus.classList.remove('checking','ready','error');managementStatus.classList.add(ready?'ready':'error');const label=managementStatus.querySelector('span');if(label)label.textContent=ready?t('Keycloak management ready'):(message||t('Keycloak management unavailable'));}
@@ -85,6 +94,17 @@ function updateActivityScopeSummary(){if(!activityScopeSummary)return;const user
 
 async function selectUser(id,repaint=true){if(!detailEl)return;selectedId=id;if(repaint)renderUsers();detailEl.replaceChildren(el('div','admin-empty-detail','Loading user…'));try{const data=await api(`/api/v1/admin/users/${encodeURIComponent(id)}`);renderDetail(data.user,data.jobs||[],data.chats||[]);}catch(err){detailEl.replaceChildren();const box=el('div','admin-empty-detail');box.append(el('strong','','Could not load user'),el('span','',err.message));detailEl.append(box);}}
 
+function creditBalanceLabel(balance){
+  if(balance?.status==='missing'){
+    return 'Credit wallet not initialized for this account.';
+  }
+  if(balance?.status!=='available'){
+    return 'Credit balance temporarily unavailable.';
+  }
+  const format=value=>Number(value||0).toLocaleString();
+  return `Monthly remaining: ${format(balance.monthly)} · Top-up remaining: ${format(balance.topup)} · Total remaining: ${format(balance.total)}`;
+}
+
 function renderDetail(user,jobs,chats){
   if(!detailEl)return;
   detailEl.replaceChildren();
@@ -104,6 +124,12 @@ function renderDetail(user,jobs,chats){
   billingExpiry.append(el('small','',t('Valid until')),el('strong','',user.valid_until?fmtDateOnly(user.valid_until):'—'),el('span','',user.billing_provider?providerLabel(user.billing_provider):t('No billing provider')));
   billingPanel.append(billingCopy,billingExpiry);
   wrap.append(billingPanel);
+
+  const credit=el('div','detail-privacy-note');
+  const balance=user.credit_balance;
+  credit.append(el('strong','','Current AI Slide Credits'));
+  credit.append(el('span','',creditBalanceLabel(balance)));
+  wrap.append(credit);
 
   const actions=el('div','detail-actions');
   if(managementReady){actions.append(actionButton('Edit','secondary',()=>openEdit(user)));actions.append(actionButton(user.banned?'Unban':'Ban','secondary',()=>toggleBan(user)));actions.append(actionButton('Delete user & files','danger-action',()=>deleteUser(user)));}
@@ -132,7 +158,19 @@ function renderDetail(user,jobs,chats){
   const chatSection=el('div','file-section chat-section');const ch=el('div','file-section-head');ch.append(el('h3','',t('Saved chat activity')),el('small','',`${chats.length} thread${chats.length===1?'':'s'} · ${messageCount} messages`));chatSection.append(ch);const privacy=el('div','detail-privacy-note');privacy.append(el('strong','',t('Chat content is protected')),el('span','',t('This panel shows metadata only. Open Presentations & chat to request audited conversation access.')));chatSection.append(privacy);const chatList=el('div','chat-admin-list');if(!chats.length){chatList.append(el('div','admin-empty-detail',t('No saved chat activity for this user.')));}else{for(const thread of chats){const card=el('article','chat-admin-thread');const titleRow=el('div','chat-admin-thread-head');titleRow.append(el('strong','',thread.mode==='rag'?t('Presentation chat'):t('General chat')),el('span','',fmtDate(thread.updated_at)));card.append(titleRow);const threadMeta=el('div','file-meta');threadMeta.append(el('span','',`Thread ${thread.id}`));if(thread.job_id)threadMeta.append(el('span','',`Job ${thread.job_id}`));threadMeta.append(el('span','',`${thread.message_count||0} messages`));card.append(threadMeta);chatList.append(card);}const open=actionButton(t('Open activity & privacy controls'),'secondary',()=>{window.location.href=`/admin/activity?user=${encodeURIComponent(user.id)}`;});chatSection.append(open);}chatSection.append(chatList);wrap.append(chatSection);detailEl.append(wrap);
 }
 
-function openModal(mode,user=null){if(!modal)return;document.querySelector('#user-modal-title').textContent=mode==='create'?t('Add user'):t('Edit user');document.querySelector('#form-user-id').value=user?.id||'';document.querySelector('#form-username').value=user?.username||'';document.querySelector('#form-email').value=user?.email||'';document.querySelector('#form-first-name').value=user?.first_name||'';document.querySelector('#form-last-name').value=user?.last_name||'';document.querySelector('#form-email-verified').checked=!!user?.email_verified;const create=document.querySelector('#create-password-fields');create.classList.toggle('hidden',mode!=='create');document.querySelector('#form-password').required=mode==='create';document.querySelector('#form-password').value='';document.querySelector('#form-temporary-password').checked=true;document.querySelector('#form-error').classList.add('hidden');modal.dataset.mode=mode;modal.classList.remove('hidden');document.querySelector('#form-username').focus();}
+function syncPlanEditor(){const plan=document.querySelector('#form-plan')?.value||'free';const pro=plan==='pro';document.querySelector('#form-plan-days-wrap')?.classList.toggle('hidden',!pro);document.querySelector('#form-plan-credits-wrap')?.classList.toggle('hidden',!pro);}
+function showCurrentCreditBalance(mode,user){
+  const holder=document.querySelector('#form-credit-balance');
+  if(!holder)return;
+  holder.replaceChildren();
+  holder.classList.toggle('hidden',mode!=='edit');
+  if(mode!=='edit')return;
+
+  const balance=user?.credit_balance;
+  holder.append(el('strong','','Current AI Slide Credits'));
+  holder.append(el('span','',creditBalanceLabel(balance)));
+}
+function openModal(mode,user=null){if(!modal)return;document.querySelector('#user-modal-title').textContent=mode==='create'?t('Add user'):t('Edit user');document.querySelector('#form-user-id').value=user?.id||'';document.querySelector('#form-username').value=user?.username||'';document.querySelector('#form-email').value=user?.email||'';document.querySelector('#form-first-name').value=user?.first_name||'';document.querySelector('#form-last-name').value=user?.last_name||'';document.querySelector('#form-email-verified').checked=!!user?.email_verified;const create=document.querySelector('#create-password-fields');create.classList.toggle('hidden',mode!=='create');document.querySelector('#form-password').required=mode==='create';document.querySelector('#form-password').value='';document.querySelector('#form-temporary-password').checked=true;const planFields=document.querySelector('#plan-access-fields');if(planFields)planFields.classList.toggle('hidden',mode==='create');const planSelect=document.querySelector('#form-plan');if(planSelect)planSelect.value=user?.plan==='pro'?'pro':'free';const planDays=document.querySelector('#form-plan-days');if(planDays)planDays.value='30';const planCredits=document.querySelector('#form-plan-credits');if(planCredits)planCredits.value='1000';const planCurrent=document.querySelector('#form-plan-current');if(planCurrent){const provider=user?.billing_provider?providerLabel(user.billing_provider):'none';const expiry=user?.valid_until?fmtDateOnly(user.valid_until):'—';planCurrent.textContent=`Current plan: ${(user?.plan_name||user?.plan||'Free').toString()} · Provider: ${provider} · Valid until: ${expiry}`;}showCurrentCreditBalance(mode,user);syncPlanEditor();modal.dataset.planDirty='0';modal.dataset.originalProfile=JSON.stringify(profileFormBody());const usernameInput=document.querySelector('#form-username');usernameInput.minLength=mode==='create'?3:1;usernameInput.maxLength=mode==='create'?120:255;if(mode==='create')usernameInput.setAttribute('pattern','[A-Za-z0-9._@-]+');else usernameInput.removeAttribute('pattern');document.querySelector('#form-error').classList.add('hidden');modal.dataset.mode=mode;modal.classList.remove('hidden');document.querySelector('#form-username').focus();}
 function closeModal(){if(!modal||!form)return;modal.classList.add('hidden');form.reset();}
 function openEdit(user){openModal('edit',user);}
 async function toggleBan(user){const verb=user.banned?'unban':'ban';if(!confirm(t(`${user.banned?'Unban':'Ban'} ${user.username}?`)))return;try{await api(`/api/v1/admin/users/${encodeURIComponent(user.id)}/${verb}`,{method:'POST'});await loadDirectorySummary();}catch(err){showAlert(err.message);}}
@@ -151,13 +189,94 @@ function renderConversation(data){if(!chatContentView)return;chatContentView.rep
 if(searchEl)searchEl.addEventListener('input',renderUsers);
 if(addButton)addButton.addEventListener('click',()=>openModal('create'));
 if(modal){document.querySelector('#modal-close')?.addEventListener('click',closeModal);document.querySelector('#modal-cancel')?.addEventListener('click',closeModal);modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.classList.contains('hidden'))closeModal();});}
-if(form)form.addEventListener('submit',async event=>{event.preventDefault();const error=document.querySelector('#form-error');error.classList.add('hidden');const mode=modal.dataset.mode;const body={username:document.querySelector('#form-username').value.trim(),email:document.querySelector('#form-email').value.trim()||null,first_name:document.querySelector('#form-first-name').value.trim()||null,last_name:document.querySelector('#form-last-name').value.trim()||null,email_verified:document.querySelector('#form-email-verified').checked};if(mode==='create'){body.password=document.querySelector('#form-password').value;body.temporary_password=document.querySelector('#form-temporary-password').checked;}const submit=document.querySelector('#form-submit');submit.disabled=true;try{if(mode==='create'){const data=await api('/api/v1/admin/users',{method:'POST',body:JSON.stringify(body)});selectedId=data.user.id;}else{const id=document.querySelector('#form-user-id').value;await api(`/api/v1/admin/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(body)});selectedId=id;}closeModal();await loadDirectorySummary();}catch(err){error.textContent=err.message;error.classList.remove('hidden');}finally{submit.disabled=false;}});
+function markPlanDirty(){
+  if(modal)modal.dataset.planDirty='1';
+}
+
+document.querySelector('#form-plan')?.addEventListener('change',()=>{
+  syncPlanEditor();
+  markPlanDirty();
+});
+
+document.querySelector('#form-plan-days')?.addEventListener('input',markPlanDirty);
+document.querySelector('#form-plan-credits')?.addEventListener('input',markPlanDirty);
+
+if(form)form.addEventListener('submit',async event=>{
+  event.preventDefault();
+
+  const error=document.querySelector('#form-error');
+  error.classList.add('hidden');
+
+  const mode=modal.dataset.mode;
+
+  const body=profileFormBody();
+
+  if(mode==='create'){
+    body.password=document.querySelector('#form-password').value;
+    body.temporary_password=document.querySelector('#form-temporary-password').checked;
+  }
+
+  const submit=document.querySelector('#form-submit');
+  submit.disabled=true;
+
+  let profileSaved=false,planAttempted=false;
+  try{
+    if(mode==='create'){
+      const data=await api('/api/v1/admin/users',{
+        method:'POST',
+        body:JSON.stringify(body)
+      });
+      selectedId=data.user.id;
+    }else{
+      const id=document.querySelector('#form-user-id').value;
+
+      if(JSON.stringify(body)!==modal.dataset.originalProfile){
+        await api(`/api/v1/admin/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify(body)});
+        profileSaved=true;
+        modal.dataset.originalProfile=JSON.stringify(body);
+      }
+
+      if(modal.dataset.planDirty==='1'){
+        const plan=document.querySelector('#form-plan').value;
+
+        const planBody={plan};
+
+        if(plan==='pro'){
+          planBody.days=Number(
+            document.querySelector('#form-plan-days').value||30
+          );
+
+          planBody.monthly_credits=Number(
+            document.querySelector('#form-plan-credits').value||1000
+          );
+        }
+
+        planAttempted=true;
+        await api(`/api/v1/admin/users/${encodeURIComponent(id)}/plan`,{
+          method:'PUT',
+          body:JSON.stringify(planBody)
+        });
+      }
+
+      selectedId=id;
+    }
+
+    closeModal();
+    await loadDirectorySummary();
+
+  }catch(err){
+    error.textContent=(profileSaved&&planAttempted?'Profile saved; the plan was not confirmed. Reopen the user to check the current plan before retrying. ':'')+err.message;
+    error.classList.remove('hidden');
+  }finally{
+    submit.disabled=false;
+  }
+});
 
 if(activityUserSelect)activityUserSelect.addEventListener('change',async()=>{const user=activityUserSelect.value;const url=new URL(window.location.href);if(user)url.searchParams.set('user',user);else url.searchParams.delete('user');window.history.replaceState({},'',url);updateActivityScopeSummary();await loadActivity();});
 if(chatAccessModal){document.querySelector('#chat-access-close')?.addEventListener('click',resetChatAccess);document.querySelector('#chat-access-cancel')?.addEventListener('click',resetChatAccess);chatAccessModal.addEventListener('click',e=>{if(e.target===chatAccessModal)resetChatAccess();});}
 if(chatAccessForm)chatAccessForm.addEventListener('submit',async event=>{event.preventDefault();const error=document.querySelector('#chat-access-error');error.classList.add('hidden');const threadId=document.querySelector('#chat-access-thread-id').value;const reason=document.querySelector('#chat-access-reason').value;const note=document.querySelector('#chat-access-note').value.trim();const submit=document.querySelector('#chat-access-submit');submit.disabled=true;try{const data=await api(`/api/v1/admin/chat-threads/${encodeURIComponent(threadId)}/reveal`,{method:'POST',body:JSON.stringify({reason,note:note||null})});chatAccessForm.classList.add('hidden');chatContentView.classList.remove('hidden');renderConversation(data);}catch(err){error.textContent=err.message;error.classList.remove('hidden');}finally{submit.disabled=false;}});
 
-(async()=>{if(page==='overview'){await loadSummary();return;}if(page==='activity'){await loadActivity();void refreshManagementStatus();return;}await loadDirectorySummary(false,{enrich:true});})();
+(async()=>{if(page==='presentation')return;if(page==='overview'){await loadSummary();return;}if(page==='activity'){await loadActivity();void refreshManagementStatus();return;}await loadDirectorySummary(false,{enrich:true});})();
 
 /* NOTEPRESO_ADMIN_AUTOSYNC_V2 */
 

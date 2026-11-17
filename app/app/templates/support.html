@@ -7,16 +7,16 @@
   <meta name="theme-color" content="#087443">
   <title>Support | {{ app_name }}</title>
   <link rel="stylesheet" href="/static/app.css?v=1007">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
-  <link rel="shortcut icon" type="image/png" href="/static/favicon.png?v=0284">
-  <link rel="apple-touch-icon" href="/static/favicon.png?v=0284">
+  <link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
+  
+  <link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
 </head>
 <body data-page="support">
 <header class="topbar">
   <nav class="nav" aria-label="Primary navigation">
     <a class="brand" href="/" aria-label="AI Speaker Notes home"><span>AI Speaker Notes<small>v{{ version }}</small></span></a>
     <div class="nav-links">
-      <a href="/">Dashboard</a>
+      <a href="/app">Dashboard</a>
       <a href="/chat">AI Chat</a>
       <a href="/how-to">How to Use</a>
       <a class="active" href="/support">Support</a>
@@ -40,114 +40,116 @@
   </nav>
 </header>
 
-<main class="shell support-shell">
-  <section class="page-hero support-hero">
-    <p class="eyebrow"><span class="dot"></span>Notepreso support</p>
-    <h1>How can we help?</h1>
-    <p>Get help with technical issues, billing, or refunds.</p>
+
+<main class="shell support-shell support-clean-shell">
+
+  <section class="support-clean-hero">
+    <p class="eyebrow"><span class="dot"></span>NOTEPRESO SUPPORT</p>
+
+    <h1>Need help with NotePreso?</h1>
+
+    <p>
+      Technical questions, billing, and refund requests are handled
+      directly by email.
+    </p>
   </section>
 
-  {% if status == 'sent' %}
-  <div class="support-alert success" role="status">
-    <strong>Your request was sent successfully.</strong>
-    <span>Reference: {{ reference }}. Keep this reference if you contact us again about the same request.</span>
-  </div>
-  {% elif status == 'smtp_failed' %}
-  <div class="support-alert error" role="alert">
-    <strong>We couldn’t send your request right now.</strong>
-    <span>Please email us directly instead.</span>
-  </div>
-  {% elif status == 'invalid' %}
-  <div class="support-alert error" role="alert">
-    <strong>Please check the form.</strong>
-    <span>{{ error_message }}</span>
-  </div>
-  {% elif status == 'rate_limited' %}
-  <div class="support-alert error" role="alert">
-    <strong>Too many requests were submitted.</strong>
-    <span>Please email us directly.</span>
-  </div>
-  {% endif %}
+  <section class="support-contact-panel">
 
-  <section class="support-grid">
-    <article class="content-card support-form-card">
-      <div class="support-card-heading">
-        <div>
-          <h2>Send a request</h2>
-        </div>
+    <div class="support-contact-intro">
+      <div class="support-contact-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 6.5h16v11H4z"></path>
+          <path d="m4 7 8 6 8-6"></path>
+        </svg>
       </div>
 
-      <form method="post" action="/support" class="support-form" autocomplete="on">
-        <div class="support-two-col">
-          <label class="field">Request type
-            <select name="request_type" required>
-              {% for value, label in request_types.items() %}
-              <option value="{{ value }}" {% if form.request_type == value %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label class="field">Full name
-            <input type="text" name="name" value="{{ form.name }}" required minlength="2" maxlength="120" autocomplete="name">
-          </label>
-        </div>
+      <div>
+        <span class="support-label">SUPPORT EMAIL</span>
+        <h2>{{ support_email }}</h2>
+        <p>
+          Send us a message and our team will respond through email.
+        </p>
+      </div>
+    </div>
 
-        <div class="support-two-col">
-          <label class="field">Email address
-            <input type="email" name="email" value="{{ form.email }}" required maxlength="254" autocomplete="email">
-          </label>
-          <label class="field">Transaction or invoice ID <span class="help">Optional</span>
-            <input type="text" name="transaction_id" value="{{ form.transaction_id }}" maxlength="120" placeholder="Recommended for refund requests">
-          </label>
-        </div>
+    <div class="support-contact-actions">
 
-        <label class="field">Message
-          <textarea name="message" required minlength="10" maxlength="5000" rows="8" placeholder="Describe the issue or refund request clearly.">{{ form.message }}</textarea>
-          <span class="help">Do not include passwords, API keys, card numbers, or other secrets.</span>
-        </label>
+      <a
+        class="support-action-primary"
+        href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to={{ support_email }}&amp;su=NotePreso%20Support%20Request"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open Gmail
+        <span aria-hidden="true">↗</span>
+      </a>
 
-        <div class="support-honeypot" aria-hidden="true">
-          <label>Company website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
-        </div>
+      <button
+        class="support-action-secondary"
+        id="support-copy-email"
+        type="button"
+        data-copy-support-email="{{ support_email }}"
+      >
+        Copy email address
+      </button>
 
-        <div class="form-actions support-actions">
-          <button class="primary" type="submit">Send to Support</button>
-        </div>
-      </form>
+      <a
+        class="support-default-mail"
+        href="{{ mailto_url }}"
+      >
+        Use default email app
+      </a>
+
+      <p
+        class="support-copy-status"
+        id="support-copy-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+
+    </div>
+
+  </section>
+
+  <section class="support-quick-info">
+
+    <article>
+      <span class="support-info-number">01</span>
+      <div>
+        <span class="support-label">REFUNDS</span>
+        <h3>Include your transaction ID.</h3>
+        <p>
+          For refund requests, email us from the address connected to
+          your NotePreso account and include the transaction or invoice ID.
+        </p>
+      </div>
     </article>
 
-    <aside class="support-side">
-      <article class="content-card support-manual-card">
-        <h2>Email support</h2>
-        <p>Prefer email? Contact us directly.</p>
-        <a class="btn secondary support-mailto" href="{{ mailto_url }}">Email Support</a>
-        <div class="support-address">
-          <span>Support inbox</span>
-          <strong>{{ support_email }}</strong>
-        </div>
-      </article>
+    <article>
+      <span class="support-info-number">02</span>
+      <div>
+        <span class="support-label">SECURITY</span>
+        <h3>Keep sensitive information private.</h3>
+        <p>
+          Never send passwords, API keys, verification codes,
+          or payment card details.
+        </p>
+      </div>
+    </article>
 
-      <article id="refund" class="content-card support-info-card">
-        <span class="feature-number">REFUNDS</span>
-        <h2>Refund requests</h2>
-        <p>Select <strong>Refund request</strong> and add your transaction or invoice ID.</p>
-      </article>
-
-      <article class="content-card support-info-card">
-        <span class="feature-number">SECURITY</span>
-        <h2>Keep secrets out of support messages</h2>
-        <p>Never include passwords, verification codes, API keys, private keys, or full card details.</p>
-      </article>
-    </aside>
   </section>
+
 </main>
+
 
 <footer class="footer">
   <div class="footer-inner">
     <span>AI Speaker Notes v{{ version }}</span>
-    <span><a href="/">Dashboard</a> &middot; <a href="/how-to">How to Use</a> &middot; <a href="/legal">Terms & Privacy</a></span>
+    <span><a href="/app">Dashboard</a> &middot; <a href="/how-to">How to Use</a> &middot; <a href="/legal">Terms & Privacy</a></span>
   </div>
 </footer>
-<script src="/static/common.js?v=1020" defer></script>
+<script src="/static/common.js?v=1880" defer></script>
 <script src="/static/support.js?v=1001" defer></script>
 </body>
 </html>

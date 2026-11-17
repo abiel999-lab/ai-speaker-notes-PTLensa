@@ -1,0 +1,5 @@
+import{wrapText,textHeight,THEMES}from'./layout.js';
+export function applyCoverRole(scene,settings){if(settings.creationMode!=='creative'||!Object.hasOwn(settings,'coverAssetId'))return scene;const first=scene.slides[0];if(!first)return scene;if(!settings.coverAssetId)return{...scene,slides:[{...first,objects:first.objects.filter(o=>o.type!=='image')},...scene.slides.slice(1)]};const texts=first.objects.filter(o=>o.type==='text'||o.type==='table');if(texts.some(o=>o.type==='table'))return scene;const has=!!settings.coverAssetId,width=has?6.5:11.6;let output;
+ for(const base of[40,36,32,28,24,22,20,18]){let y=2.05,objects=[];for(const[i,o]of texts.entries()){const font=i===0?base:Math.min(base,22),lines=o.text.split('\n').flatMap(s=>wrapText(s,width,font,!!o.bold)),h=textHeight(lines.length,font)*1.18+.12;objects.push({...o,x:.8,y,w:width,h,fontSize:font,lines});y+=h+.2;}if(y>6.2)continue;output=objects;break;}
+ if(!output)throw Error('COVER_BRANDING_SPACE');if(has)output.unshift({type:'image',asset:settings.coverAssetId,x:8.05,y:2.0,w:4.5,h:4.65,fit:'contain'});
+ return{...scene,slides:[{...first,objects:output},...scene.slides.slice(1)]};}

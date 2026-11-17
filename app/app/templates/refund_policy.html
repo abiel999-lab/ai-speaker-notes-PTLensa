@@ -6,12 +6,12 @@
   <meta name="theme-color" content="#087443">
   <title>Kebijakan Refund · {{ app_name }}</title>
   <link rel="stylesheet" href="/static/app.css?v=1071">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+  <link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
 </head>
 <body data-page="refund-policy">
 <header class="topbar"><nav class="nav">
   <a class="brand" href="/"><span>AI Speaker Notes<small>v{{ version }}</small></span></a>
-  <div class="nav-links"><a href="/">Dashboard</a><a href="/chat">Chat AI</a><a href="/how-to">Cara Pakai</a><a href="/legal">Legal</a><a class="active" href="/refund-policy">Refund</a></div>
+  <div class="nav-links"><a href="/app">Dashboard</a><a href="/chat">Chat AI</a><a href="/how-to">Cara Pakai</a><a href="/legal">Legal</a><a class="active" href="/refund-policy">Refund</a></div>
   <div class="nav-actions">{% if auth_enabled and authenticated %}<div class="account-actions"><span class="plan-chip" data-plan-chip>Free</span><div class="account-chip" title="{{ username }}"><span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span><span class="account-name">{{ username }}</span></div><button class="logout-btn" type="button" data-logout aria-label="Keluar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Keluar</span></button></div>{% endif %}</div>
 </nav></header>
 
@@ -86,7 +86,7 @@ Lampiran: invoice / receipt / bukti pembayaran</pre>
   </section>
 </main>
 
-<footer class="footer"><div class="footer-inner"><span>NotePreso · Refund Policy {{ refund_policy_date }}</span><span><a href="/legal">Terms & Privacy</a> · <a href="/">Dashboard</a></span></div></footer>
-<script src="/static/common.js?v=1071" defer></script>
+<footer class="footer"><div class="footer-inner"><span>NotePreso · Refund Policy {{ refund_policy_date }}</span><span><a href="/legal">Terms & Privacy</a> · <a href="/app">Dashboard</a></span></div></footer>
+<script src="/static/common.js?v=1880" defer></script>
 </body>
 </html>

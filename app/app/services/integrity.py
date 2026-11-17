@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import gc
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
@@ -158,6 +159,13 @@ class PptxIntegrityValidator:
 
     @staticmethod
     def _notes_texts(path: Path) -> dict[int, str]:
+        try:
+            return PptxIntegrityValidator._read_notes_texts(path)
+        finally:
+            gc.collect()
+
+    @staticmethod
+    def _read_notes_texts(path: Path) -> dict[int, str]:
         presentation = Presentation(path)
         result: dict[int, str] = {}
         for number, slide in enumerate(presentation.slides, start=1):

@@ -1,0 +1,20 @@
+:root {font-family:Inter,system-ui,sans-serif;color:#142948;background:#f4f7f9}
+* {box-sizing:border-box}
+body {margin:0}
+.pg-guide {width:min(100% - 32px,1050px);margin:auto;padding:clamp(34px,6vw,76px) 0 64px}
+.pg-intro {max-width:680px;margin:0 0 38px}
+.pg-kicker {font-size:12px;font-weight:750;letter-spacing:.09em;color:#076a75}
+.pg-intro h1 {font-size:clamp(35px,5vw,56px);line-height:1.06;letter-spacing:-.035em;margin:10px 0 14px}
+.pg-guide p {line-height:1.6;color:#455b73}
+.pg-guide h2 {margin:0 0 16px;font-size:clamp(23px,3vw,30px)}
+.pg-primary {display:inline-flex;align-items:center;min-height:44px;padding:10px 18px;border-radius:9px;background:#086978;color:white;text-decoration:none;font-weight:650}
+.pg-steps {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;list-style:none;counter-reset:step;padding:0;margin:0}
+.pg-steps li,.pg-help {border:1px solid #d9e4ea;border-radius:14px;background:white;padding:clamp(16px,3vw,24px)}
+.pg-steps li {counter-increment:step}
+.pg-steps li::before {content:"0" counter(step);color:#076a75;font-size:13px;font-weight:750}
+.pg-steps h3 {margin:8px 0 6px;font-size:19px}
+.pg-steps p {margin:0}
+.pg-help {margin-top:24px}
+.pg-links {display:flex;flex-wrap:wrap;gap:4px 20px}
+.pg-links a {display:inline-flex;align-items:center;min-height:44px;color:#076a75}
+@media(max-width:700px){.pg-steps {grid-template-columns:minmax(0,1fr)}}

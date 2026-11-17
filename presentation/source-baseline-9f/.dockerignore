@@ -1,0 +1,23 @@
+# Never send local credentials, backups, or development state in build context.
+.env*
+**/.env*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*credentials*.json
+**/*secret*.json
+node_modules
+.git
+.backups
+coverage
+data
+test-output
+dist
+server-dist
+*.log
+
+qa-evidence
+upload
+**/*.bak
+**/*.phase*.bak

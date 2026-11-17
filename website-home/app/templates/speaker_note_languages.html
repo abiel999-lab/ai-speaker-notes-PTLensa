@@ -1,0 +1,19 @@
+{% set language_aliases = {
+  'id': 'Indonesia Bahasa Indonesia', 'en': 'Inggris English',
+  'zh_cn': 'Mandarin Cina China 中文 简体', 'zh_tw': 'Mandarin Cina China 中文 繁體',
+  'ja': 'Jepang 日本語', 'ko': 'Korea 한국어', 'ar': 'Arab العربية',
+  'fr': 'Prancis Français', 'de': 'Jerman Deutsch', 'es': 'Spanyol Español',
+  'pt': 'Portugis Português', 'ru': 'Rusia Русский', 'it': 'Italia Italiano',
+  'nl': 'Belanda Nederlands', 'tr': 'Turki Türkçe', 'hi': 'Hindi हिन्दी',
+  'ms': 'Melayu Bahasa Melayu', 'fil': 'Filipina Tagalog Filipino',
+  'uk': 'Ukraina Українська', 'su': 'Sunda', 'jv': 'Jawa Bahasa Jawa',
+  'ace': 'Aceh', 'mad': 'Madura', 'mak': 'Makassar', 'min': 'Minang Minangkabau',
+  'bug': 'Bugis', 'ban': 'Bali', 'bjn': 'Banjar',
+  'yue': 'Kanton Cantonese 粵語', 'pt_br': 'Portugis Brasil Brazil Português',
+  'pt_pt': 'Portugis Portugal Português', 'fr_ca': 'Prancis Kanada Canada Français',
+  'pa_ar': 'Punjabi Shahmukhi شاہ مکھی', 'my': 'Myanmar Burma Burmese',
+  'or_': 'Oriya Odia', 'fa': 'Farsi Persia Persian فارسی'
+} %}
+{% for language in speaker_note_languages %}
+<option value="{{ language.value }}" data-language-search="{{ language.name|replace('_', '-') }} {{ language_aliases.get(language.name, '') }}"{% if language.value == selected_language %} selected{% endif %}>{% if language.value == 'Bahasa Indonesia' %}Indonesian{% else %}{{ language.value }}{% endif %}</option>
+{% endfor %}

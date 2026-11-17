@@ -9,6 +9,7 @@ from app.services.notes.openai_generator import OpenAINotesGenerator
 
 ALLOWED_OPENAI_MODELS = {
     "gpt-6-luna",
+    "gpt-6.1-terra",
     "gpt-5.6-luna",
 }
 
@@ -42,7 +43,7 @@ class NotesGeneratorFactory:
         if selected_model not in ALLOWED_OPENAI_MODELS:
             raise RuntimeError(
                 f"Unsupported OpenAI model: {selected_model}. "
-                "Allowed models: gpt-6-luna, gpt-5.6-luna."
+                "Allowed models: gpt-6-luna, gpt-6.1-terra, gpt-5.6-luna."
             )
 
         generator = self._openai_generators.get(selected_model)

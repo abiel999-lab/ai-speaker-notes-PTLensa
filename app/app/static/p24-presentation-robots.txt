@@ -1,0 +1,10 @@
+User-agent: *
+Disallow: /app
+Disallow: /chat
+Disallow: /auth/
+Disallow: /api/
+Disallow: /login
+Disallow: /paddle/
+Disallow: /admin
+
+Sitemap: https://presentation.notepreso.com/sitemap.xml

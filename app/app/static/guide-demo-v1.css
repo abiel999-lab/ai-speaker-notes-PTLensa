@@ -1,0 +1,21 @@
+
+.guide-demo {scroll-margin-top:90px;border:1px solid #d9e3ea;border-radius:20px;background:#fff;overflow:hidden;color:#142948}
+.guide-demo-heading {padding:24px clamp(16px,4vw,28px) 18px}
+.guide-demo-heading h2 {margin:6px 0;font-size:clamp(23px,3vw,30px);line-height:1.15}
+.guide-demo p {margin:6px 0 0;color:#455b73;line-height:1.55}
+.guide-demo-stage {display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;padding:16px clamp(16px,4vw,28px);background:#f1f6f8;align-items:start}
+.guide-demo figure {margin:0}
+.guide-demo figure img {display:block;width:100%;height:auto;border:1px solid #d9e3ea;border-radius:10px}
+.guide-demo-notes {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0;border:0;margin:0;padding:0;position:relative}
+.guide-demo-notes legend {font-weight:700;padding:0 0 6px}
+.guide-demo-notes input {position:absolute;opacity:0;width:1px;height:1px}
+.guide-demo-notes label {display:grid;place-items:center;min-height:44px;border-radius:9px;border:1px solid #cbd9e2;background:#fff;color:#18314d;font-weight:650;cursor:pointer}
+.guide-demo-notes input:checked+label {background:#0b6070;border-color:#0b6070;color:#fff}
+.guide-demo-notes input:focus-visible+label {outline:2px solid #087f8c;outline-offset:2px}
+.guide-demo-panel {grid-column:1/-1;display:none;border:1px solid #d9e3ea;border-radius:10px;background:#fff;padding:14px;min-height:86px}
+#guide-demo-before:checked ~ .guide-demo-empty,#guide-demo-after:checked ~ .guide-demo-generated {display:block;animation:guide-note-in .24s ease-out both}
+@keyframes guide-note-in {from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.guide-demo-downloads {display:flex;flex-wrap:wrap;gap:4px 20px;padding:8px clamp(16px,4vw,28px)}
+.guide-demo-downloads a {display:inline-flex;align-items:center;min-height:44px;color:#0b6070;text-decoration:underline;font-weight:650}
+@media(max-width:660px){.guide-demo-stage {grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){.guide-demo-panel {animation:none!important}}

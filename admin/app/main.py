@@ -127,7 +127,7 @@ async def lifespan(app: FastAPI):
     interrupted = store.recover_interrupted()
     if interrupted:
         logger.warning("startup_recovery interrupted_jobs=%s", interrupted)
-    removed = store.cleanup_expired(settings.job_retention_hours)
+    removed = 0 if Path("/app/.notepreso-v2-preserve-startup").exists() else store.cleanup_expired(settings.job_retention_hours)
     if removed:
         logger.info("retention_cleanup removed_jobs=%s", removed)
     yield

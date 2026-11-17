@@ -1,0 +1,14 @@
+.docs-main { max-width: 960px; }
+.docs-main .content-card { margin: 20px 0; }
+.docs-main p { line-height: 1.7; }
+.docs-main a { overflow-wrap: anywhere; }
+.nav { flex-wrap: wrap; gap: 16px; }
+.nav-links { flex-wrap: wrap; }
+.nav-actions { margin-left: auto; }
+.footer-inner { flex-wrap: wrap; gap: 16px; }
+@media (max-width: 600px) {
+  .docs-main { width: auto; margin: 0 16px; }
+  .docs-main .page-hero h1 { font-size: 38px; line-height: 1.12; }
+  .nav-links { order: 3; width: 100%; gap: 16px; }
+  .docs-main .content-card { padding: 20px; }
+}

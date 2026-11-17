@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#08281d">
+  <meta name="theme-color" content="#172B4D">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>{{ admin_page_title }} · {{ app_name }}</title>
+  <title>{{ admin_page_title }} · NotePreso</title>
   <link rel="stylesheet" href="/static/app.css?v=1010">
-  <link rel="stylesheet" href="/static/admin.css?v=1810">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+  <link rel="stylesheet" href="/static/admin.css?v=notepreso-admin-transparent-2">
+  <link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=notepreso-blue-1">
 </head>
 <body class="admin-body" data-admin-page="{{ admin_page }}" data-management-ready="{{ 'true' if management_ready else 'false' }}">
 <div class="admin-app-shell">
   <aside class="admin-sidebar" aria-label="Administration navigation">
     <div class="admin-brand-block">
-      <a class="admin-brand-lockup" href="/admin" aria-label="AI Speaker Notes Administration">
-        <span class="admin-logo-plate"><img src="/static/admin-logo.png?v=1210" alt="Lensa Lingkungan"></span>
+      <a class="admin-brand-lockup" href="/admin" aria-label="NotePreso Administration">
+        <span class="admin-logo-plate"><picture><source media="(max-width:1120px)" srcset="/static/notepreso-favicon-original.png?v=notepreso-admin-transparent-2"><img src="/static/notepreso-admin-transparent-v2.png?v=notepreso-admin-transparent-2" alt="NotePreso" decoding="async"></picture></span>
         <span class="admin-brand-copy">
-          <strong>AI Speaker Notes</strong>
+          <strong>NotePreso</strong>
           <small>Administration</small>
         </span>
       </a>
@@ -38,10 +38,20 @@
         <span>Presentations & chat</span>
       </a>
 
-      <p>Application</p>
+      <a class="{% if admin_page == 'presentation' %}active{% endif %}" href="/admin/presentation-ai">
+        <span class="admin-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 3h16v13H4V3Zm2 2v9h12V5H6Zm5 2h2v5h-2V7Zm-4 11h10v2H7v-2Z"/></svg></span>
+        <span>Presentation AI</span>
+      </a>
+
+      <a class="{% if admin_page == 'translator' %}active{% endif %}" href="/admin/translator"><span class="admin-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 4h9v2H9.8a15 15 0 0 1-3 5.5l2.7 2.7-1.4 1.4-2.5-2.5-2.1 2.1-1.4-1.4 2.2-2.2A16 16 0 0 1 2.5 8h2.1a11 11 0 0 0 1.1 2A12 12 0 0 0 7.6 6H1V4h4V2h2v2H3Zm11 5h3l5 13h-2.2l-1.2-3.5h-6.2L11.2 22H9l5-13Zm-.9 7.5h4.8L15.5 10l-2.4 6.5Z"/></svg></span><span>PowerPoint Translator</span></a>
+<p>Application</p>
       <a href="{{ user_app_url }}/" target="_blank" rel="noopener noreferrer">
         <span class="admin-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H5v12h12v-6h2v8H3V5h2Z"/></svg></span>
-        <span>Open user app</span>
+        <span>Open NotePreso</span>
+      </a>
+<a href="https://presentation.notepreso.com/app" target="_blank" rel="noopener noreferrer">
+        <span class="admin-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3ZM5 5h6v2H5v12h12v-6h2v8H3V5h2Z"/></svg></span>
+        <span>Presentation</span>
       </a>
     </nav>
 
@@ -60,7 +70,7 @@
           <button type="button" data-admin-lang="id" aria-label="Bahasa Indonesia">ID</button>
           <button type="button" data-admin-lang="en" aria-label="English">EN</button>
         </div>
-        <span id="management-status" class="management-status {{ 'ready' if management_ready else 'error' }}"><i></i><span>{{ 'Keycloak management ready' if management_ready else 'Keycloak management unavailable' }}</span></span>
+        <span id="management-status" class="management-status {{ 'ready' if management_ready else 'error' }}"><i></i><span>{{ 'Account management connected' if management_ready else 'Account management unavailable' }}</span></span>
         <div class="admin-account-chip" title="{{ username }}"><span class="admin-account-avatar">{{ (username or 'A')[:1] | upper }}</span><span class="admin-account-name">{{ username }}</span></div>
         <form class="admin-logout-form" action="/auth/admin/logout" method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -70,56 +80,92 @@
     </header>
 
     <main class="admin-content">
+      {% if admin_page == 'translator' %}
+      <link rel="stylesheet" href="/static/translation_admin.css?v=20261111-2">
+      <section class="admin-hero"><div class="admin-hero-copy"><div class="admin-page-kicker"><span></span>Translation monitoring</div><h1>PowerPoint Translator</h1><p>Monitor translation activity, shared credit usage, and translation reports.</p></div><div class="admin-hero-actions"><button class="admin-primary-action" id="tr-refresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.09A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h8V3l-3.35 3.35Z"/></svg><span>Refresh</span></button></div></section>
+      <section class="admin-alert admin-alert-error hidden" id="tr-alert" role="alert"></section>
+      <section class="admin-stats" id="tr-stats" aria-label="Translator metrics"></section>
+      <section class="admin-workspace-section"><div class="admin-section-title"><div><h2>Translation activity</h2><p id="tr-count">All recorded translation jobs. Refreshes every 30 seconds.</p></div><div class="admin-section-note"><span id="tr-state" role="status" aria-live="polite">Loading…</span></div></div>
+      <div class="admin-panel"><div class="admin-panel-head tr-toolbar"><label class="admin-search"><span class="admin-search-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4a6 6 0 1 0 3.74 10.69L19.05 20 20.46 18.59l-5.3-5.3A6 6 0 0 0 10 4Z"/></svg></span><span class="sr-only">Search users or files</span><input id="tr-search" type="search" placeholder="Search by user, email, file, or job ID"></label><div class="tr-filters"><label for="tr-status">Status<select id="tr-status"><option value="">All statuses</option></select></label><label for="tr-language">Output language<select id="tr-language"><option value="">All languages</option></select></label></div></div>
+      <div class="table-wrap"><table class="admin-table tr-table"><thead><tr><th>File / account</th><th>Languages</th><th>Status</th><th>Slides / credits</th><th>Created</th><th>Report &amp; details</th></tr></thead><tbody id="tr-rows"><tr><td colspan="6" class="empty-cell">Loading translations…</td></tr></tbody></table></div></div></section>
+      <script src="/static/translation_admin.js?v=20261111-privacy3" defer></script>
+      {% endif %}
+
       {% if admin_page == 'overview' %}
       <section class="admin-hero">
         <div class="admin-hero-copy">
-          <div class="admin-page-kicker"><span></span>Control center</div>
+          <div class="admin-page-kicker"><span></span>Administration</div>
           <h1>Administration overview</h1>
-          <p>Monitor identities, presentation processing, and saved AI conversations from one workspace.</p>
+          <p>Manage accounts, review presentation activity, and monitor service usage.</p>
         </div>
         <div class="admin-hero-actions"><div class="admin-hero-meta"><span>Access</span><strong>Administrator</strong></div></div>
       </section>
 
       <section class="admin-alert admin-alert-error hidden" id="runtime-alert"></section>
       <section class="admin-stats" aria-label="Admin overview metrics">
-        <article class="admin-stat-card primary-stat"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13Zm8 0c-.4 0-.86.03-1.34.08 1.41.92 2.34 2.16 2.34 3.42V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z"/></svg></div><div><span>Total users</span><strong id="stat-users">—</strong><small>Known application accounts</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5V3Zm2 2v14h10V9h-4V5H7Zm8 .41V7h1.59L15 5.41Z"/></svg></div><div><span>Presentations</span><strong id="stat-jobs">—</strong><small>PowerPoint processing records</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H7l-3 3V4Zm2 2v8h11.17l.83.83V6H6Z"/></svg></div><div><span>Chat threads</span><strong id="stat-chats">—</strong><small>Saved AI conversations</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon complete"><svg viewBox="0 0 24 24"><path d="m9.55 17.2-4.24-4.24 1.42-1.42 2.82 2.83 7.72-7.72 1.42 1.42-9.14 9.13Z"/></svg></div><div><span>Completed</span><strong id="stat-completed">—</strong><small>Successfully processed jobs</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon failed"><svg viewBox="0 0 24 24"><path d="M11 6h2v7h-2V6Zm0 9h2v2h-2v-2Z"/></svg></div><div><span>Failed</span><strong id="stat-failed">—</strong><small>Jobs requiring attention</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon banned"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 0 1 5.65 13.65L6.35 6.35A7.96 7.96 0 0 1 12 4Z"/></svg></div><div><span>Restricted</span><strong id="stat-banned">—</strong><small>Locally banned accounts</small></div></article>
+        <article class="admin-stat-card primary-stat"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13Zm8 0c-.4 0-.86.03-1.34.08 1.41.92 2.34 2.16 2.34 3.42V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z"/></svg></div><div><span>Total users</span><strong id="stat-users">Loading</strong><small>Accounts recorded in NotePreso</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5V3Zm2 2v14h10V9h-4V5H7Zm8 .41V7h1.59L15 5.41Z"/></svg></div><div><span>Presentations</span><strong id="stat-jobs">Loading</strong><small>PowerPoint processing records</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H7l-3 3V4Zm2 2v8h11.17l.83.83V6H6Z"/></svg></div><div><span>Conversations</span><strong id="stat-chats">Loading</strong><small>Saved conversations</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon complete"><svg viewBox="0 0 24 24"><path d="m9.55 17.2-4.24-4.24 1.42-1.42 2.82 2.83 7.72-7.72 1.42 1.42-9.14 9.13Z"/></svg></div><div><span>Completed</span><strong id="stat-completed">Loading</strong><small>Successfully processed jobs</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon failed"><svg viewBox="0 0 24 24"><path d="M11 6h2v7h-2V6Zm0 9h2v2h-2v-2Z"/></svg></div><div><span>Failed</span><strong id="stat-failed">Loading</strong><small>Jobs requiring attention</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon banned"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 0 1 5.65 13.65L6.35 6.35A7.96 7.96 0 0 1 12 4Z"/></svg></div><div><span>Restricted</span><strong id="stat-banned">Loading</strong><small>Accounts restricted in this application</small></div></article>
       </section>
 
       <section class="admin-workspace-section billing-overview-section">
         <div class="admin-section-title">
-          <div><div class="admin-page-kicker"><span></span>Billing & access</div><h2>Plan overview</h2><p>Effective Free/Pro access is calculated from the NotePreso subscription database and paid-period expiry.</p></div>
-          <div class="admin-section-note"><span class="admin-section-note-dot"></span><span>Read-only subscription visibility</span></div>
+          <div><div class="admin-page-kicker"><span></span>Subscriptions & access</div><h2>Plan overview</h2><p>Review Free and Pro access based on subscription status and the paid access period.</p></div>
+          <div class="admin-section-note"><span class="admin-section-note-dot"></span><span>Subscription information only</span></div>
         </div>
         <section class="admin-stats billing-stats" aria-label="Subscription metrics">
-          <article class="admin-stat-card billing-pro-card"><div class="admin-stat-icon billing-pro"><svg viewBox="0 0 24 24"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></div><div><span>Pro users</span><strong id="stat-pro-users">—</strong><small>Paid access currently active</small></div></article>
-          <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 5v6h5v2h-7V7h2Z"/></svg></div><div><span>Free users</span><strong id="stat-free-users">—</strong><small>Free access, including expired Pro</small></div></article>
-          <article class="admin-stat-card"><div class="admin-stat-icon billing-expiring"><svg viewBox="0 0 24 24"><path d="M11 7h2v6h5v2h-7V7Zm1-5a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8.01 8.01 0 0 1-8 8Z"/></svg></div><div><span>Expiring Pro</span><strong id="stat-expiring-pro">—</strong><small>Ending within 7 days or renewal canceled</small></div></article>
-          <article class="admin-stat-card"><div class="admin-stat-icon failed"><svg viewBox="0 0 24 24"><path d="M11 6h2v7h-2V6Zm0 9h2v2h-2v-2Zm1-13a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Z"/></svg></div><div><span>Expired Pro</span><strong id="stat-expired-pro">—</strong><small>Previous Pro period has ended</small></div></article>
+          <article class="admin-stat-card billing-pro-card"><div class="admin-stat-icon billing-pro"><svg viewBox="0 0 24 24"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></div><div><span>Pro users</span><strong id="stat-pro-users">Loading</strong><small>Paid access currently active</small></div></article>
+          <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 5v6h5v2h-7V7h2Z"/></svg></div><div><span>Free users</span><strong id="stat-free-users">Loading</strong><small>Free access, including expired Pro</small></div></article>
+          <article class="admin-stat-card"><div class="admin-stat-icon billing-expiring"><svg viewBox="0 0 24 24"><path d="M11 7h2v6h5v2h-7V7Zm1-5a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8.01 8.01 0 0 1-8 8Z"/></svg></div><div><span>Expiring Pro</span><strong id="stat-expiring-pro">Loading</strong><small>Ending within 7 days or renewal canceled</small></div></article>
+          <article class="admin-stat-card"><div class="admin-stat-icon failed"><svg viewBox="0 0 24 24"><path d="M11 6h2v7h-2V6Zm0 9h2v2h-2v-2Zm1-13a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Z"/></svg></div><div><span>Expired Pro</span><strong id="stat-expired-pro">Loading</strong><small>Previous Pro period has ended</small></div></article>
         </section>
       </section>
 
       <section class="admin-overview-links">
-        <a class="admin-overview-card" href="/admin/users"><span class="admin-overview-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><div><small>IDENTITY</small><strong>User management</strong><p>Inspect accounts, plan status, login activity, and user-owned data.</p></div><span class="admin-card-arrow">→</span></a>
-        <a class="admin-overview-card" href="/admin/activity"><span class="admin-overview-icon"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3Zm2 2v14h10V5H7Zm2 3h6v2H9V8Zm0 4h6v2H9v-2Z"/></svg></span><div><small>ACTIVITY</small><strong>Presentations & chat</strong><p>Review processing records and saved AI conversation threads.</p></div><span class="admin-card-arrow">→</span></a>
+        <a class="admin-overview-card" href="/admin/users"><span class="admin-overview-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><div><small>IDENTITY</small><strong>User management</strong><p>Review account details, plan access, sign-in activity, and associated records.</p></div><span class="admin-card-arrow">→</span></a>
+        <a class="admin-overview-card" href="/admin/presentation-ai"><span class="admin-overview-icon"><svg viewBox="0 0 24 24"><path d="M4 3h16v13H4V3Zm2 2v9h12V5H6Zm5 13h14v2H5v-2Z"/></svg></span><div><small>GENERATION</small><strong>Presentation AI</strong><p>Monitor presentation generation, account activity, and estimated AI usage.</p></div><span class="admin-card-arrow">→</span></a>
+        <a class="admin-overview-card" href="/admin/activity"><span class="admin-overview-icon"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5V3Zm2 2v14h10V5H7Zm2 3h6v2H9V8Zm0 4h6v2H9v-2Z"/></svg></span><div><small>ACTIVITY</small><strong>Presentations & chat</strong><p>Review presentation processing and saved conversation records.</p></div><span class="admin-card-arrow">→</span></a>
+      </section>
+      {% endif %}
+
+      {% if admin_page == 'presentation' %}
+      <section class="admin-hero">
+        <div class="admin-hero-copy"><div class="admin-page-kicker"><span></span>Presentation generation</div><h1>Presentation AI</h1><p>Monitor generation activity, account usage, and estimated AI costs. Slide content and prompts are not displayed.</p></div>
+        <div class="admin-hero-actions"><a class="admin-primary-action" href="https://presentation.notepreso.com/app" target="_blank" rel="noopener noreferrer">Open Presentation AI ↗</a></div>
+      </section>
+      <section class="admin-alert admin-alert-error hidden" id="presentation-alert" role="alert"></section>
+      <section class="admin-stats" aria-label="Presentation AI metrics">
+        <article class="admin-stat-card primary-stat"><div><span>Generations</span><strong id="pa-total">Loading</strong><small>All recorded jobs</small></div></article>
+        <article class="admin-stat-card"><div><span>Ready</span><strong id="pa-ready">Loading</strong><small>Successful exports</small></div></article>
+        <article class="admin-stat-card"><div><span>Failed</span><strong id="pa-failed">Loading</strong><small>Failed jobs</small></div></article>
+        <article class="admin-stat-card"><div><span>Active</span><strong id="pa-active">Loading</strong><small>Queued and processing</small></div></article>
+        <article class="admin-stat-card"><div><span>Accounts</span><strong id="pa-users">Loading</strong><small>Known Presentation accounts</small></div></article>
+        <article class="admin-stat-card"><div><span>Tokens</span><strong id="pa-tokens">Loading</strong><small>Recorded input + output</small></div></article>
+        <article class="admin-stat-card"><div><span>Estimated API cost</span><strong id="pa-cost">Loading</strong><small>USD estimate, not billing</small></div></article>
+      </section>
+      <section class="admin-workspace-section">
+        <div class="admin-section-title"><div><h2>Recent generations</h2><p>Latest 100 generation records, metadata only.</p></div><div class="admin-section-note"><span id="pa-refreshed">Loading…</span></div></div>
+        <div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Project</th><th>Account</th><th>Status</th><th>Model / engine</th><th>Last updated</th><th>Error code</th></tr></thead><tbody id="pa-generations"><tr><td colspan="6" class="empty-cell">Loading…</td></tr></tbody></table></div></div>
+      </section>
+      <section class="admin-workspace-section">
+        <div class="admin-section-title"><div><h2>Usage by account</h2><p>Up to 100 active accounts by generation count.</p></div></div>
+        <div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Account</th><th>Generations</th></tr></thead><tbody id="pa-user-rows"><tr><td colspan="2" class="empty-cell">Loading…</td></tr></tbody></table></div></div>
       </section>
       {% endif %}
 
       {% if admin_page == 'users' %}
       <section class="admin-hero">
-        <div class="admin-hero-copy"><div class="admin-page-kicker"><span></span>Identity & access</div><h1>User management</h1><p>Manage Keycloak identities and inspect each user's application activity.</p></div>
+        <div class="admin-hero-copy"><div class="admin-page-kicker"><span></span>Identity & access</div><h1>User management</h1><p>Manage user accounts and review their application activity.</p></div>
         <div class="admin-hero-actions"><button id="add-user" class="admin-primary-action" type="button" {% if not management_ready %}disabled{% endif %}><svg viewBox="0 0 24 24"><path d="M11 11V7h2v4h4v2h-4v4h-2v-4H7v-2h4Z"/></svg><span>Add user</span></button></div>
       </section>
-      {% if not management_ready %}<section class="admin-alert admin-alert-warning" id="server-config-alert"><div class="admin-alert-icon">!</div><div><strong>User management service is not configured.</strong><span>Database activity remains available, but Keycloak user mutations require the admin service account.</span></div></section>{% endif %}
+      {% if not management_ready %}<section class="admin-alert admin-alert-warning" id="server-config-alert"><div class="admin-alert-icon">!</div><div><strong>User management service is not configured.</strong><span>Activity records remain available. Account changes require a configured Keycloak management connection.</span></div></section>{% endif %}
       <section class="admin-alert admin-alert-error hidden" id="runtime-alert"></section>
       <section class="admin-workspace-section">
-        <div class="admin-section-title"><div><div class="admin-page-kicker"><span></span>Directory</div><h2>Users</h2><p>Select an account to inspect identity data, presentation history, and saved AI chat activity.</p></div><div class="admin-section-note"><span class="admin-section-note-dot"></span><span>Live data from application database and Keycloak</span></div></div>
         <section class="admin-grid">
-          <div class="admin-panel users-panel"><div class="admin-panel-head"><div class="admin-panel-heading"><h3>User directory</h3><p id="user-count">Loading…</p></div><label class="admin-search"><span class="admin-search-icon"><svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.74 10.69L19.05 20 20.46 18.59l-5.3-5.3A6 6 0 0 0 10 4Z"/></svg></span><span class="sr-only">Search users</span><input id="user-search" type="search" placeholder="Search name, username, or email"></label></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>User</th><th>Email</th><th>Plan</th><th>Billing</th><th>Status</th><th>Files</th><th>Last login</th></tr></thead><tbody id="user-rows"><tr><td colspan="7" class="empty-cell">Loading users…</td></tr></tbody></table></div></div>
+          <div class="admin-panel users-panel"><div class="admin-panel-head"><div class="admin-panel-heading"><h3>User directory</h3><p id="user-count">Loading…</p></div><label class="admin-search"><span class="admin-search-icon"><svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.74 10.69L19.05 20 20.46 18.59l-5.3-5.3A6 6 0 0 0 10 4Z"/></svg></span><span class="sr-only">Search users</span><input id="user-search" type="search" placeholder="Search by name, username, or email"></label></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>User</th><th>Email</th><th>Plan</th><th>Payments</th><th>Status</th><th>Files</th><th>Last login</th></tr></thead><tbody id="user-rows"><tr><td colspan="7" class="empty-cell">Loading users…</td></tr></tbody></table></div></div>
           <aside class="admin-panel detail-panel" id="user-detail"><div class="admin-empty-detail"><span class="admin-empty-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg></span><strong>Select a user</strong><span>User profile, PowerPoint history, and saved chat activity will appear here.</span></div></aside>
         </section>
       </section>
@@ -142,10 +188,10 @@
         <span class="privacy-badge">Audited access</span>
       </section>
       <section class="admin-stats compact-stats" aria-label="Activity metrics">
-        <article class="admin-stat-card primary-stat"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5V3Z"/></svg></div><div><span>Presentations</span><strong id="stat-jobs">—</strong><small>Application processing records</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon complete"><svg viewBox="0 0 24 24"><path d="m9.55 17.2-4.24-4.24 1.42-1.42 2.82 2.83 7.72-7.72 1.42 1.42-9.14 9.13Z"/></svg></div><div><span>Completed</span><strong id="stat-completed">—</strong><small>Successful jobs</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon failed"><svg viewBox="0 0 24 24"><path d="M11 6h2v7h-2V6Zm0 9h2v2h-2v-2Z"/></svg></div><div><span>Failed</span><strong id="stat-failed">—</strong><small>Jobs requiring attention</small></div></article>
-        <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H7l-3 3V4Z"/></svg></div><div><span>Chat threads</span><strong id="stat-chats">—</strong><small>Metadata-visible threads</small></div></article>
+        <article class="admin-stat-card primary-stat"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5V3Z"/></svg></div><div><span>Presentations</span><strong id="stat-jobs">Loading</strong><small>Application processing records</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon complete"><svg viewBox="0 0 24 24"><path d="m9.55 17.2-4.24-4.24 1.42-1.42 2.82 2.83 7.72-7.72 1.42 1.42-9.14 9.13Z"/></svg></div><div><span>Completed</span><strong id="stat-completed">Loading</strong><small>Successful jobs</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon failed"><svg viewBox="0 0 24 24"><path d="M11 6h2v7h-2V6Zm0 9h2v2h-2v-2Z"/></svg></div><div><span>Failed</span><strong id="stat-failed">Loading</strong><small>Jobs requiring attention</small></div></article>
+        <article class="admin-stat-card"><div class="admin-stat-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H7l-3 3V4Z"/></svg></div><div><span>Conversations</span><strong id="stat-chats">Loading</strong><small>Metadata-visible threads</small></div></article>
       </section>
       <section class="activity-scope-summary" id="activity-scope-summary">
         <div><span class="activity-scope-avatar">A</span><div><small>Current scope</small><strong>All users</strong><p>Showing metadata across the application database.</p></div></div>
@@ -153,7 +199,7 @@
       </section>
       <section class="admin-activity-grid privacy-activity-grid">
         <div class="admin-panel"><div class="admin-panel-head"><div class="admin-panel-heading"><h3>Presentations</h3><p>Processing metadata for the selected user scope</p></div></div><div id="activity-jobs" class="activity-list"><div class="activity-empty">Loading presentation activity…</div></div></div>
-        <div class="admin-panel"><div class="admin-panel-head"><div class="admin-panel-heading"><h3>AI conversations</h3><p>Thread metadata only. Content access is audited.</p></div></div><div id="activity-chats" class="activity-list"><div class="activity-empty">Loading chat activity…</div></div></div>
+        <div class="admin-panel"><div class="admin-panel-head"><div class="admin-panel-heading"><h3>AI conversations</h3><p>Conversation details are hidden. Access to content is recorded in the audit log.</p></div></div><div id="activity-chats" class="activity-list"><div class="activity-empty">Loading chat activity…</div></div></div>
       </section>
       {% endif %}
     </main>
@@ -169,6 +215,39 @@
       <div class="admin-form-grid"><label><span>Username</span><input id="form-username" required minlength="3" maxlength="120" pattern="[A-Za-z0-9._@-]+"></label><label><span>Email</span><input id="form-email" type="email" maxlength="320"></label><label><span>First name</span><input id="form-first-name" maxlength="120"></label><label><span>Last name</span><input id="form-last-name" maxlength="120"></label></div>
       <label class="admin-check"><input id="form-email-verified" type="checkbox"><span>Email verified</span></label>
       <div id="create-password-fields"><div class="admin-form-grid single"><label><span>Initial password</span><input id="form-password" type="password" minlength="12" maxlength="256" autocomplete="new-password"></label></div><label class="admin-check"><input id="form-temporary-password" type="checkbox" checked><span>Require password change on first sign-in</span></label></div>
+      <div id="plan-access-fields" class="hidden">
+        <div class="admin-form-grid">
+          <label>
+            <span>Plan</span>
+            <select id="form-plan">
+              <option value="free">FREE</option>
+              <option value="pro">PRO</option>
+            </select>
+          </label>
+          <label id="form-plan-days-wrap">
+            <span>Access duration</span>
+            <input id="form-plan-days" type="number" min="1" max="3660" value="30">
+            <small>Days of manual Pro access.</small>
+          </label>
+          <label id="form-plan-credits-wrap">
+            <span>Monthly AI Slide Credits</span>
+            <input id="form-plan-credits" type="number" min="1" max="10000000" value="1000">
+            <small>Default Pro allowance: 1,000.</small>
+          </label>
+        </div>
+
+        <div id="form-credit-balance"
+             class="detail-privacy-note hidden"
+             role="status"
+             aria-live="polite"></div>
+
+        <div class="detail-privacy-note">
+          <strong>Manual access control</strong><small>Manual Pro grants credits once per cycle. Switching to Free locks unused credits without deleting them; reactivation in the same cycle does not grant more. Paddle billing remains separate.</small>
+          <span id="form-plan-current">Current plan: —</span>
+        </div>
+
+      </div>
+
       <div id="form-error" class="admin-form-error hidden"></div>
       <div class="admin-modal-actions"><button id="modal-cancel" class="btn secondary" type="button">Cancel</button><button id="form-submit" class="btn primary" type="submit">Save user</button></div>
     </form>
@@ -196,7 +275,8 @@
 </div>
 {% endif %}
 
-<script src="/static/admin_i18n.js?v=2310" defer></script>
-<script src="/static/admin.js?v=2310" defer></script>
+<script src="/static/admin_i18n.js?v=notepreso-blue-1" defer></script>
+<script src="/static/admin.js?v=20261109-account1" defer></script>
+{% if admin_page == 'presentation' %}<script src="/static/presentation_admin.js?v=9h1" defer></script>{% endif %}
 </body>
 </html>

@@ -12,7 +12,7 @@ import time
 from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.core.auth import COOKIE_NAME, request_identity
@@ -476,8 +476,23 @@ def _complete_keycloak_callback(
     return response
 
 
+
+
+def _provider_error_page(request: Request, *, admin_flow: bool):
+    # Use the existing signed admin restart flow; never reflect provider input.
+    action = ('<form method="post" action="/auth/admin/restart"><input type="hidden" name="restart_token" value="' + admin_restart_token(request) + '"><button type="submit">Start sign-in again</button></form>') if admin_flow else '<a href="/auth/login">Start sign-in again</a>'
+    response = HTMLResponse(
+        '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Sign in again | NotePreso</title><h1>Sign-in could not be completed</h1><p>Please start a fresh sign-in to continue.</p>' + action + '</html>',
+        status_code=400, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+    )
+    response.delete_cookie(ADMIN_OIDC_COOKIE_NAME if admin_flow else OIDC_COOKIE_NAME, path="/")
+    return response
+
+
 @browser_router.get("/auth/callback")
-def keycloak_callback(request: Request, code: str, state: str):
+def keycloak_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    if error is not None or not code or not state:
+        return _provider_error_page(request, admin_flow=False)
     settings = request.app.state.settings
     if not settings.keycloak_enabled:
         raise HTTPException(status_code=404, detail="Keycloak login is not enabled.")
@@ -493,7 +508,9 @@ def keycloak_callback(request: Request, code: str, state: str):
 
 
 @browser_router.get("/auth/admin/callback")
-def keycloak_admin_callback(request: Request, code: str, state: str):
+def keycloak_admin_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    if error is not None or not code or not state:
+        return _provider_error_page(request, admin_flow=True)
     settings = request.app.state.settings
     if not settings.keycloak_enabled:
         raise HTTPException(status_code=404, detail="Keycloak login is not enabled.")

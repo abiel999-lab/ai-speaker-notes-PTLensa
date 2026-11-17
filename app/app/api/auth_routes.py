@@ -6,17 +6,35 @@ import hmac
 import json
 import secrets
 import time
+
+import httpx
+import jwt
 from urllib.parse import quote
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
+from app.core.oidc import OIDC_LOGIN_TTL_SECONDS
 from pydantic import BaseModel, Field
 
 from app.core.auth import COOKIE_NAME, request_identity
+from app.domain.models import JobStatus
+from app.core.job_store import JobNotFoundError
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 browser_router = APIRouter(tags=["auth"])
 OIDC_COOKIE_NAME = "asn_oidc_state"
+AUTH_RECOVERY_HTML = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Continue sign-in | NotePreso</title><link rel="stylesheet" href="/static/auth-recovery.css?v=1"></head><body><main><a href="/" aria-label="NotePreso home"><img src="/static/notepreso-brand-v2.png" alt="NotePreso"></a><h1>Let\'s restart your sign-in</h1><p>Your sign-in session expired or could not be confirmed. Start a fresh sign-in in this browser to continue.</p><p>If you selected a presentation, keep its original tab open. Your selected file may still be available there.</p><a class="primary" href="/auth/login?return_to=%2Fauth%2Fpopup-complete">Start sign-in again →</a><a class="secondary" href="/">Return to NotePreso home</a></main></body></html>'
+
+
+def _login_recovery(*, unavailable: bool = False):
+    # Never reflect provider descriptions, tokens or authorization codes.
+    response = HTMLResponse(
+        AUTH_RECOVERY_HTML, status_code=503 if unavailable else 400,
+        headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+    )
+    response.delete_cookie(OIDC_COOKIE_NAME, path="/auth")
+    return response
 
 
 class LoginRequest(BaseModel):
@@ -126,7 +144,7 @@ def login(request: Request, payload: LoginRequest, response: Response) -> AuthSt
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
-        max_age=settings.session_hours * 3600,
+        max_age=settings.persistent_session_hours * 3600,
         httponly=True,
         secure=settings.app_env == "production",
         samesite="lax",
@@ -144,23 +162,28 @@ def login(request: Request, payload: LoginRequest, response: Response) -> AuthSt
     )
 
 
-@browser_router.get("/auth/login")
-def keycloak_login(request: Request, return_to: str = "/"):
+def _start_keycloak_flow(request: Request, *, return_to: str, prompt: str | None = None,
+                         verify_subject: str | None = None):
     settings = request.app.state.settings
     if not settings.keycloak_enabled:
         return RedirectResponse("/login", status_code=303)
     if not return_to.startswith("/") or return_to.startswith("//"):
-        return_to = "/"
-    login_url, state = request.app.state.oidc_client.new_login(return_to)
+        return_to = "/app"
+    oidc = request.app.state.oidc_client
+    if verify_subject:
+        login_url, state = oidc.new_login(return_to, action="VERIFY_EMAIL")
+    else:
+        login_url, state = oidc.new_login(return_to, prompt=prompt)
     cookie = _oidc_cookie(
         request,
-        {"state": state.state, "verifier": state.verifier, "return_to": state.return_to, "exp": state.expires_at},
+        {"state": state.state, "verifier": state.verifier, "return_to": state.return_to, "exp": state.expires_at,
+         "verify_subject": verify_subject},
     )
     response = RedirectResponse(login_url, status_code=303)
     response.set_cookie(
         OIDC_COOKIE_NAME,
         cookie,
-        max_age=600,
+        max_age=OIDC_LOGIN_TTL_SECONDS,
         httponly=True,
         secure=settings.app_env == "production",
         samesite="lax",
@@ -169,20 +192,69 @@ def keycloak_login(request: Request, return_to: str = "/"):
     return response
 
 
+@browser_router.get("/auth/login")
+def keycloak_login(request: Request, return_to: str = "/app"):
+    return _start_keycloak_flow(request, return_to=return_to)
+
+
+@browser_router.get("/auth/register")
+def keycloak_register(request: Request, return_to: str = "/app"):
+    # Keycloak 26 supports the standards-based Initiating User Registration
+    # flow through prompt=create on the normal OIDC authorization endpoint.
+    return _start_keycloak_flow(request, return_to=return_to, prompt="create")
+
+
+@browser_router.get("/auth/verify-preview-email")
+def verify_preview_email(request: Request, job_id: UUID, origin: str = "workspace"):
+    if not request.app.state.settings.keycloak_enabled:
+        raise HTTPException(status_code=404, detail="Email verification is unavailable.")
+    identity = request_identity(request)
+    if identity is None:
+        raise HTTPException(status_code=401, detail="Sign in before verifying your email.")
+    destination = "/" if origin == "home" else "/app"
+    if identity.email_verified:
+        return RedirectResponse(destination, status_code=303)
+    try:
+        job = request.app.state.store.get(str(job_id))
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Preview not found.") from exc
+    if job.owner != identity.owner_key:
+        raise HTTPException(status_code=404, detail="Preview not found.")
+    if not identity.email or job.status != JobStatus.completed or job.options.target_slide_limit is None:
+        raise HTTPException(status_code=409, detail="Complete a free preview before verifying your email.")
+    return _start_keycloak_flow(request, return_to=destination, verify_subject=identity.owner_key)
+
+
 @browser_router.get("/auth/callback")
-def keycloak_callback(request: Request, code: str, state: str):
+def keycloak_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
     settings = request.app.state.settings
     if not settings.keycloak_enabled:
         raise HTTPException(status_code=404, detail="Keycloak login is not enabled.")
-    stored = _parse_oidc_cookie(request)
-    if not hmac.compare_digest(str(stored.get("state", "")), state):
-        raise HTTPException(status_code=400, detail="OIDC state mismatch.")
-    tokens = request.app.state.oidc_client.exchange(code=code, verifier=str(stored["verifier"]))
-    id_token = str(tokens.get("id_token", ""))
-    if not id_token:
-        raise HTTPException(status_code=502, detail="Identity provider did not return an ID token.")
-    claims = request.app.state.oidc_client.validate_id_token(id_token)
+    if error is not None or not code or not state:
+        return _login_recovery(unavailable=error == "temporarily_unavailable")
+    try:
+        stored = _parse_oidc_cookie(request)
+        if not hmac.compare_digest(str(stored.get("state", "")), state):
+            raise HTTPException(status_code=400, detail="OIDC state mismatch.")
+    except HTTPException as exc:
+        if exc.status_code != 400:
+            raise
+        # Never exchange an authorization code without valid browser-bound state.
+        return _login_recovery()
+    try:
+        tokens = request.app.state.oidc_client.exchange(code=code, verifier=str(stored["verifier"]))
+        id_token = str(tokens.get("id_token", ""))
+        if not id_token:
+            return _login_recovery(unavailable=True)
+        claims = request.app.state.oidc_client.validate_id_token(id_token)
+    except (httpx.HTTPError, jwt.PyJWTError, RuntimeError, ValueError):
+        return _login_recovery(unavailable=True)
     subject = str(claims["sub"])
+    verify_subject = stored.get("verify_subject")
+    if verify_subject:
+        current = request_identity(request)
+        if current is None or subject != verify_subject or current.owner_key != verify_subject:
+            raise HTTPException(status_code=409, detail="Use the same NotePreso account to verify your email.")
     username = str(claims.get("preferred_username") or claims.get("email") or subject)
     email = str(claims.get("email")) if claims.get("email") else None
     display_name = str(claims.get("name") or username)
@@ -193,6 +265,8 @@ def keycloak_callback(request: Request, code: str, state: str):
             username=username,
             email=email,
             display_name=display_name,
+            welcome_credits=0,  # Free access uses weekly previews, not signup credits.
+            welcome_rollout_at=settings.free_welcome_rollout_at,
         )
         request.app.state.db.ensure_subscription(subject)
         request.app.state.db.audit("login", owner=subject, resource_type="session")
@@ -203,13 +277,14 @@ def keycloak_callback(request: Request, code: str, state: str):
         subject=subject,
         email=email,
         display_name=display_name,
+        email_verified=claims.get("email_verified") is True,
     )
     response = RedirectResponse(str(stored.get("return_to") or "/"), status_code=303)
     response.delete_cookie(OIDC_COOKIE_NAME, path="/auth")
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
-        max_age=settings.session_hours * 3600,
+        max_age=settings.persistent_session_hours * 3600,
         httponly=True,
         secure=settings.app_env == "production",
         samesite="lax",

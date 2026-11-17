@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Keep this separate so the admin audit/session database can remain local while
     # production presentation/chat data is read through a protected DB connection.
     application_database_url: str | None = None
+    # Dedicated Presentation AI read-only metadata API. Never a DB connection.
+    presentation_admin_api_url: str = ""
+    presentation_admin_api_secret: SecretStr | None = None
     auth_provider: str = "local"  # local | keycloak
     public_base_url: str = "http://127.0.0.1:8000"
     # Canonical end-user application URL. Admin pages use this for links back to
@@ -135,6 +138,14 @@ class Settings(BaseSettings):
             return False
         value = secret.get_secret_value().strip()
         return len(value) >= min_length and not value.upper().startswith("CHANGE_ME")
+
+    @property
+    def presentation_admin_configured(self) -> bool:
+        return bool(
+            self.presentation_admin_api_url
+            == "http://actia-presentation-app:4310/api/internal/admin/metrics"
+            and self._secret_ready(self.presentation_admin_api_secret, min_length=48)
+        )
 
     @property
     def auth_configured(self) -> bool:

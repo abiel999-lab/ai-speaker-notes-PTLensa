@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.core.model_policy import estimated_provider_cost
+
 import json
 from pathlib import Path
 from typing import Callable
@@ -46,6 +48,8 @@ class PresentationPipeline:
         output_path: Path,
         options: GenerationOptions,
         progress: ProgressCallback,
+        *,
+        slide_progress: Callable[[int, int], None] | None = None,
     ) -> PipelineResult:
         warnings: list[str] = []
         progress(1, 5, "Reading PowerPoint structure and existing notes")
@@ -57,7 +61,20 @@ class PresentationPipeline:
             encoding="utf-8",
         )
 
-        generation_deck = self._select_generation_deck(deck, options.notes_mode)
+        full_generation_deck = self._select_generation_deck(deck, options.notes_mode)
+        generation_deck = self._limit_generation_deck(
+            full_generation_deck,
+            options.target_slide_limit,
+        )
+        remaining_unprocessed_slides = max(0, len(full_generation_deck.slides) - len(generation_deck.slides))
+        preview_limited = options.target_slide_limit is not None and remaining_unprocessed_slides > 0
+        target_count = len(generation_deck.slides)
+
+        def report_slide_progress(count: int) -> None:
+            if slide_progress is not None:
+                slide_progress(count, target_count)
+
+        report_slide_progress(0)
         effective_options = options
         preflight_cost: float | None = None
 
@@ -193,6 +210,7 @@ class PresentationPipeline:
             rendered_slides=rendered_map,
             artifact_dir=input_path.parent,
             status=lambda message: progress(3, 5, message),
+            **({"slide_progress": report_slide_progress} if slide_progress is not None else {}),
         )
         warnings.extend(item for item in generated.warnings if item not in warnings)
 
@@ -237,7 +255,7 @@ class PresentationPipeline:
         preserved = existing if options.notes_mode in {NotesMode.missing_only, NotesMode.append} else 0
         cost = None
         if generated.provider == "openai":
-            cost = self.settings.estimated_openai_cost_usd(
+            cost = estimated_provider_cost(self.settings,
                 model=generated.model or options.model.value,
                 input_tokens=generated.usage.input_tokens,
                 cached_input_tokens=generated.usage.cached_input_tokens,
@@ -246,6 +264,10 @@ class PresentationPipeline:
 
         return PipelineResult(
             deck=deck,
+            slide_count=deck.slide_count,
+            target_slide_count=len(generation_deck.slides),
+            remaining_unprocessed_slides=remaining_unprocessed_slides,
+            preview_limited=preview_limited,
             existing_notes_count=existing,
             generated_notes_count=len(generated.notes),
             preserved_existing_notes_count=preserved,
@@ -269,6 +291,15 @@ class PresentationPipeline:
             image_dominant_slide_count=image_dominant_slide_count,
             external_image_count=external_image_count,
         )
+
+    @staticmethod
+    def _limit_generation_deck(
+        deck: PresentationDeck,
+        limit: int | None,
+    ) -> PresentationDeck:
+        if limit is None or len(deck.slides) <= limit:
+            return deck
+        return PresentationDeck(slide_count=deck.slide_count, slides=deck.slides[:limit])
 
     @staticmethod
     def _select_generation_deck(deck: PresentationDeck, mode: NotesMode) -> PresentationDeck:

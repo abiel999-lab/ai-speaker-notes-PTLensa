@@ -1,7 +1,90 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#087443"><title>How to Use · {{ app_name }}</title><link rel="stylesheet" href="/static/app.css?v=1001"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284"><link rel="shortcut icon" type="image/png" href="/static/favicon.png?v=0284"><link rel="apple-touch-icon" href="/static/favicon.png?v=0284"></head><body data-page="howto">
-<header class="topbar"><nav class="nav"><a class="brand" href="/"><span>AI Speaker Notes<small>v{{ version }}</small></span></a><div class="nav-links"><a href="/" data-i18n="dashboard">Dashboard</a><a href="/chat" data-i18n="chatAI">Chat AI</a><a class="active" href="/how-to" data-i18n="howTo">How to Use</a><a href="/support">Support</a><a href="/legal" data-i18n="legal">Legal</a></div><div class="nav-actions">{% if auth_enabled and authenticated %}<div class="account-actions"><span class="plan-chip" data-plan-chip>Free</span><div class="account-chip" title="{{ username }}"><span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span><span class="account-name">{{ username }}</span></div><button class="logout-btn" type="button" data-logout aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="logout">Sign out</span></button></div>{% endif %}</div></nav></header>
-<main class="shell"><section class="page-hero"><p class="eyebrow"><span class="dot"></span>User guide · v{{ version }}</p><h1 data-lang="id" class="hidden">How to Use AI Speaker Notes</h1><h1 data-lang="en" >How to use AI Speaker Notes</h1><p data-lang="id" class="hidden">The workflow is simple: upload, configure, process, review, then download. The system handles many PowerPoint edge cases behind the scenes.</p><p data-lang="en" >The workflow is intentionally simple: upload, configure, process, review, then download. The system handles many PowerPoint edge cases behind the scenes.</p></section>
-<section class="content-card"><h2 data-lang="id" class="hidden">6 Main Steps</h2><h2 data-lang="en" >6 main steps</h2><div class="steps"><div class="step"><div><strong>Upload PowerPoint</strong><p data-lang="id" class="hidden">Choose a PowerPoint file up to {{ max_upload_mb }} MB. Legacy and macro-enabled formats are normalized automatically into a working copy.</p><p data-lang="en" >Choose a PowerPoint file up to {{ max_upload_mb }} MB. Legacy and macro-enabled formats are normalized automatically into a working copy.</p></div></div><div class="step"><div><strong data-lang="id" class="hidden">Choose Language and Audience</strong><strong data-lang="en" >Choose language and audience</strong><p data-lang="id" class="hidden">Use the Student preset for simpler explanations, or Academic for a more formal style.</p><p data-lang="en" >Use the Student preset for simpler explanations, or Academic for a more formal style.</p></div></div><div class="step"><div><strong data-lang="id" class="hidden">Choose Text-only or Vision</strong><strong data-lang="en" >Choose Text-only or Vision</strong><p data-lang="id" class="hidden">Vision is recommended for charts, diagrams, and image-only slides. Large decks are automatically split into smaller batches without a hard slide-count limit.</p><p data-lang="en" >Vision is recommended for charts, diagrams, and image-only slides. Large decks are automatically split into small batches with no hard slide-count limit.</p></div></div><div class="step"><div><strong data-lang="id" class="hidden">Process and Wait for Validation</strong><strong data-lang="en" >Process and wait for validation</strong><p data-lang="id" class="hidden">The application runs preflight, rendering, generation, write-back, and integrity checks.</p><p data-lang="en" >The app runs preflight, rendering, generation, write-back, and integrity checks.</p></div></div><div class="step"><div><strong data-lang="id" class="hidden">Review the Result</strong><strong data-lang="en" >Review the result</strong><p data-lang="id" class="hidden">Check warnings, visual coverage, and slides that use fallback processing. AI can still make mistakes.</p><p data-lang="en" >Check warnings, visual coverage, and fallback slides. AI can still be wrong.</p></div></div><div class="step"><div><strong>Download / Chat AI</strong><p data-lang="id" class="hidden">Download the PPTX or open AI Chat to explain a specific slide, summarize it, or rewrite notes.</p><p data-lang="en" >Download the PPTX or open AI Chat to explain a slide, summarize it, or rewrite notes.</p></div></div></div></section>
-<section class="content-card"><h2 data-lang="id" class="hidden">Pemrosesan deck besar</h2><h2 data-lang="en" >Large-deck processing</h2><div class="feature-grid"><div class="feature"><span class="feature-number">AI JOB</span><h3 data-lang="id" class="hidden">Batch otomatis</h3><h3 data-lang="en" >Automatic batching</h3><p data-lang="id" class="hidden">Tidak ada hard limit berdasarkan jumlah slide. Target diproses dalam batch kecil agar request tetap stabil.</p><p data-lang="en" >There is no hard slide-count limit. Targets are processed in small batches to keep requests stable.</p></div><div class="feature"><span class="feature-number">VISION</span><h3 data-lang="id" class="hidden">Per slide, dapat dipulihkan</h3><h3 data-lang="en" >Per-slide, recoverable</h3><p data-lang="id" class="hidden">Kegagalan satu slide tidak mematikan Vision untuk seluruh deck; retry dan checkpoint tetap digunakan.</p><p data-lang="en" >One slide failure does not disable Vision for the whole deck; retries and checkpoints remain enabled.</p></div><div class="feature"><span class="feature-number">SAFETY</span><h3>Guardrails remain</h3><p data-lang="id" class="hidden">Ukuran file, ukuran konteks hasil ekstraksi, estimasi biaya, timeout, retry, dan concurrency tetap dibatasi untuk mencegah overload.</p><p data-lang="en" >File size, extracted context size, estimated cost, timeouts, retries, and concurrency remain bounded to prevent overload.</p></div></div></section>
-<section class="content-card"><h2>Troubleshooting</h2><h3>“Slide tidak punya teks” tetapi ada gambar</h3><p data-lang="id" class="hidden">Gunakan Vision. v1.0.0 mendeteksi image-only slide dan tidak menganggapnya kosong hanya karena tidak ada textbox.</p><p data-lang="en" >Use Vision. v1.0.0 detects image-only slides and does not treat them as blank just because there is no textbox.</p><h3>Hidden slides</h3><p data-lang="id" class="hidden">Hidden slide dinormalisasi untuk proses render agar numbering tidak bergeser. Jika satu slide gagal, sistem mencoba recovery per slide.</p><p data-lang="en" >Hidden slides are normalized for rendering so numbering stays aligned. If one slide fails, the system attempts per-slide recovery.</p><h3>External / linked image</h3><p data-lang="id" class="hidden">Aplikasi tidak mengambil URL eksternal secara otomatis karena alasan keamanan. Embed gambar ke dalam PowerPoint jika visual wajib dianalisis.</p><p data-lang="en" >The app does not automatically fetch external URLs for security. Embed required images inside the PowerPoint.</p><h3>File ditolak</h3><p data-lang="id" class="hidden">Macro, ZIP/PPTX mencurigakan, path traversal, decompression bomb, dan embedded OLE/package object diblokir secara default.</p><p data-lang="en" >Macros, suspicious ZIP/PPTX packages, path traversal, decompression bombs, and embedded OLE/package objects are blocked by default.</p></section>
-</main><footer class="footer"><div class="footer-inner"><span>AI Speaker Notes v{{ version }}</span><span><a href="/">Dashboard</a> · <a href="/legal">Terms & Privacy</a> &middot; <a href="/support#refund">Refund</a></span></div></footer><script src="/static/common.js?v=1020" defer></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#172B4D"><title>How to Use · {{ app_name }}</title><link rel="stylesheet" href="/static/app.css?v=workspace-blue-1"><link rel="stylesheet" href="/static/information-pages.css?v=readability-1"><link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1"><link rel="icon" type="image/png" sizes="any" href="/static/notepreso-favicon-original.png?v=original-png-1">
+<style>
+.site-nav{gap:20px}
+.site-links a[aria-current=page]{color:#087F8C}
+.docs-user{display:flex;align-items:center;gap:14px;min-width:0}
+.docs-user-name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:#526176}
+.docs-signout{border:1px solid #C9D6E5;background:#fff;color:#172B4D;border-radius:10px;padding:10px 13px;font:inherit;font-size:14px;cursor:pointer}
+.docs-signout:focus-visible{outline:3px solid #087F8C;outline-offset:3px}
+@media(max-width:760px){.docs-user{width:100%;justify-content:space-between}.docs-user-name{max-width:65vw}}
+</style>
+
+<link rel="stylesheet" href="/static/site-chrome.css?v=audit-closeout-1">
+<link rel="stylesheet" href="/static/readability-audit.css?v=1">
+<link rel="canonical" href="https://notepreso.com/how-to">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NotePreso">
+<meta property="og:url" content="https://notepreso.com/how-to">
+<meta property="og:title" content="How to Use | NotePreso">
+<meta property="og:description" content="Learn how to upload PowerPoint slides, generate and review speaker notes, and download your deck.">
+<meta property="og:image" content="https://notepreso.com/static/notepreso-share-v1.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="NotePreso speaker notes and PowerPoint decks">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How to Use | NotePreso">
+<meta name="twitter:description" content="Learn how to upload PowerPoint slides, generate and review speaker notes, and download your deck.">
+<meta name="twitter:image" content="https://notepreso.com/static/notepreso-share-v1.png">
+<link rel="stylesheet" href="/static/guide-demo-v1.css">
+<link rel="stylesheet" href="/static/np-analytics-v1.css">
+<script src="/static/np-analytics-v1.js" defer></script>
+</head><body data-page="howto">
+
+<header class="topbar">
+  <nav class="nav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="NotePreso home"><span class="workspace-logo"><img src="/static/notepreso-brand-v2.png" alt="NotePreso"></span></a>
+    <div class="nav-links">
+      <a href="/app" data-i18n="dashboard">Workspace</a>
+      <a href="/chat" data-i18n="chatAI">Chat</a>
+      <a class="active" href="/how-to" data-i18n="howTo">Guide</a>
+      <a href="/support">Help</a><a href="/legal" data-i18n="legal">Legal</a>
+    </div>
+    <div class="nav-actions">
+      
+      {% if auth_enabled and authenticated %}<div class="account-actions"><span class="plan-chip" data-plan-chip>Free</span><div class="account-chip" title="{{ username }}"><span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span><span class="account-name">{{ username }}</span></div><button class="logout-btn" type="button" data-logout aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="logout">Sign out</span></button></div>{% elif auth_enabled %}<a class="btn secondary" href="/auth/login?return_to=%2Fhow-to">Sign in</a>{% endif %}
+    </div>
+  </nav>
+</header>
+
+<main class="docs-main guide-main">
+<section class="docs-hero"><span class="section-kicker">HOW TO USE</span><h1>Prepare the explanation<br>behind your slides</h1><p>Bring your PowerPoint, set your audience and use the generated notes as a draft to review, refine and rehearse.</p><a class="docs-primary" href="/app">Open workspace <span aria-hidden="true">→</span></a></section>
+<section class="docs-section"><div class="docs-section-heading"><span class="section-kicker">YOUR WORKFLOW</span><h2>From your deck to your speaking notes</h2></div><div class="guide-grid">
+<article class="guide-step"><span class="guide-number">01</span><h3>Bring your PowerPoint</h3><p>Sign in and choose a presentation up to {{ max_upload_mb }} MB that you are authorized to process.</p><p class="docs-hint">Keep any visuals you want analyzed embedded in the file.</p></article>
+<article class="guide-step"><span class="guide-number">02</span><h3>Set your audience and language</h3><p>Choose who you are presenting to and the language for your speaker notes so the explanation suits the people in the room.</p></article>
+<article class="guide-step"><span class="guide-number">03</span><h3>Choose depth and note length</h3><p>Set the level of explanation and the amount of text you need per slide, then add any relevant context or instructions.</p></article>
+<article class="guide-step"><span class="guide-number">04</span><h3>Choose how slides are analyzed</h3><p>Use Text-only for slide text, or Text + Vision for charts, diagrams and images when available on your plan.</p><p class="docs-hint">Check how existing notes will be handled before starting.</p></article>
+<article class="guide-step"><span class="guide-number">05</span><h3>Generate and review the draft</h3><p>Start processing and follow the progress in the workspace, then review any warnings and check the generated explanation against your slides.</p></article>
+<article class="guide-step"><span class="guide-number">06</span><h3>Refine and rehearse</h3><p>Open the generated PowerPoint copy, check names and figures, adapt the notes to your own voice and rehearse aloud.</p><p class="docs-hint">Your original PowerPoint is not overwritten.</p></article>
+</div></section>
+<div class="docs-section"><section class="guide-demo" id="sample-deck" aria-labelledby="notes-sample-title">
+  <header class="guide-demo-heading">
+    <span class="section-kicker">TRY THE EXAMPLE</span>
+    <h2 id="notes-sample-title">See what speaker notes add</h2>
+    <p>Switch between the original and the Luna result. Both use the same fictional library slide.</p>
+  </header>
+  <div class="guide-demo-stage">
+    <figure><img src="/static/notepreso-sample-slide.png" width="1280" height="720" alt="Fictional library pilot slide. On-time pickups rose from 62% to 78%."></figure>
+    <fieldset class="guide-demo-notes">
+      <legend>Speaker notes</legend>
+      <input type="radio" name="guide-sample-view" id="guide-demo-before" checked>
+      <label for="guide-demo-before">Before</label>
+      <input type="radio" name="guide-sample-view" id="guide-demo-after">
+      <label for="guide-demo-after">After</label>
+      <div class="guide-demo-panel guide-demo-empty"><strong>Original slide</strong><p>No speaker notes on this slide.</p></div>
+      <div class="guide-demo-panel guide-demo-generated"><strong>Generated by Luna</strong><p>This slide introduces the Library Pickup Pilot and compares the share of reserved books collected within three days. Before the pilot, the figure was 62%; with a day-before reminder, it was 78%. That is a difference of 16 percentage points, suggesting that more holds were collected on time in this illustration. The note at the bottom is important: these are illustrative figures from a fictional library, not verified results from an actual pilot.</p></div>
+    </fieldset>
+  </div>
+  <div class="guide-demo-downloads">
+    <a href="/static/notepreso-sample-before.pptx" download>Download original deck</a>
+    <a href="/static/notepreso-sample-after.pptx" download>Download deck with notes</a>
+  </div>
+</section></div>
+<section class="docs-section docs-callout"><div><span class="section-kicker">PLANS AND USAGE</span><h2>Check your allowance before processing</h2><p>Free previews, Pro credits and available analysis options follow your account plan.</p></div><a class="docs-secondary" href="/pricing">View plans and credits →</a></section>
+<section class="docs-section"><div class="docs-section-heading"><span class="section-kicker">COMMON QUESTIONS</span><h2>Help with your presentation</h2></div><div class="faq-list">
+<details><summary>My slide contains an image but little text<span>+</span></summary><p>Use Text + Vision when available on your plan and embed the image in the PowerPoint so its content can be analyzed.</p></details>
+<details><summary>A file or slide could not be processed<span>+</span></summary><p>Read the message in the workspace, check that the file opens in PowerPoint and review the file-size limit; contact Support with the job reference if you need help.</p></details>
+<details><summary>How should I review AI-generated notes?<span>+</span></summary><p>Compare the explanation with your slide, verify facts and figures and remove any unsupported claims before you present.</p></details>
+<details><summary>Can I continue after a free preview?<span>+</span></summary><p>Follow the upgrade option for your existing presentation; processing the remaining slides requires an active Pro plan and enough available credits.</p></details>
+</div></section></main><footer class="footer"><div class="footer-inner"><span>NotePreso &middot; <span data-i18n="humanReviewRequired">Human review required</span></span><span><a href="/how-to" data-i18n="howTo">Guide</a> &middot; <a href="/legal">Terms & Privacy</a> &middot; <a href="/refund-policy">Refund</a></span></div></footer><script src="/static/common.js?v=audit-copy-1" defer></script><script src="/static/site-chrome.js?v=audit-closeout-1" defer></script>
+</body></html>

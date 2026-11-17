@@ -8,6 +8,7 @@ from typing import Any
 
 from app.core.config import Settings
 from app.core.database import DatabaseManager
+from app.core.entitlements import EntitlementService
 from app.services.payments.paddle import PaddlePaymentClient
 from app.services.payments.stripe import StripePaymentClient
 from app.services.payments.xendit import XenditPaymentClient
@@ -117,21 +118,85 @@ class BillingService:
     def checkout_enabled(self) -> bool:
         return bool(self.enabled_providers)
 
-    def checkout_mode_for(self, provider: str) -> str:
+    def checkout_mode_for(
+        self,
+        provider: str,
+        product: str = "pro",
+    ) -> str:
+        product = str(product or "pro").strip().lower()
+
         if provider == "xendit":
-            mode = str(self.settings.xendit_checkout_mode or "one_time").strip().lower()
+            mode = str(
+                self.settings.xendit_checkout_mode or "one_time"
+            ).strip().lower()
             return "subscription" if mode == "subscription" else "one_time"
-        if provider in {"stripe", "paddle"}:
+
+        if provider == "stripe":
             return "one_time"
+
+        if provider == "paddle":
+            return "subscription" if product == "pro" else "one_time"
+
         return "disabled"
 
-    def checkout_price_for(self, provider: str) -> int:
+    def _topup_pack_for(self, product: str) -> dict[str, Any]:
+        product = str(product or "").strip().lower()
+
+        packs: dict[str, dict[str, Any]] = {
+            "topup_250": {
+                "product": "topup_250",
+                "credits": int(self.settings.topup_250_slide_credits),
+                "price_id": self.settings.paddle_topup_250_price_id.strip(),
+                "price_minor": int(self.settings.paddle_topup_250_price_minor),
+            },
+            "topup_500": {
+                "product": "topup_500",
+                "credits": int(self.settings.topup_500_slide_credits),
+                "price_id": self.settings.paddle_topup_500_price_id.strip(),
+                "price_minor": int(self.settings.paddle_topup_500_price_minor),
+            },
+            "topup_750": {
+                "product": "topup_750",
+                "credits": int(self.settings.topup_750_slide_credits),
+                "price_id": (
+                    self.settings.paddle_topup_750_price_id.strip()
+                    or self.settings.paddle_topup_price_id.strip()
+                ),
+                "price_minor": int(
+                    self.settings.paddle_topup_750_price_minor
+                    or self.settings.paddle_topup_price_minor
+                ),
+            },
+        }
+
+        pack = packs.get(product)
+
+        if pack is None:
+            raise BillingError(
+                "Unsupported AI Slide Credit top-up pack.",
+                status_code=400,
+            )
+
+        return pack
+
+    def checkout_price_for(
+        self,
+        provider: str,
+        product: str = "pro",
+    ) -> int:
+        product = str(product or "pro").strip().lower()
+
         if provider == "xendit":
             return self.settings.xendit_pro_price_idr
+
         if provider == "stripe":
             return self.settings.stripe_pro_price_idr
+
         if provider == "paddle":
+            if product.startswith("topup_"):
+                return int(self._topup_pack_for(product)["price_minor"])
             return self.settings.paddle_pro_price_minor
+
         return 0
 
     def checkout_access_days_for(self, provider: str) -> int:
@@ -158,32 +223,104 @@ class BillingService:
         email: str | None,
         display_name: str | None,
         provider: str | None = None,
+        product: str = "pro",
     ) -> dict[str, Any]:
-        selected_provider = str(provider or self.provider or "").strip().lower()
+        selected_provider = str(
+            provider or self.provider or ""
+        ).strip().lower()
+
+        selected_product = str(
+            product or "pro"
+        ).strip().lower()
+
+        supported_products = {
+            "pro",
+            "topup_250",
+            "topup_500",
+            "topup_750",
+        }
+
+        if selected_product not in supported_products:
+            raise BillingError(
+                "Unsupported billing product.",
+                status_code=400,
+            )
+
         if selected_provider not in self.enabled_providers:
-            raise BillingError("Selected payment provider is not available.", status_code=400)
+            raise BillingError(
+                "Selected payment provider is not available.",
+                status_code=400,
+            )
+
+        # Credit top-ups are currently a Paddle-only product.
+        is_topup = selected_product.startswith("topup_")
+
+        if is_topup and selected_provider != "paddle":
+            raise BillingError(
+                "AI Credit top-ups are currently available through Paddle.",
+                status_code=400,
+            )
 
         subscription = self.db.get_subscription(owner)
         now = datetime.now(UTC)
         period_end = _aware(subscription.get("current_period_end"))
-        if (
+
+        active_pro = (
             str(subscription.get("plan") or "free").lower() == "pro"
-            and str(subscription.get("status") or "").lower() in {"active", "trialing", "past_due"}
+            and str(subscription.get("status") or "").lower()
+            in {"active", "trialing"}
             and (period_end is None or period_end > now)
-        ):
-            raise BillingError("This account already has an active Pro plan.", status_code=409)
+        )
+
+        if is_topup:
+            # Use the same effective access rules as account/plan and generation.
+            # An active manual Pro grant is independent of a paid subscription.
+            access = EntitlementService(self.db, self.settings)
+            effective, _, _ = access._effective_access_source(
+                owner, now=now, subscription=subscription,
+            )
+            active_pro = access._effective_plan(effective, now=now) == "pro"
+
+        if selected_product == "pro" and active_pro:
+            raise BillingError(
+                "This account already has an active Pro subscription.",
+                status_code=409,
+            )
+
+        if is_topup and not active_pro:
+            raise BillingError(
+                "An active Pro subscription is required to buy AI Credit top-ups.",
+                status_code=409,
+            )
 
         provider = selected_provider
-        existing = self.db.get_reusable_payment_checkout(owner, provider=provider, now=now)
+
+        # Paddle sessions are product-specific. Do not reuse an older Paddle
+        # checkout because a Pro transaction and a top-up transaction have
+        # different prices and fulfillment rules.
+        existing = None
+        if provider != "paddle":
+            existing = self.db.get_reusable_payment_checkout(
+                owner,
+                provider=provider,
+                now=now,
+            )
+
         if existing and existing.get("checkout_url"):
             return existing
 
-        reference_id = self.db.new_payment_reference(prefix="np-pro")
+        prefix = (
+            f"np-{selected_product.replace('_', '-')}"
+            if is_topup
+            else "np-pro"
+        )
+        reference_id = self.db.new_payment_reference(prefix=prefix)
+
         self.db.create_payment_checkout(
             reference_id=reference_id,
             owner=owner,
             provider=provider,
-            amount=self.checkout_price_for(provider),
+            amount=self.checkout_price_for(provider, selected_product),
             currency=self.checkout_currency_for(provider),
             status="CREATING",
         )
@@ -195,53 +332,118 @@ class BillingService:
                 "email": email,
                 "display_name": display_name,
                 "username": username,
-                "existing_customer_id": subscription.get("provider_customer_id")
-                if subscription.get("provider") == provider
-                else None,
+                "existing_customer_id": (
+                    subscription.get("provider_customer_id")
+                    if subscription.get("provider") == provider
+                    else None
+                ),
             }
+
             if provider == "xendit":
+                if selected_product != "pro":
+                    raise BillingError(
+                        "This billing product is not available through Xendit.",
+                        status_code=400,
+                    )
+
                 assert self.xendit is not None
-                if self.checkout_mode_for(provider) == "subscription":
-                    result = self.xendit.create_pro_subscription_session(**checkout_kwargs)
+
+                if self.checkout_mode_for(provider, selected_product) == "subscription":
+                    result = self.xendit.create_pro_subscription_session(
+                        **checkout_kwargs
+                    )
                 else:
-                    result = self.xendit.create_pro_one_time_session(**checkout_kwargs)
+                    result = self.xendit.create_pro_one_time_session(
+                        **checkout_kwargs
+                    )
+
             elif provider == "stripe":
+                if selected_product != "pro":
+                    raise BillingError(
+                        "This billing product is not available through Stripe.",
+                        status_code=400,
+                    )
+
                 assert self.stripe is not None
-                result = self.stripe.create_pro_one_time_session(**checkout_kwargs)
+                result = self.stripe.create_pro_one_time_session(
+                    **checkout_kwargs
+                )
+
             elif provider == "paddle":
                 assert self.paddle is not None
-                result = self.paddle.create_pro_one_time_session(**checkout_kwargs)
+
+                if selected_product == "pro":
+                    result = self.paddle.create_pro_subscription_session(
+                        **checkout_kwargs
+                    )
+                else:
+                    pack = self._topup_pack_for(selected_product)
+
+                    result = self.paddle.create_topup_session(
+                        **checkout_kwargs,
+                        product=selected_product,
+                        price_id=str(pack["price_id"]),
+                        credits=int(pack["credits"]),
+                    )
+
             else:
-                raise BillingError("Payment checkout is not configured yet.", status_code=503)
+                raise BillingError(
+                    "Payment checkout is not configured yet.",
+                    status_code=503,
+                )
+
         except Exception:
-            self.db.update_payment_checkout(reference_id, status="FAILED")
+            self.db.update_payment_checkout(
+                reference_id,
+                status="FAILED",
+            )
             raise
 
         checkout = self.db.update_payment_checkout(
             reference_id,
-            provider_session_id=str(result.get("payment_session_id") or "") or None,
-            provider_plan_id=str(result.get("recurring_plan_id") or "") or None,
-            provider_customer_id=str(result.get("customer_id") or "") or None,
+            provider_session_id=(
+                str(result.get("payment_session_id") or "") or None
+            ),
+            provider_plan_id=(
+                str(result.get("recurring_plan_id") or "") or None
+            ),
+            provider_customer_id=(
+                str(result.get("customer_id") or "") or None
+            ),
             status=str(result.get("status") or "ACTIVE"),
-            checkout_url=str(result.get("payment_link_url") or "") or None,
+            checkout_url=(
+                str(result.get("payment_link_url") or "") or None
+            ),
             expires_at=_parse_dt(result.get("expires_at")),
         )
 
-        # Only Xendit subscription mode needs to link the provider customer before
-        # payment. One-time providers become authoritative only after a paid event.
         customer_id = checkout.get("provider_customer_id")
-        if customer_id and provider == "xendit" and self.checkout_mode_for(provider) == "subscription":
+
+        if (
+            customer_id
+            and provider == "xendit"
+            and selected_product == "pro"
+            and self.checkout_mode_for(provider, selected_product)
+            == "subscription"
+        ):
             current = self.db.get_subscription(owner)
+
             self.db.set_subscription(
                 owner,
                 plan=str(current.get("plan") or "free"),
                 status=str(current.get("status") or "active"),
                 provider="xendit",
                 provider_customer_id=customer_id,
-                provider_subscription_id=current.get("provider_subscription_id"),
-                current_period_start=current.get("current_period_start"),
+                provider_subscription_id=current.get(
+                    "provider_subscription_id"
+                ),
+                current_period_start=current.get(
+                    "current_period_start"
+                ),
                 current_period_end=current.get("current_period_end"),
-                cancel_at_period_end=bool(current.get("cancel_at_period_end", False)),
+                cancel_at_period_end=bool(
+                    current.get("cancel_at_period_end", False)
+                ),
             )
 
         self.db.audit(
@@ -251,41 +453,87 @@ class BillingService:
             resource_id=reference_id,
             metadata={
                 "provider": provider,
-                "mode": self.checkout_mode_for(provider),
-                "amount": self.checkout_price_for(provider),
+                "product": selected_product,
+                "mode": self.checkout_mode_for(
+                    provider,
+                    selected_product,
+                ),
+                "amount": self.checkout_price_for(
+                    provider,
+                    selected_product,
+                ),
                 "currency": self.checkout_currency_for(provider),
             },
         )
+
         return checkout
 
     def cancel_subscription(self, owner: str) -> dict[str, Any]:
-        if self.xendit is None or not self.settings.xendit_available:
-            raise BillingError("There is no renewable subscription to cancel.", status_code=409)
         subscription = self.db.get_subscription(owner)
-        if subscription.get("provider") != "xendit" or not subscription.get("provider_subscription_id"):
-            raise BillingError("There is no Xendit subscription to cancel.", status_code=409)
+        provider = str(subscription.get("provider") or "").lower()
+        subscription_id = str(
+            subscription.get("provider_subscription_id") or ""
+        )
+
+        if not subscription_id:
+            raise BillingError(
+                "There is no renewable subscription to cancel.",
+                status_code=409,
+            )
+
         if subscription.get("cancel_at_period_end"):
             return subscription
 
-        self.xendit.deactivate_subscription(str(subscription["provider_subscription_id"]))
+        if provider == "paddle":
+            if self.paddle is None or not self.settings.paddle_available:
+                raise BillingError(
+                    "Paddle billing is not configured.",
+                    status_code=409,
+                )
+
+            self.paddle.cancel_subscription(subscription_id)
+
+        elif provider == "xendit":
+            if self.xendit is None or not self.settings.xendit_available:
+                raise BillingError(
+                    "Xendit billing is not configured.",
+                    status_code=409,
+                )
+
+            self.xendit.deactivate_subscription(subscription_id)
+
+        else:
+            raise BillingError(
+                "There is no renewable subscription to cancel.",
+                status_code=409,
+            )
+
         updated = self.db.set_subscription(
             owner,
             plan=str(subscription.get("plan") or "pro"),
             status=str(subscription.get("status") or "active"),
-            provider="xendit",
-            provider_customer_id=subscription.get("provider_customer_id"),
-            provider_subscription_id=subscription.get("provider_subscription_id"),
-            current_period_start=subscription.get("current_period_start"),
-            current_period_end=subscription.get("current_period_end"),
+            provider=provider,
+            provider_customer_id=subscription.get(
+                "provider_customer_id"
+            ),
+            provider_subscription_id=subscription_id,
+            current_period_start=subscription.get(
+                "current_period_start"
+            ),
+            current_period_end=subscription.get(
+                "current_period_end"
+            ),
             cancel_at_period_end=True,
         )
+
         self.db.audit(
             "subscription_cancellation_requested",
             owner=owner,
             resource_type="subscription",
-            resource_id=str(subscription.get("provider_subscription_id")),
-            metadata={"provider": "xendit"},
+            resource_id=subscription_id,
+            metadata={"provider": provider},
         )
+
         return updated
 
     def handle_xendit_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -615,110 +863,539 @@ class BillingService:
         )
         return {"processed": recorded, "event": event_type}
 
-    def handle_paddle_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def handle_paddle_webhook(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         event_type = str(payload.get("event_type") or "")
         event_key = _paddle_event_key(payload)
-        if self.db.payment_event_processed(event_key):
-            return {"processed": False, "duplicate": True, "event": event_type}
 
-        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-        custom_data = data.get("custom_data") if isinstance(data.get("custom_data"), dict) else {}
-        reference_id = str(custom_data.get("notepreso_reference") or "")
-        transaction_id = str(data.get("id") or "")
-        checkout = self.db.get_payment_checkout(reference_id) if reference_id else None
+        supported_events = {
+            "transaction.completed", "transaction.canceled", "transaction.past_due",
+            "subscription.created", "subscription.updated", "subscription.canceled",
+            "subscription.paused", "subscription.resumed", "subscription.activated",
+            "subscription.past_due", "subscription.trialing",
+        }
+        if event_type not in supported_events:
+            return {"processed": False, "ignored": True, "event": event_type}
 
-        if checkout is None or str(checkout.get("provider") or "").lower() != "paddle":
-            self.db.record_payment_event(
+        data = (
+            payload.get("data")
+            if isinstance(payload.get("data"), dict)
+            else {}
+        )
+
+        custom_data = (
+            data.get("custom_data")
+            if isinstance(data.get("custom_data"), dict)
+            else {}
+        )
+
+        reference_id = str(
+            custom_data.get("notepreso_reference") or ""
+        )
+
+        product = str(
+            custom_data.get("notepreso_product") or ""
+        ).strip().lower()
+
+        object_id = str(data.get("id") or "")
+
+        is_transaction = event_type.startswith("transaction.")
+        is_subscription = event_type.startswith("subscription.")
+
+        transaction_id = (
+            object_id
+            if is_transaction
+            else str(data.get("transaction_id") or "")
+        )
+
+        subscription_id = (
+            object_id
+            if is_subscription
+            else str(data.get("subscription_id") or "")
+        )
+
+        checkout = (
+            self.db.get_payment_checkout(reference_id)
+            if reference_id
+            else None
+        )
+
+        if checkout is None and subscription_id:
+            checkout = self.db.get_payment_checkout_by_plan(
+                subscription_id
+            )
+
+        if (
+            checkout is None
+            or str(checkout.get("provider") or "").lower() != "paddle"
+        ):
+            # A subscription event may arrive before the related completed
+            # transaction. Do not permanently acknowledge an unmatched event.
+            # Paddle will retry; operators should investigate persistent 503s.
+            raise BillingError(
+                "Paddle webhook checkout correlation is not ready.",
+                status_code=503,
+            )
+
+        owner = str(checkout["owner"])
+        reference_id = str(checkout["reference_id"])
+
+        with self.db.paddle_event_transaction(owner) as db:
+            if db.has_payment_event(event_key):
+                return {"processed": False, "duplicate": True, "event": event_type}
+            # Do not allow a signed old subscription event to revert current state.
+            stale_status = db.is_stale_subscription_event(
+                reference_id, payload,
+                terminal_only=(event_type == "transaction.completed"),
+            )
+            status_applied = False
+
+            # Legacy records do not have an explicit product column.
+            # Reference prefix and custom_data together safely distinguish them.
+            supported_products = {
+                "pro",
+                "topup_250",
+                "topup_500",
+                "topup_750",
+            }
+
+            if product not in supported_products:
+                if reference_id.startswith("np-topup-250-"):
+                    product = "topup_250"
+                elif reference_id.startswith("np-topup-500-"):
+                    product = "topup_500"
+                elif reference_id.startswith("np-topup-750-"):
+                    product = "topup_750"
+                else:
+                    product = "pro"
+
+            topup_pack = (
+                self._topup_pack_for(product)
+                if product.startswith("topup_")
+                else None
+            )
+
+            expected_price_id = (
+                str(topup_pack["price_id"])
+                if topup_pack is not None
+                else self.settings.paddle_pro_price_id.strip()
+            )
+
+            expected_amount = (
+                int(topup_pack["price_minor"])
+                if topup_pack is not None
+                else int(self.settings.paddle_pro_price_minor)
+            )
+
+            expected_credits = (
+                int(topup_pack["credits"])
+                if topup_pack is not None
+                else int(self.settings.pro_monthly_slide_credits)
+            )
+
+            expected_currency = str(
+                checkout.get("currency")
+                or self.settings.paddle_pro_currency
+            ).upper()
+
+            if event_type == "transaction.completed":
+                if str(data.get("status") or "").lower() != "completed":
+                    raise BillingError(
+                        "Paddle transaction was not completed.",
+                        status_code=400,
+                    )
+
+                items = (
+                    data.get("items")
+                    if isinstance(data.get("items"), list)
+                    else []
+                )
+
+                matches: list[
+                    tuple[dict[str, Any], dict[str, Any]]
+                ] = []
+
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+
+                    price = (
+                        item.get("price")
+                        if isinstance(item.get("price"), dict)
+                        else {}
+                    )
+
+                    if str(price.get("id") or "") == expected_price_id:
+                        matches.append((item, price))
+
+                if (
+                    len(matches) != 1
+                    or int(matches[0][0].get("quantity") or 0) != 1
+                ):
+                    raise BillingError(
+                        "Paddle webhook price did not match the configured NotePreso product.",
+                        status_code=400,
+                    )
+
+                price = matches[0][1]
+                unit_price = (
+                    price.get("unit_price")
+                    if isinstance(price.get("unit_price"), dict)
+                    else {}
+                )
+
+                raw_amount = unit_price.get("amount")
+
+                if (
+                    raw_amount is not None
+                    and int(raw_amount) != expected_amount
+                ):
+                    raise BillingError(
+                        "Paddle webhook price amount did not match the checkout record.",
+                        status_code=400,
+                    )
+
+                currency = str(
+                    data.get("currency_code")
+                    or unit_price.get("currency_code")
+                    or ""
+                ).upper()
+
+                if currency and currency != expected_currency:
+                    raise BillingError(
+                        "Paddle webhook currency did not match the checkout record.",
+                        status_code=400,
+                    )
+
+                paid_at = PaddlePaymentClient.parse_event_time(payload)
+                customer_id = (
+                    str(data.get("customer_id") or "")
+                    or checkout.get("provider_customer_id")
+                )
+
+                if product.startswith("topup_"):
+                    # A top-up is intentionally a non-recurring Paddle price.
+                    if subscription_id:
+                        raise BillingError(
+                            "Paddle top-up unexpectedly created a subscription.",
+                            status_code=400,
+                        )
+
+                    db.grant_topup_credits(
+                        owner,
+                        credits=expected_credits,
+                        idempotency_key=(
+                            f"paddle-topup:{transaction_id}"
+                        ),
+                        payment_reference=reference_id,
+                        metadata={
+                            "provider": "paddle",
+                            "transaction_id": transaction_id,
+                            "price_id": expected_price_id,
+                            "amount_minor": expected_amount,
+                            "currency": expected_currency,
+                        },
+                    )
+
+                    db.update_payment_checkout(
+                        reference_id,
+                        provider_customer_id=customer_id or None,
+                        status="PAID",
+                        completed_at=paid_at,
+                    )
+
+                    db.audit(
+                        "topup_credits_payment_paid",
+                        owner=owner,
+                        resource_type="payment_checkout",
+                        resource_id=reference_id,
+                        metadata={
+                            "provider": "paddle",
+                            "transaction_id": transaction_id,
+                            "product": product,
+                            "credits": expected_credits,
+                            "amount_minor": expected_amount,
+                            "currency": expected_currency,
+                        },
+                    )
+
+                else:
+                    # A completed transaction with the recurring Pro price must
+                    # resolve to a Paddle subscription.
+                    if not subscription_id.startswith("sub_"):
+                        raise BillingError(
+                            "Paddle Pro transaction did not create a subscription.",
+                            status_code=400,
+                        )
+
+                    billing_period = (
+                        data.get("billing_period")
+                        if isinstance(data.get("billing_period"), dict)
+                        else {}
+                    )
+
+                    period_start = (
+                        _parse_dt(billing_period.get("starts_at"))
+                        or paid_at
+                    )
+
+                    period_end = (
+                        _parse_dt(billing_period.get("ends_at"))
+                        or _add_month(period_start)
+                    )
+
+                    current_subscription = db.get_subscription(owner)
+                    current_start = _aware(current_subscription.get("current_period_start"))
+                    if current_start is not None and period_start < current_start:
+                        stale_status = True
+                    if not stale_status:
+                        db.set_subscription(
+                            owner,
+                            plan="pro",
+                            status="active",
+                            provider="paddle",
+                            provider_customer_id=customer_id,
+                            provider_subscription_id=subscription_id,
+                            current_period_start=period_start,
+                            current_period_end=period_end,
+                            cancel_at_period_end=(
+                                bool(current_subscription.get("cancel_at_period_end", False))
+                                if current_subscription.get("provider") == "paddle"
+                                and current_subscription.get("provider_subscription_id") == subscription_id
+                                else False
+                            ),
+                        )
+
+                        status_applied = True
+
+                    # Reset rather than accumulate monthly allowance.
+                    # Top-up balance remains untouched.
+                    db.reset_monthly_credits(
+                        owner,
+                        credits=self.settings.pro_monthly_slide_credits,
+                        period_start=period_start,
+                        period_end=period_end,
+                        idempotency_key=(
+                            f"paddle-monthly:{transaction_id}"
+                        ),
+                        metadata={
+                            "provider": "paddle",
+                            "transaction_id": transaction_id,
+                            "subscription_id": subscription_id,
+                            "price_id": expected_price_id,
+                        },
+                    )
+
+                    db.update_payment_checkout(
+                        reference_id,
+                        provider_plan_id=subscription_id,
+                        provider_customer_id=customer_id or None,
+                        status="PAID",
+                        completed_at=paid_at,
+                    )
+
+                    db.audit(
+                        "subscription_cycle_paid",
+                        owner=owner,
+                        resource_type="subscription",
+                        resource_id=subscription_id,
+                        metadata={
+                            "provider": "paddle",
+                            "transaction_id": transaction_id,
+                            "credits": (
+                                self.settings.pro_monthly_slide_credits
+                            ),
+                            "amount_minor": expected_amount,
+                            "currency": expected_currency,
+                        },
+                    )
+
+            elif event_type in {
+                "transaction.canceled",
+                "transaction.past_due",
+            }:
+                db.update_payment_checkout(
+                    reference_id,
+                    status=(
+                        "PAST_DUE"
+                        if event_type == "transaction.past_due"
+                        else "FAILED"
+                    ),
+                )
+
+                if product == "pro" and not stale_status:
+                    current = db.get_subscription(owner)
+
+                    if str(current.get("plan") or "") == "pro":
+                        db.set_subscription(
+                            owner,
+                            plan="pro",
+                            status=(
+                                "past_due"
+                                if event_type == "transaction.past_due"
+                                else str(
+                                    current.get("status")
+                                    or "active"
+                                )
+                            ),
+                            provider="paddle",
+                            provider_customer_id=current.get(
+                                "provider_customer_id"
+                            ),
+                            provider_subscription_id=(
+                                current.get("provider_subscription_id")
+                                or subscription_id
+                                or None
+                            ),
+                            current_period_start=current.get(
+                                "current_period_start"
+                            ),
+                            current_period_end=current.get(
+                                "current_period_end"
+                            ),
+                            cancel_at_period_end=bool(
+                                current.get(
+                                    "cancel_at_period_end",
+                                    False,
+                                )
+                            ),
+                        )
+                        status_applied = True
+
+            elif event_type in {
+                "subscription.created",
+                "subscription.updated",
+                "subscription.canceled",
+                "subscription.paused",
+                "subscription.resumed",
+                "subscription.activated",
+                "subscription.past_due",
+                "subscription.trialing",
+            }:
+                subscription_id = object_id or subscription_id
+
+                status = str(
+                    data.get("status") or "active"
+                ).lower()
+
+                current_period = (
+                    data.get("current_billing_period")
+                    if isinstance(
+                        data.get("current_billing_period"),
+                        dict,
+                    )
+                    else {}
+                )
+
+                period_start = _parse_dt(
+                    current_period.get("starts_at")
+                )
+
+                period_end = _parse_dt(
+                    current_period.get("ends_at")
+                )
+
+                current = db.get_subscription(owner)
+
+                if period_start is None:
+                    period_start = _aware(
+                        current.get("current_period_start")
+                    )
+
+                if period_end is None:
+                    period_end = _aware(
+                        current.get("current_period_end")
+                    )
+
+                scheduled_change = (
+                    data.get("scheduled_change")
+                    if isinstance(
+                        data.get("scheduled_change"),
+                        dict,
+                    )
+                    else {}
+                )
+
+                scheduled_cancel = (
+                    str(
+                        scheduled_change.get("action") or ""
+                    ).lower()
+                    == "cancel"
+                )
+
+                canceled = status in {"canceled", "paused"}
+
+                # Subscription notifications alone are not proof of paid checkout.
+                # Initial entitlement is granted by transaction.completed only.
+                prior_paid = (
+                    current.get("provider") == "paddle"
+                    and current.get("plan") == "pro"
+                ) or str(checkout.get("status") or "") in {"PAID", "SUBSCRIPTION_ACTIVE"}
+                # Paddle may deliver subscription.updated for a *future* billing
+                # period before the corresponding transaction.completed. Do not
+                # let entitlement reads mint a new credit cycle without payment.
+                paid_period_start = _aware(current.get("current_period_start"))
+                if (
+                    prior_paid and not canceled and paid_period_start is not None
+                    and period_start is not None and period_start > paid_period_start
+                ):
+                    period_start = paid_period_start
+                    period_end = _aware(current.get("current_period_end"))
+
+                should_update = not stale_status and (canceled or prior_paid)
+                if should_update:
+                    db.set_subscription(
+                        owner,
+                        plan="free" if canceled else "pro",
+                        status=status,
+                        provider="paddle",
+                        provider_customer_id=(
+                            str(data.get("customer_id") or "")
+                            or current.get("provider_customer_id")
+                        ),
+                        provider_subscription_id=(
+                            subscription_id
+                            or current.get("provider_subscription_id")
+                        ),
+                        current_period_start=period_start,
+                        current_period_end=period_end,
+                        cancel_at_period_end=(
+                            True
+                            if canceled
+                            else scheduled_cancel
+                        ),
+                    )
+
+                    status_applied = True
+
+                if subscription_id and not stale_status:
+                    db.update_payment_checkout(
+                        reference_id,
+                        provider_plan_id=subscription_id,
+                        provider_customer_id=(
+                            str(data.get("customer_id") or "")
+                            or None
+                        ),
+                        status=(
+                            "CANCELED" if canceled
+                            else "SUBSCRIPTION_ACTIVE" if prior_paid
+                            else "SUBSCRIPTION_PENDING"
+                        ),
+                    )
+
+            recorded = db.record_payment_event(
                 event_key=event_key,
                 provider="paddle",
                 event_type=event_type or "unknown",
                 reference_id=reference_id or None,
-                provider_object_id=transaction_id or None,
+                provider_object_id=object_id or None,
                 payload=payload,
+                status_applied=status_applied,
             )
-            return {"processed": False, "ignored": True, "event": event_type}
 
-        if checkout.get("provider_session_id") and transaction_id != checkout.get("provider_session_id"):
-            raise BillingError("Paddle webhook transaction did not match the checkout record.", status_code=400)
-
-        if event_type == "transaction.completed":
-            if str(data.get("status") or "").lower() != "completed":
-                raise BillingError("Paddle transaction was not completed.", status_code=400)
-            if data.get("subscription_id"):
-                raise BillingError("Paddle transaction unexpectedly created a subscription.", status_code=400)
-
-            expected_currency = str(checkout.get("currency") or self.settings.paddle_pro_currency).upper()
-            currency = str(data.get("currency_code") or "").upper()
-            if currency and currency != expected_currency:
-                raise BillingError("Paddle webhook currency did not match the checkout record.", status_code=400)
-
-            expected_price_id = self.settings.paddle_pro_price_id.strip()
-            items = data.get("items") if isinstance(data.get("items"), list) else []
-            matches: list[tuple[dict[str, Any], dict[str, Any]]] = []
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                price = item.get("price") if isinstance(item.get("price"), dict) else {}
-                if str(price.get("id") or "") == expected_price_id:
-                    matches.append((item, price))
-            if len(matches) != 1 or int(matches[0][0].get("quantity") or 0) != 1:
-                raise BillingError("Paddle webhook price did not match the configured Pro product.", status_code=400)
-
-            price = matches[0][1]
-            unit_price = price.get("unit_price") if isinstance(price.get("unit_price"), dict) else {}
-            raw_amount = unit_price.get("amount")
-            if raw_amount is not None and int(raw_amount) != int(checkout["amount"]):
-                raise BillingError("Paddle webhook price amount did not match the checkout record.", status_code=400)
-            price_currency = str(unit_price.get("currency_code") or currency or "").upper()
-            if price_currency and price_currency != expected_currency:
-                raise BillingError("Paddle webhook price currency did not match the checkout record.", status_code=400)
-
-            paid_at = PaddlePaymentClient.parse_event_time(payload)
-            access_end = paid_at + timedelta(days=self.settings.paddle_pro_access_days)
-            customer_id = str(data.get("customer_id") or "") or checkout.get("provider_customer_id")
-
-            self.db.set_subscription(
-                str(checkout["owner"]),
-                plan="pro",
-                status="active",
-                provider="paddle",
-                provider_customer_id=customer_id,
-                provider_subscription_id=None,
-                current_period_start=paid_at,
-                current_period_end=access_end,
-                cancel_at_period_end=False,
-            )
-            self.db.update_payment_checkout(
-                reference_id,
-                provider_session_id=transaction_id or None,
-                provider_customer_id=customer_id or None,
-                status="PAID",
-                completed_at=paid_at,
-            )
-            self.db.audit(
-                "one_time_pro_payment_paid",
-                owner=str(checkout["owner"]),
-                resource_type="payment_checkout",
-                resource_id=reference_id,
-                metadata={
-                    "provider": "paddle",
-                    "transaction_id": transaction_id,
-                    "price_id": expected_price_id,
-                    "amount_minor": int(checkout["amount"]),
-                    "currency": expected_currency,
-                    "access_days": self.settings.paddle_pro_access_days,
-                },
-            )
-        elif event_type in {"transaction.canceled", "transaction.past_due"}:
-            self.db.update_payment_checkout(reference_id, status="FAILED")
-
-        recorded = self.db.record_payment_event(
-            event_key=event_key,
-            provider="paddle",
-            event_type=event_type or "unknown",
-            reference_id=reference_id or None,
-            provider_object_id=transaction_id or None,
-            payload=payload,
-        )
-        return {"processed": recorded, "event": event_type}
-
+            return {
+                "processed": recorded,
+                "event": event_type,
+            }

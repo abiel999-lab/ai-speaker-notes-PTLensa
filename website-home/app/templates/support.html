@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#087443">
+  <title>Support | {{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=1007">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+  <link rel="shortcut icon" type="image/png" href="/static/favicon.png?v=0284">
+  <link rel="apple-touch-icon" href="/static/favicon.png?v=0284">
+</head>
+<body data-page="support">
+<header class="topbar">
+  <nav class="nav" aria-label="Primary navigation">
+    <a class="brand" href="/" aria-label="AI Speaker Notes home"><span>AI Speaker Notes<small>v{{ version }}</small></span></a>
+    <div class="nav-links">
+      <a href="/app">Dashboard</a>
+      <a href="/chat">AI Chat</a>
+      <a href="/how-to">How to Use</a>
+      <a class="active" href="/support">Support</a>
+      <a href="/legal">Legal</a>
+    </div>
+    <div class="nav-actions">
+      {% if auth_enabled and authenticated %}
+      <div class="account-actions">
+        <span class="plan-chip" data-plan-chip>Free</span>
+        <div class="account-chip" title="{{ username }}">
+          <span class="account-avatar" aria-hidden="true">{{ (username or 'U')[:1] | upper }}</span>
+          <span class="account-name">{{ username }}</span>
+        </div>
+        <button class="logout-btn" type="button" data-support-logout aria-label="Sign out">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3m11-7h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Sign out</span>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </nav>
+</header>
+
+
+<main class="shell support-shell support-clean-shell">
+
+  <section class="support-clean-hero">
+    <p class="eyebrow"><span class="dot"></span>NOTEPRESO SUPPORT</p>
+
+    <h1>Need help with NotePreso?</h1>
+
+    <p>
+      Technical questions, billing, and refund requests are handled
+      directly by email.
+    </p>
+  </section>
+
+  <section class="support-contact-panel">
+
+    <div class="support-contact-intro">
+      <div class="support-contact-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 6.5h16v11H4z"></path>
+          <path d="m4 7 8 6 8-6"></path>
+        </svg>
+      </div>
+
+      <div>
+        <span class="support-label">SUPPORT EMAIL</span>
+        <h2>{{ support_email }}</h2>
+        <p>
+          Send us a message and our team will respond through email.
+        </p>
+      </div>
+    </div>
+
+    <div class="support-contact-actions">
+
+      <a
+        class="support-action-primary"
+        href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to={{ support_email }}&amp;su=NotePreso%20Support%20Request"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Open Gmail
+        <span aria-hidden="true">↗</span>
+      </a>
+
+      <button
+        class="support-action-secondary"
+        id="support-copy-email"
+        type="button"
+        data-copy-support-email="{{ support_email }}"
+      >
+        Copy email address
+      </button>
+
+      <a
+        class="support-default-mail"
+        href="{{ mailto_url }}"
+      >
+        Use default email app
+      </a>
+
+      <p
+        class="support-copy-status"
+        id="support-copy-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+
+    </div>
+
+  </section>
+
+  <section class="support-quick-info">
+
+    <article>
+      <span class="support-info-number">01</span>
+      <div>
+        <span class="support-label">REFUNDS</span>
+        <h3>Include your transaction ID.</h3>
+        <p>
+          For refund requests, email us from the address connected to
+          your NotePreso account and include the transaction or invoice ID.
+        </p>
+      </div>
+    </article>
+
+    <article>
+      <span class="support-info-number">02</span>
+      <div>
+        <span class="support-label">SECURITY</span>
+        <h3>Keep sensitive information private.</h3>
+        <p>
+          Never send passwords, API keys, verification codes,
+          or payment card details.
+        </p>
+      </div>
+    </article>
+
+  </section>
+
+</main>
+
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>AI Speaker Notes v{{ version }}</span>
+    <span><a href="/app">Dashboard</a> &middot; <a href="/how-to">How to Use</a> &middot; <a href="/legal">Terms & Privacy</a></span>
+  </div>
+</footer>
+<script src="/static/common.js?v=1880" defer></script>
+<script src="/static/support.js?v=1001" defer></script>
+</body>
+</html>

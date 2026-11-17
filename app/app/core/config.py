@@ -1,4 +1,5 @@
 from functools import lru_cache
+from datetime import datetime
 from pathlib import Path
 
 from pydantic import Field, SecretStr
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     auth_password: SecretStr | None = None
     session_secret: SecretStr | None = None
     session_hours: int = Field(default=8, ge=1, le=168)
+    persistent_session_hours: int = Field(default=720, ge=1, le=720)
     terms_version: str = "2026-09-13"
     require_terms_acceptance: bool = True
 
@@ -63,10 +65,31 @@ class Settings(BaseSettings):
     # Internal subscription/entitlement engine. These are starter defaults and are
     # intentionally configurable so pricing can be tuned without a code change.
     # A value of 0 means unlimited for the corresponding monthly quota.
-    free_monthly_presentations: int = Field(default=3, ge=0, le=10000)
+    # Free uses a weekly account quota. Legacy monthly and welcome settings
+    # remain parseable for older deployment environments.
+    free_monthly_presentations: int = Field(default=1, ge=0, le=10000)
+    free_weekly_presentations: int = Field(default=5, ge=1, le=10000)
+    free_preview_slide_limit: int = Field(default=5, ge=1, le=50)
+    free_signup_slide_credits: int = Field(default=0, ge=0, le=1000)
+    # Original v1.8.7 build time: only accounts created afterward can be reconciled.
+    free_welcome_rollout_at: datetime | None = None
     free_monthly_chat_messages: int = Field(default=20, ge=0, le=100000)
     free_vision_enabled: bool = False
+    # Legacy presentation-count quota is retained temporarily for compatibility,
+    # but paid presentation generation is migrating to AI Slide Credits.
     pro_monthly_presentations: int = Field(default=50, ge=0, le=100000)
+
+    # Customer-facing AI Slide Credits.
+    # 1 generated target slide = 1 credit.
+    pro_monthly_slide_credits: int = Field(default=1000, ge=1, le=10_000_000)
+    # Legacy/default pack retained for account UI compatibility.
+    topup_slide_credits: int = Field(default=750, ge=1, le=10_000_000)
+
+    # Available one-time AI Slide Credit packs.
+    topup_250_slide_credits: int = Field(default=250, ge=1, le=10_000_000)
+    topup_500_slide_credits: int = Field(default=500, ge=1, le=10_000_000)
+    topup_750_slide_credits: int = Field(default=750, ge=1, le=10_000_000)
+
     pro_monthly_chat_messages: int = Field(default=500, ge=0, le=1000000)
     pro_vision_enabled: bool = True
 
@@ -101,9 +124,24 @@ class Settings(BaseSettings):
     paddle_api_key: SecretStr | None = None
     paddle_client_token: SecretStr | None = None
     paddle_webhook_secret: SecretStr | None = None
+    # Pro uses a recurring Paddle price. Top-up uses a separate one-time price.
     paddle_pro_price_id: str = ""
     paddle_pro_price_minor: int = Field(default=0, ge=0, le=1_000_000_000)
+    # Legacy 750-credit top-up fields retained for backward compatibility.
+    paddle_topup_price_id: str = ""
+    paddle_topup_price_minor: int = Field(default=0, ge=0, le=1_000_000_000)
+
+    # Multi-pack Paddle one-time prices.
+    paddle_topup_250_price_id: str = ""
+    paddle_topup_250_price_minor: int = Field(default=400, ge=0, le=1_000_000_000)
+
+    paddle_topup_500_price_id: str = ""
+    paddle_topup_500_price_minor: int = Field(default=700, ge=0, le=1_000_000_000)
+
+    paddle_topup_750_price_id: str = ""
+    paddle_topup_750_price_minor: int = Field(default=1000, ge=0, le=1_000_000_000)
     paddle_pro_currency: str = "USD"
+    # Retained for backward compatibility with older deployments/providers.
     paddle_pro_access_days: int = Field(default=30, ge=1, le=3650)
     paddle_timeout_seconds: float = Field(default=20.0, ge=3.0, le=120.0)
     paddle_webhook_tolerance_seconds: int = Field(default=300, ge=0, le=3600)
@@ -229,7 +267,7 @@ class Settings(BaseSettings):
 
     @property
     def enabled_payment_providers(self) -> list[str]:
-        allowed = {"xendit", "stripe", "paddle"}
+        allowed = {"stripe", "paddle"}  # Xendit retired; retain only legacy records.
         raw = self.payment_providers.strip()
         values = [item.strip().lower() for item in raw.split(",") if item.strip()] if raw else []
         if not values:
@@ -254,7 +292,7 @@ class Settings(BaseSettings):
 
     @property
     def xendit_available(self) -> bool:
-        return "xendit" in self.enabled_payment_providers and self.xendit_configured
+        return False  # Legacy Xendit access is read-only; no new callbacks or checkout.
 
     @property
     def stripe_configured(self) -> bool:
@@ -286,6 +324,18 @@ class Settings(BaseSettings):
             and self.paddle_webhook_secret.get_secret_value().strip()
             and self.paddle_pro_price_id.strip().startswith("pri_")
             and self.paddle_pro_price_minor > 0
+            and self.paddle_topup_250_price_id.strip().startswith("pri_")
+            and self.paddle_topup_250_price_minor > 0
+            and self.paddle_topup_500_price_id.strip().startswith("pri_")
+            and self.paddle_topup_500_price_minor > 0
+            and (
+                self.paddle_topup_750_price_id.strip().startswith("pri_")
+                or self.paddle_topup_price_id.strip().startswith("pri_")
+            )
+            and (
+                self.paddle_topup_750_price_minor > 0
+                or self.paddle_topup_price_minor > 0
+            )
             and len(currency) == 3
             and currency != "IDR"
             and self.public_base_url.startswith("https://")

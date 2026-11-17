@@ -1,0 +1,3 @@
+FROM notepreso-document-app:document-quality-20261109-rnt6acap-recovery-final
+COPY --chown=node:node payload/ /app/
+USER node

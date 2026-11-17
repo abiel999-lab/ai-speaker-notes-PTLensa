@@ -117,8 +117,8 @@ class XenditPaymentClient:
             "locale": "en",
             "allow_save_payment_method": "DISABLED",
             "description": f"NotePreso Pro - {self.settings.xendit_pro_access_days} days",
-            "success_return_url": f"{base}/?billing=success",
-            "cancel_return_url": f"{base}/?billing=cancelled",
+            "success_return_url": f"{base}/pricing?billing=success",
+            "cancel_return_url": f"{base}/pricing?billing=cancelled",
             "metadata": {
                 "notepreso_owner": owner[:80],
                 "notepreso_plan": "pro",
@@ -183,8 +183,8 @@ class XenditPaymentClient:
                 "immediate_payment": True,
                 "failed_cycle_action": "RESUME",
             },
-            "success_return_url": f"{base}/?billing=success",
-            "cancel_return_url": f"{base}/?billing=cancelled",
+            "success_return_url": f"{base}/pricing?billing=success",
+            "cancel_return_url": f"{base}/pricing?billing=cancelled",
             "metadata": {
                 "notepreso_owner": owner[:80],
                 "notepreso_plan": "pro",

@@ -67,3 +67,12 @@ build/
 *.bak*
 *.backup*
 *.orig*
+
+# Unified ecosystem exclusions
+node_modules/
+*.private.json
+.notepreso-*
+*monitor-token*
+*.sqlite*
+*.db
+identity/**/import/

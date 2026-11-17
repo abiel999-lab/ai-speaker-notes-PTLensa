@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07130f">
+  <meta name="description" content="NotePreso pricing for PowerPoint speaker-note generation.">
+  <title>Pricing | NotePreso</title>
+  <link rel="stylesheet" href="/static/home.css?v=1800">
+  <link rel="stylesheet" href="/static/pricing.css?v=1800">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png?v=0284">
+</head>
+<body data-authenticated="{{ 'true' if authenticated else 'false' }}">
+  <header class="site-header scrolled">
+    <nav class="site-nav">
+      <a class="np-brand" href="/"><span class="np-mark" aria-hidden="true"><span></span><span></span><span></span></span><span>NotePreso</span></a>
+      <div class="site-links"><a href="/#product">Product</a><a href="/#how-it-works">How it works</a><a href="/pricing" class="current">Pricing</a><a href="/#faq">FAQ</a></div>
+      <div class="site-actions">
+        {% if authenticated %}<a class="text-link" href="/app">Open app</a><a class="nav-cta" href="/app">Workspace →</a>{% else %}<a class="text-link" href="/auth/login?return_to=/pricing">Log in</a><a class="nav-cta" href="/auth/register?return_to=/pricing">Create account →</a>{% endif %}
+      </div>
+      <button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span></button>
+    </nav>
+  </header>
+
+  <main class="pricing-page">
+    <section class="pricing-hero">
+      <span class="section-kicker">PRICING</span>
+      <h1>Start free.<br><span>Pay for the slides you generate.</span></h1>
+      <p>Free accounts can process up to {{ pricing.free_weekly_presentations }} PPT files each week, with up to {{ pricing.free_preview_slides }} generated slides per PPT. Pro includes 1,000 AI Slide Credits each billing cycle, with optional credit top-ups when you need more.</p>
+      <div id="billing-notice" class="billing-notice hidden" aria-live="polite"></div>
+    </section>
+
+    <section class="pricing-grid">
+      <article class="price-card free-card">
+        <div class="price-card-top"><div><span class="price-label">FREE PREVIEW</span><h2>Try NotePreso</h2></div><span class="price-pill">Every week</span></div>
+        <div class="price-value"><strong>$0</strong><span>no credit card</span></div>
+        <p>Enough to see how the workflow feels before committing to a paid plan.</p>
+        <ul>
+          <li><span>✓</span> Up to {{ pricing.free_weekly_presentations }} PPT files per week, per account.</li>
+          <li><span>✓</span> Up to {{ pricing.free_preview_slides }} generated slides per PPT. Resets Monday 00:00 WIB.</li>
+          <li><span>✓</span> Language, audience, depth and note length controls.</li>
+          <li><span>✓</span> Download the generated preview copy.</li>
+          <li class="muted"><span>—</span> Full-deck processing requires Pro.</li>
+          <li class="muted"><span>—</span> Text + Vision analysis.</li>
+        </ul>
+        <a class="price-secondary" href="{{ '/app' if authenticated else '/auth/register?return_to=/app' }}">Start free</a>
+      </article>
+
+      <article class="price-card pro-card">
+        <div class="recommended">MONTHLY PLAN</div>
+        <div class="price-card-top">
+          <div><span class="price-label">PRO</span><h2>1,000 AI Slide Credits</h2></div>
+          <span class="price-pill dark">Subscription</span>
+        </div>
+
+        <div class="price-value pro-price">
+          <strong>$10</strong><span>per month</span>
+        </div>
+
+        <p>For full presentations and recurring speaker-note generation.</p>
+
+        <ul>
+          <li><span>✓</span> {{ pricing.pro_monthly_slide_credits }} AI Slide Credits each billing cycle.</li>
+          <li><span>✓</span> 1 generated slide uses 1 AI Slide Credit.</li>
+          <li><span>✓</span> Monthly credits reset each billing cycle and do not roll over.</li>
+          <li><span>✓</span> Text + Vision analysis {% if pricing.pro_vision_enabled %}included{% else %}subject to server availability{% endif %}.</li>
+          <li><span>✓</span> Continue a free preview without uploading the PowerPoint again.</li>
+          <li><span>✓</span> {{ pricing.pro_chat_messages }} AI Chat messages per usage period.</li>
+        </ul>
+
+        <div id="provider-list" class="provider-list">
+          {% for provider in pricing.providers %}
+          <button class="provider-button" type="button"
+            data-provider="{{ provider.provider }}"
+            data-currency="{{ provider.currency }}"
+            data-price="{{ provider.price }}"
+            data-minor="{{ 'true' if provider.price_minor_units else 'false' }}"
+            data-mode="{{ provider.checkout_mode or 'subscription' }}">
+            <span>
+              <strong>{{ provider.provider | title }}</strong>
+              <small>{% if provider.provider == 'paddle' %}Secure recurring billing{% else %}Secure checkout{% endif %}</small>
+            </span>
+            <span class="provider-price" data-price-output>Checkout</span>
+          </button>
+          {% endfor %}
+
+          {% if not pricing.providers %}
+          <div class="provider-empty">{% if sandbox_restricted %}{% if not authenticated %}Sign in with the designated Sandbox test account to continue. Live checkout opens after Paddle approval.{% else %}Sandbox test checkout is available only to the designated test account. Live checkout will open after Paddle approval.{% endif %}{% else %}Online checkout is not configured on this deployment yet.{% endif %}</div>
+          {% endif %}
+        </div>
+
+        <button class="price-primary" id="pro-checkout" type="button"
+          {% if not pricing.checkout_enabled and not (sandbox_restricted and not authenticated) %}disabled{% endif %}>
+          {% if sandbox_restricted and not authenticated %}Log in to subscribe{% else %}Subscribe to Pro{% endif %} <span>→</span>
+        </button>
+
+        <small class="pricing-fineprint">
+          Subscription renews monthly until canceled. Your monthly AI Slide Credits reset when a new paid billing cycle starts.
+        </small>
+      </article>
+
+    </section>
+
+    <section class="topup-section">
+      <div class="topup-section-heading">
+        <div>
+          <span class="section-kicker">NEED MORE CREDITS?</span>
+          <h2>Top up only when you need it.</h2>
+        </div>
+        <p>
+          One-time credit packs for active Pro accounts. Monthly credits are
+          used first, while unused top-up credits stay on your account.
+        </p>
+      </div>
+
+      <div class="topup-grid">
+        {% for pack in pricing.topup_packs %}
+        <article class="topup-pack-card{% if pack.best_value %} best-value{% endif %}">
+          {% if pack.best_value %}
+          <span class="topup-best-value">BEST VALUE</span>
+          {% endif %}
+
+          <div class="topup-pack-head">
+            <span class="price-label">CREDIT TOP-UP</span>
+            <span class="price-pill">Every week</span>
+          </div>
+
+          <h3>{{ pack.credits }} credits</h3>
+
+          <div class="topup-pack-price">
+            <strong>${{ (pack.price_minor / 100) | int }}</strong>
+            <span>one-time</span>
+          </div>
+
+          <div class="topup-unit-price">
+            ${{ '%.4f' | format((pack.price_minor / 100) / pack.credits) }}
+            per AI Slide Credit
+          </div>
+
+          <ul>
+            <li><span>✓</span> {{ pack.credits }} additional AI Slide Credits.</li>
+            <li><span>✓</span> Does not reset with the monthly allowance.</li>
+            <li><span>✓</span> Remains stored on your account.</li>
+            <li><span>✓</span> Available while Pro is active.</li>
+          </ul>
+
+          <button
+            class="price-secondary topup-checkout"
+            type="button"
+            data-topup-product="{{ pack.product }}"
+            {% if not pricing.checkout_enabled and not (sandbox_restricted and not authenticated) %}disabled{% endif %}
+          >
+            {% if sandbox_restricted and not authenticated %}Log in to buy {{ pack.credits }} credits{% else %}Buy {{ pack.credits }} credits{% endif %} <span>→</span>
+          </button>
+        </article>
+        {% endfor %}
+      </div>
+
+      <p class="topup-section-note">
+        Top-ups are one-time purchases and do not start or extend a subscription.
+      </p>
+    </section>
+
+    <section class="pricing-context" id="continue-card">
+      <div><span class="section-kicker">COMING FROM A PREVIEW?</span><h2>Keep the same presentation.</h2><p>If you arrived here after a {{ pricing.free_preview_slides }}-slide preview, NotePreso can continue that same job after Pro is active. You do not need to upload the PowerPoint again.</p></div>
+      <div class="continue-status"><span id="continue-status-label">No pending preview detected</span><strong id="continue-job-name">Your presentation</strong><button id="continue-now" class="continue-now hidden" type="button">Continue presentation →</button><a id="continue-open-app" href="/app">Open workspace →</a></div>
+    </section>
+
+    <section class="pricing-faq">
+      <div class="section-heading compact"><span class="section-kicker">BILLING FAQ</span><h2>Clear before checkout.</h2></div>
+      <div class="faq-list">
+        <details><summary>When does the Free PPT quota reset?<span>+</span></summary><p>Free accounts receive {{ pricing.free_weekly_presentations }} PPT previews per week, up to {{ pricing.free_preview_slides }} generated slides each. The quota resets every Monday at 00:00 WIB (Asia/Jakarta). Unused previews do not carry over.</p></details>
+        <details><summary>What happens to unused monthly credits?<span>+</span></summary><p>The Pro monthly allowance resets to {{ pricing.pro_monthly_slide_credits }} credits when a new paid billing cycle begins. Unused monthly credits do not roll over.</p></details>
+        <details><summary>Do top-up credits expire at the monthly reset?<span>+</span></summary><p>No. Top-up credits are stored separately and remain on the account. They can be used while the Pro subscription is active.</p></details>
+        <details><summary>Which credits are used first?<span>+</span></summary><p>NotePreso uses monthly Pro credits first. Top-up credits are used only after the monthly balance is exhausted.</p></details>
+        <details><summary>Will I have to upload my presentation again after upgrading?<span>+</span></summary><p>No. When you upgrade from a preview in the same workflow, NotePreso keeps the job and can continue the remaining slides after Pro is confirmed.</p></details>
+        <details><summary>Where can I request a refund?<span>+</span></summary><p>Use the NotePreso Support page and include the transaction or invoice reference. The applicable refund terms are available there as well.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="home-footer pricing-footer"><div class="footer-brand"><a class="np-brand" href="/"><span class="np-mark"><span></span><span></span><span></span></span><span>NotePreso</span></a><p>Presentation-ready speaker notes from the PowerPoint you already have.</p></div><div class="footer-links"><div><strong>Product</strong><a href="/">Home</a><a href="/app">Workspace</a></div><div><strong>Support</strong><a href="/support">Support</a><a href="/legal">Terms & Privacy</a></div></div><div class="footer-bottom"><span>NotePreso · v{{ version }}</span><span>by Actia Carbon</span></div></footer>
+
+  <div class="auth-modal hidden" id="pricing-auth-modal" role="dialog" aria-modal="true" aria-labelledby="pricing-auth-title">
+    <div class="auth-backdrop" data-pricing-auth-close></div>
+    <div class="auth-card">
+      <button class="auth-close" type="button" data-pricing-auth-close>×</button>
+      <div class="auth-icon">✦</div><span class="section-kicker">SAVE YOUR PLAN TO AN ACCOUNT</span><h2 id="pricing-auth-title">Sign in before checkout.</h2><p>Your NotePreso account connects the payment to your plan, usage and presentation history.</p>
+      <button class="auth-primary" id="pricing-signin" type="button">Sign in to continue <span>→</span></button>
+      <button class="auth-secondary" id="pricing-register" type="button">Create an account</button>
+    </div>
+  </div>
+
+  <script src="/static/pricing.js?v=1850" defer></script>
+</body>
+</html>

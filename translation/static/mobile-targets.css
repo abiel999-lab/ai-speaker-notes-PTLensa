@@ -1,0 +1,49 @@
+@media (max-width: 900px) {
+  :is(#home-main, #workspace-main) .speaker-language-search {
+    min-height: 44px;
+  }
+  #home-main .np-platform-card > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  #np-global-footer nav a {
+    min-width: 44px;
+  }
+  #workspace-main input[type="file"] {
+    max-width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  #workspace-main input[type="file"]::file-selector-button {
+    min-height: 44px;
+    margin-inline-end: 8px;
+    padding-inline: 12px;
+    border: 1px solid #aac0d8;
+    border-radius: 8px;
+    background: #f2f7fc;
+    color: #173858;
+    font: 600 14px/1.45 Inter, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  #home-main #home-drop:focus-within {
+    outline: 2px solid #075b66;
+    outline-offset: 3px;
+  }
+}
+
+@media (max-width: 420px) {
+  #home-main #home-drop {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 12px;
+  }
+  #home-main #home-drop .home-drop-icon { grid-column: 1; }
+  #home-main #home-drop .home-drop-copy { grid-column: 2; }
+  #home-main #home-drop .browse-chip {
+    grid-column: 2;
+    justify-self: start;
+  }
+  #home-main #home-drop input[type="file"] { width: 100%; height: 100%; }
+}

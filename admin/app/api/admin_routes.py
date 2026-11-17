@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 import time
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,11 +11,14 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.auth_routes import admin_restart_token, begin_keycloak_admin_login
 from app.core.auth import is_admin_identity, request_identity, require_admin_identity, verify_csrf
 from app.core.keycloak_admin import KeycloakAdminError, KeycloakUser
 from app.core.subscription_view import subscription_view
+from app.core.presentation_admin import fetch_presentation_admin_metrics
 
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -34,11 +38,18 @@ class CreateUserRequest(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=120, pattern=r"^[A-Za-z0-9._@-]+$")
+    # Existing federated usernames are immutable identities, not new-account input.
+    username: str = Field(min_length=1, max_length=255)
     email: EmailStr | None = None
     first_name: str | None = Field(default=None, max_length=120)
     last_name: str | None = Field(default=None, max_length=120)
     email_verified: bool = False
+
+
+class UpdatePlanRequest(BaseModel):
+    plan: Literal["free", "pro"]
+    days: int = Field(default=30, ge=1, le=3660)
+    monthly_credits: int = Field(default=1000, ge=1, le=10_000_000)
 
 
 class RevealChatRequest(BaseModel):
@@ -205,6 +216,8 @@ def _render_admin_page(request: Request, page: str):
         "overview": "/admin",
         "users": "/admin/users",
         "activity": "/admin/activity",
+        "presentation": "/admin/presentation-ai",
+        "translator": "/admin/translator",
     }.get(page, "/admin")
     if identity is None:
         if settings.keycloak_enabled:
@@ -216,6 +229,8 @@ def _render_admin_page(request: Request, page: str):
         "overview": "Control Center",
         "users": "User Management",
         "activity": "Presentations & Chat",
+        "presentation": "Presentation AI",
+        "translator": "PowerPoint Translator",
     }
     return templates.TemplateResponse(
         request=request,
@@ -263,6 +278,17 @@ def admin_users_page(request: Request):
 @browser_router.get("/admin/activity", response_class=HTMLResponse)
 def admin_activity_page(request: Request):
     return _render_admin_page(request, "activity")
+
+
+@browser_router.get("/admin/presentation-ai", response_class=HTMLResponse)
+def admin_presentation_page(request: Request):
+    return _render_admin_page(request, "presentation")
+
+
+@router.get("/presentation-ai")
+def admin_presentation_metrics(request: Request):
+    _require_admin_api(request)
+    return fetch_presentation_admin_metrics(request.app.state.settings)
 
 
 @router.get("/summary")
@@ -569,6 +595,37 @@ def get_user(request: Request, user_id: str):
         job_count=len(jobs),
         subscription=subscription,
     )
+    # Read-only wallet lookup in the application database.
+    try:
+        with db.engine.connect() as conn:
+            wallet = conn.execute(
+                text(
+                    "SELECT monthly_credits, topup_credits "
+                    "FROM credit_wallets "
+                    "WHERE owner = :owner LIMIT 1"
+                ),
+                {"owner": user_id},
+            ).mappings().first()
+
+        if wallet is None:
+            user["credit_balance"] = {"status": "missing"}
+        else:
+            monthly = max(0, int(wallet["monthly_credits"] or 0))
+            topup = max(0, int(wallet["topup_credits"] or 0))
+            user["credit_balance"] = {
+                "status": "available",
+                "monthly": monthly,
+                "topup": topup,
+                "total": monthly + topup,
+            }
+
+    except SQLAlchemyError as exc:
+        logger.warning(
+            "Admin wallet lookup failed: %s",
+            type(exc).__name__,
+        )
+        user["credit_balance"] = {"status": "unavailable"}
+
     storage_root = request.app.state.settings.storage_dir
     return {
         "user": user,
@@ -621,6 +678,9 @@ def update_user(request: Request, user_id: str, payload: UpdateUserRequest):
     admin = _require_admin_api(request, mutate=True)
     client = _admin_client(request)
     try:
+        existing = client.get_user(user_id)
+        if payload.username != existing.username and not re.fullmatch(r"[A-Za-z0-9._@-]{3,120}", payload.username):
+            raise HTTPException(status_code=422, detail="A new username must contain 3–120 letters, numbers, dots, underscores, @ or hyphens. Keep the current username to preserve a linked sign-in.")
         user = client.update_user(
             user_id,
             username=payload.username,
@@ -653,6 +713,46 @@ def update_user(request: Request, user_id: str, payload: UpdateUserRequest):
             "deleted_at": local.deleted_at,
         }
     return {"user": _user_payload(user, local_payload, job_count=db.user_job_counts().get(user_id, 0))}
+
+
+@router.put("/users/{user_id}/plan")
+def update_user_plan(request: Request, user_id: str, payload: UpdatePlanRequest):
+    admin = _require_admin_api(request, mutate=True)
+
+    data_db = _data_db(request)
+    audit_db = _require_db(request)
+
+    try:
+        result = data_db.set_manual_plan(
+            user_id,
+            plan=payload.plan,
+            days=payload.days,
+            monthly_credits=payload.monthly_credits,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (RuntimeError, SQLAlchemyError) as exc:
+        logger.warning("manual_plan_save_failed type=%s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="The plan could not be saved. No plan or credit changes were committed. Please try again.") from exc
+
+    audit_db.audit(
+        "admin_user_plan_updated",
+        owner=admin.owner_key,
+        resource_type="user",
+        resource_id=user_id,
+        metadata={
+            "plan": payload.plan,
+            "days": payload.days if payload.plan == "pro" else None,
+            "monthly_credits": payload.monthly_credits if payload.plan == "pro" else 0,
+            "provider": "manual",
+        },
+    )
+
+    return {
+        "ok": True,
+        "user_id": user_id,
+        "billing": result,
+    }
 
 
 @router.post("/users/{user_id}/ban")
@@ -723,3 +823,51 @@ def delete_user(request: Request, user_id: str):
         metadata={"deleted_jobs": deleted_jobs},
     )
     return {"deleted": True, "deleted_jobs": deleted_jobs}
+
+
+# Translator monitoring: dedicated read-only service, admin authorization enforced here.
+def _translation_fetch(path):
+    import httpx
+    from pathlib import Path
+    token = Path('/app/translation-monitor-token').read_text().strip()
+    try:
+        with httpx.Client(timeout=30, trust_env=False, follow_redirects=False) as client:
+            result = client.get('http://notepreso-translation-monitor:8020'+path, headers={'Authorization':'Bearer '+token})
+        if result.status_code in (404,409):
+            raise HTTPException(result.status_code, 'Translation artifact unavailable')
+        if result.status_code != 200:
+            raise ValueError('upstream unavailable')
+        return result
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(503, 'Translation monitoring temporarily unavailable') from None
+
+@browser_router.get('/admin/translator', response_class=HTMLResponse)
+def admin_translator_page(request: Request):
+    return _render_admin_page(request, 'translator')
+
+@router.get('/translator')
+def admin_translator_jobs(request: Request):
+    _require_admin_api(request)
+    data = _translation_fetch('/jobs').json()
+    users = {str(u['subject']):u for u in _data_db(request).list_users(limit=10000)}
+    for job in data['jobs']:
+        user = users.get(job.get('owner'), {})
+        job['owner_name'] = user.get('display_name') or user.get('username') or job.get('owner')
+        job['owner_email'] = user.get('email')
+    return data
+
+@router.post('/translator/{job}/{artifact}')
+def admin_translator_artifact(job: str, artifact: str, request: Request):
+    from uuid import UUID
+    from fastapi.responses import Response
+    admin = _require_admin_api(request, mutate=True)
+    try:
+        if str(UUID(job)) != job: raise ValueError()
+    except ValueError:
+        raise HTTPException(404, 'Job not found')
+    if artifact != 'report':
+        raise HTTPException(404, 'Artifact not found')
+    result = _translation_fetch('/jobs/'+job+'/'+artifact)
+    _require_db(request).audit('admin_translation_download', owner=admin.owner_key, resource_type='translation', resource_id=job, metadata={'artifact':artifact})
+    suffix = 'json' if artifact == 'report' else 'pptx'
+    return Response(result.content, media_type=result.headers['content-type'], headers={'Content-Disposition':f'attachment; filename="translation-{job}-{artifact}.{suffix}"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})

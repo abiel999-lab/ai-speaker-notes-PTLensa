@@ -1,0 +1,6 @@
+/* Landing page metadata and upload guidance */
+.workflow-grid article > div > span,
+.gallery-grid > a > div > span,
+.np7d-start-card :is(.np7d-divider span, .np7d-topic-link small, .np7d-source-text small, .np7d-start-caption) {
+  color: #465c75;
+}

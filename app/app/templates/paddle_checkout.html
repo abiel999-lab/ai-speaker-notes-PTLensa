@@ -6,7 +6,9 @@
   <title>NotePreso · Paddle Checkout</title>
   <link rel="stylesheet" href="/static/app.css">
   <script defer src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-  <script defer src="/static/paddle-checkout.js?v=1.6.2"></script>
+  <script defer src="/static/paddle-checkout.js?v=pricing-final-1"></script>
+<link rel="stylesheet" href="/static/pricing-final.css?v=1"><link rel="stylesheet" href="/static/np-analytics-v1.css">
+<script src="/static/np-analytics-v1.js" defer></script>
 </head>
 <body class="paddle-checkout-page" data-paddle-environment="{{ paddle_environment|e }}" data-paddle-client-token="{{ paddle_client_token|e }}" data-return-url="{{ return_url|e }}">
   <main class="paddle-checkout-shell">
@@ -15,12 +17,13 @@
         <span class="account-plan-kicker">SECURE CHECKOUT</span>
         <h1>NotePreso Pro</h1>
         <p id="paddle-checkout-status">Loading Paddle Checkout…</p>
-        <p class="muted">Your Pro access is activated only after NotePreso verifies Paddle's signed payment webhook.</p>
-        <a class="btn secondary" href="/">Back to NotePreso</a>
+        <p class="muted">Credits update after NotePreso receives payment confirmation. Your workspace opens automatically.</p>
+        <div id="checkout-breakdown" hidden aria-live="polite"><h2>Order summary</h2><dl><div><dt>Subtotal</dt><dd id="checkout-subtotal"></dd></div><div><dt>Tax</dt><dd id="checkout-tax"></dd></div><div id="checkout-discount-row" hidden><dt>Discount</dt><dd id="checkout-discount"></dd></div><div id="checkout-credit-row" hidden><dt>Credit applied</dt><dd id="checkout-credit"></dd></div><div class="checkout-total"><dt>Total due</dt><dd id="checkout-total"></dd></div></dl><p>Calculated by Paddle. Review the payment form before confirming.</p></div><p>Applicable tax depends on your billing location. The final total is shown before you pay.</p><a class="btn secondary" href="/app">Back to workspace</a>
       </div>
       <div class="paddle-inline-wrap" aria-label="Paddle secure payment form">
         <div class="paddle-inline-checkout"></div>
       </div>
+      <section class="checkout-trust" aria-label="Provider and policies"><p class="checkout-company">NotePreso is provided by PT ACTIA BERSAMA SEJAHTERA (Actia Carbon). Paddle is our authorised reseller and Merchant of Record for payments.</p><p><a href="/refund-policy" target="_blank" rel="noopener">Refund Policy</a> · <a href="/terms" target="_blank" rel="noopener">Terms</a> · <a href="/privacy" target="_blank" rel="noopener">Privacy</a></p></section>
     </section>
   </main>
 </body>

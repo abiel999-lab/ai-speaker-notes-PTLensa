@@ -22,6 +22,9 @@ class OidcLoginState:
     expires_at: int
 
 
+OIDC_LOGIN_TTL_SECONDS = 1800
+
+
 class KeycloakOidcClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -59,12 +62,18 @@ class KeycloakOidcClient:
             return self.internal_issuer + public_url[len(self.issuer):]
         return public_url
 
-    def new_login(self, return_to: str = "/") -> tuple[str, OidcLoginState]:
+    def new_login(
+        self,
+        return_to: str = "/app",
+        *,
+        prompt: str | None = None,
+        action: str | None = None,
+    ) -> tuple[str, OidcLoginState]:
         discovery = self.discovery()
         state = secrets.token_urlsafe(32)
         verifier = secrets.token_urlsafe(64)
         challenge = self._b64url(hashlib.sha256(verifier.encode("ascii")).digest())
-        login = OidcLoginState(state=state, verifier=verifier, return_to=return_to, expires_at=int(time.time()) + 600)
+        login = OidcLoginState(state=state, verifier=verifier, return_to=return_to, expires_at=int(time.time()) + OIDC_LOGIN_TTL_SECONDS)
         params = {
             "client_id": self.client_id,
             "response_type": "code",
@@ -74,6 +83,10 @@ class KeycloakOidcClient:
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }
+        if action:
+            params["kc_action"] = action
+        if prompt:
+            params["prompt"] = prompt
         return f"{discovery['authorization_endpoint']}?{urlencode(params)}", login
 
     def exchange(self, *, code: str, verifier: str) -> dict:
