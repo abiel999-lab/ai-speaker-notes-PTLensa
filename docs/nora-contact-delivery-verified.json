@@ -1,0 +1,16 @@
+{
+  "marker": "NORA-INTEGRATION-QA-20261117T091015Z",
+  "status": 200,
+  "references": [
+    "SUP-F71EBB1DAA"
+  ],
+  "recipient": "billing@actiacarbon.com",
+  "request_count": 1,
+  "inbox_delivery_verified": true,
+  "mailbox": "INBOX",
+  "smtp_dsn": "2.0.0",
+  "mail_queue_id": "15ED6289B8E6",
+  "delivered_at_utc": "2026-11-17T09:10:56Z",
+  "delivered_at_jakarta": "2026-11-17T16:10:56+07:00",
+  "verification": "Exact subject reference found through doveadm search; Postfix reports status=sent and Dovecot stored into INBOX."
+}
