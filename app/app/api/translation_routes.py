@@ -91,3 +91,16 @@ async def translation_action(action:str,request:Request):
    return wallet.finish(b.subject,b.operationId,actual_slides=b.actualSlides,refund=action=='refund')
   raise HTTPException(404,'UNKNOWN_TRANSLATION_ACTION')
  except PlatformBillingError as e:raise HTTPException(402 if e.code in {'INSUFFICIENT_CREDITS','PRO_REQUIRED'} else 409,e.code) from None
+
+@router.get('/auth/presentation/connect')
+def presentation_connect(request:Request,state:str=''):
+ if not re.fullmatch('[A-Za-z0-9_-]{43}',state):raise HTTPException(400,'Invalid sign-in state')
+ identity=request_identity(request)
+ if identity is None:return RedirectResponse('/auth/login?return_to='+quote('/auth/presentation/connect?state='+state,safe=''),status_code=303)
+ try:subject=str(UUID(identity.owner_key))
+ except ValueError:raise HTTPException(403,'Sign in with your NotePreso account')
+ key=bytes.fromhex(json.loads(SECRET_FILE.read_text())['secret'])
+ value={'purpose':'presentation-login-v1','sub':subject,'state':state,'exp':int(time.time())+60,'jti':secrets.token_urlsafe(32),'iss':request.app.state.settings.keycloak_issuer,'aud':'https://presentation.notepreso.com','name':identity.display_name or identity.username,'email':identity.email if identity.email_verified else None}
+ encoded=base64.urlsafe_b64encode(json.dumps(value,separators=(',',':')).encode()).decode().rstrip('=')
+ signature=hmac.new(key,('presentation-login-v1.'+encoded).encode(),hashlib.sha256).hexdigest()
+ return RedirectResponse('https://presentation.notepreso.com/api/auth/shared/callback#ticket='+encoded+'.'+signature,status_code=303,headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer'})

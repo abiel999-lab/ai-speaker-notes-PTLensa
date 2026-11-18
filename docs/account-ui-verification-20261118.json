@@ -1,0 +1,27 @@
+{
+  "utc": "2026-11-18T05:52:12.905386+00:00",
+  "assets": [
+    {
+      "url": "https://presentation.notepreso.com/api/auth/shared/client.js",
+      "status": 200
+    },
+    {
+      "url": "https://translation.notepreso.com/app.js?v=20261118-clean",
+      "status": 200
+    },
+    {
+      "url": "https://translation.notepreso.com/static/translator.css?v=20261118-clean",
+      "status": 200
+    }
+  ],
+  "ops_alerts": [],
+  "signed_bridge_tests": "passed",
+  "static_fallthrough_regression": "reproduced and fixed",
+  "translator_clean_start_tests": "passed",
+  "browser_account_name": "matched across observed applications",
+  "browser_shared_credits": 746,
+  "browser_presentation_reload": "passed",
+  "browser_translator_view_then_reload": "passed",
+  "mobile_overflow": false,
+  "keycloak_configuration_changed": false
+}

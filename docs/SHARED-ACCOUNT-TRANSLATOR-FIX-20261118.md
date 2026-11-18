@@ -1,0 +1,20 @@
+# Shared account and clean Translator — 18 November 2026
+
+## Production result
+- Presentation production sign-in now goes through the currently authenticated NotePreso session, instead of independently reusing an old Keycloak/application identity. At workspace entry/F5, a short-lived signed Notes identity ticket replaces the Presentation session with the canonical issuer/sub. Existing user IDs/project ownership are retained; no email-based merge or account deletion.
+- Notes issues purpose presentation-login-v1, exact audience/issuer/state, UUID subject, expiry60seconds and random jti using the existing service authority key. Ticket travels in a URL fragment, not a query parameter. Presentation requires a same-origin POST plus its HttpOnly Secure host-only flow cookie, consumes the stored flow once, verifies signature/claims and issues its normal session. No access/refresh token or shared secret enters the browser. One-time entry proof avoids permanent trust in a stale local session.
+- Explicit workspace routes prevent Fastify static/not-found fallback from consuming entry proof twice. First canary showed a redirect loop; Presentation was immediately rolled back, the exact static fallback regression was reproduced, corrected and integration-tested before redeploy. Final browser entry and F5 both passed.
+- Already-open tabs must be refreshed to use the updated session. No global logout/revocation system or account merging was introduced. Translator's existing Notes bridge was retained. No Keycloak client, roles, permissions or credentials changed.
+- Translator starts with job=null and no auto polling of the last saved job. Legacy np.translation.job pointer is cleared safely; storage disabled is tolerated. Recent jobs is collapsed on entry, preserving files/history for explicit access. Browser BFCache return reloads the page. Existing in-progress work continues server-side; open it from Recent jobs when needed.
+- File chooser width/spacing/style standardized, with filename aligned next to Choose File and responsive width. Versioned CSS/JS URLs updated.
+
+## Tests
+- Notes authority fixture passed current subject/profile signing, exact target, fragment-only ticket, expiry, login-required and invalid state.
+- Presentation integration passed issuer/audience/state/purpose/UUID/expiry/tamper rejection, origin, replay, and single-use entry/F5 revalidation. Static fallback control reproduces redirect302; explicit route passes200.
+- Translator bootstrap fixture passed existing saved job, blocked localStorage, no automatic result fetch, initial empty file and collapsed history.
+- Browser production: Presentation and Translator show Abiel Georgius / Pro /746credits, matching Notes account observed in this session. Presentation repeated F5 successfully. No second real user was created or signed in for this test; cross-account selection is covered by verified subject fixtures and canonical-session design, not a two-user browser acceptance test.
+- Browser Translator: manual View job shows COMPLETED; F5 hides result and closes history. Desktop and390x844 viewport no horizontal overflow. No upload, generation, retry, download or paid job triggered. Screenshots retained locally.
+
+## Deployment and rollback
+Only three application containers swapped, with exact previous runtime config/mounts/networkIP retained. Existing images/data retained; no DB migration or billing change. Notes/Translator backups /home/actiaAdmin26/account-ui-production-20261118; final Presentation backup /home/actiaAdmin26/account-ui-presfix-20261118. Private inspect files remain server-only.
+Rollback Presentation: sudo python3 /home/actiaAdmin26/account-ui-presfix-cutover.py rollback presentation (restores stable pre-change Presentation). Notes or Translator: sudo python3 /home/actiaAdmin26/account-ui-cutover.py rollback notes (or translation). Rollback restores independent old Presentation login / Translator restore behavior. Do not run deploy/prepare again against an already swapped state. Operator should verify account and publicHTTPS after any rollback.

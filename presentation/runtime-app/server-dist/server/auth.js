@@ -1,3 +1,4 @@
+import {registerSharedSignin} from './shared-signin.js';
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import * as oidc from "openid-client";
 import { profileDisplayName } from "./profile.js";
@@ -43,6 +44,7 @@ export async function registerOidc(app, repo, cfg) {
         return undefined;
     validateOidc(settings, cfg.origin, cfg.production);
     const origin = cfg.origin;
+    const sharedSignin = cfg.production ? registerSharedSignin(app,repo,cfg) : null;
     // Lazy discovery keeps local diagnostics available during an IdP outage.
     // Failed discovery is never cached; the next sign-in may retry.
     let discovery;
@@ -93,6 +95,7 @@ export async function registerOidc(app, repo, cfg) {
                 target.searchParams.set("returnTo", returnTo);
             return reply.redirect(target.href);
         }
+        if(sharedSignin)return sharedSignin(req,reply);
         let step = "discovery";
         try {
             const conf = await configuration();

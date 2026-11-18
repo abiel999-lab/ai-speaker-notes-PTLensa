@@ -124,7 +124,7 @@ export async function createApp(cfg) {
         }
         req.user = identity ? await identity.user(req) : workspaceUser;
         if (identity) {
-            const publicApi = new Set(["/api/health", "/api/session", "/api/auth/login", "/api/auth/callback"]);
+            const publicApi = new Set(["/api/health", "/api/session", "/api/auth/login", "/api/auth/callback", "/api/auth/shared/callback", "/api/auth/shared/client.js", "/api/auth/shared/complete"]);
             const pathname = req.url.split("?")[0];
             if (!req.user && (pathname === "/app" || pathname.startsWith("/app/"))) {
                 const returnTo = workspaceReturnPath(req.url);
@@ -136,7 +136,7 @@ export async function createApp(cfg) {
             if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
                 if (req.headers.origin !== cfg.origin)
                     return reply.code(403).send({ error: "ORIGIN_REJECTED" });
-                if (!identity.csrf(req))
+                if (pathname !== "/api/auth/shared/complete" && !identity.csrf(req))
                     return reply.code(403).send({ error: "CSRF_REJECTED" });
             }
         }
@@ -147,6 +147,13 @@ export async function createApp(cfg) {
         return payload;
     });
     registerPresentationAccess(app,cfg);
+    // Workspace HTML is explicit: static fall-through runs not-found hooks again,
+    // which must not consume a one-time shared-account entry proof twice.
+    if(cfg.production && cfg.oidc){
+        app.get('/app',async(req,reply)=>reply.sendFile('index.html'));
+        app.get('/app/*',async(req,reply)=>reply.sendFile('index.html'));
+    }
+
     const auth = async (req, reply) => {
         if (!req.user)
             return reply.code(401).send({ error: "AUTH_REQUIRED" });
