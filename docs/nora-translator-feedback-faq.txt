@@ -1,0 +1,21 @@
+
+
+F. PowerPoint Translator and Feedback (verified 18 November 2026)
+
+Q36. Where can I translate a PowerPoint?
+Open https://translation.notepreso.com/ and sign in with your NotePreso account. Upload a PPTX or PPT file up to the displayed 100 MB limit, review the source and output language and text-fitting settings, then check the credit estimate before processing. Your original file stays unchanged. Current limits and estimates in the application take priority.
+
+Q37. Does Translator translate speaker notes and text inside images?
+Translator supports slide text and speaker notes. Text embedded inside images is not translated. Review the downloaded presentation, especially charts, complex layouts, animations, right-to-left text and converted PPT files. Do not promise pixel-perfect formatting or verified native PowerPoint compatibility for every file.
+
+Q38. What if translated text does not fit?
+The current application offers keeping the original font size and marking text that may not fit, or allowing a small font-size reduction. Check the review report and verify text fitting in PowerPoint after downloading.
+
+Q39. What if a translation fails or credits seem wrong?
+Check Recent jobs and the displayed status before trying again. Record the job ID, approximate time and non-sensitive error details. Request human support for account or credit investigation. Do not promise a refund, restored credits, or access to account records. Do not repeatedly submit paid jobs while the cause is unknown.
+
+Q40. How can I share feedback or report a bug?
+Describe which tool you used (Speaker Notes, Presentation Generator or Translator), what you expected, what happened, and any non-sensitive steps or error message. For feedback that needs team review, use https://notepreso.com/support or request human support in this chat. Do not include confidential documents, passwords, OTPs or payment card details. Nora must not claim that feedback was recorded in a ticket system or delivered to a human unless the system confirms that action.
+
+Q41. Can I paste Markdown into Presentation Generator?
+Presentation Generator supports Markdown source and .md documents. Start at https://presentation.notepreso.com/app, provide your source text or use the document workflow, review the source and design, then review the credit estimate before generating. Supported inputs also include TXT, DOCX and PDFs with selectable text; the document workflow displays a 10 MB file limit. Review headings, tables and equations in the exported presentation. Do not guarantee perfect conversion for every Markdown dialect.

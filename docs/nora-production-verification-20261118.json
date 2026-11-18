@@ -1,0 +1,62 @@
+{
+  "verified_at_utc": "2026-11-18T01:47:08.306896+00:00",
+  "https": [
+    {
+      "url": "https://notepreso.com/",
+      "status": 200,
+      "widget": true,
+      "expected_anonymous_login_redirect": false,
+      "final_host": "notepreso.com"
+    },
+    {
+      "url": "https://presentation.notepreso.com/",
+      "status": 200,
+      "widget": true,
+      "expected_anonymous_login_redirect": false,
+      "final_host": "presentation.notepreso.com"
+    },
+    {
+      "url": "https://translation.notepreso.com/",
+      "status": 200,
+      "widget": false,
+      "expected_anonymous_login_redirect": true,
+      "final_host": "login.notepreso.com"
+    },
+    {
+      "url": "https://notepreso.com/support",
+      "status": 200,
+      "widget": true,
+      "expected_anonymous_login_redirect": false,
+      "final_host": "notepreso.com"
+    }
+  ],
+  "services": [
+    {
+      "name": "notepreso-translation-monitor",
+      "health": "healthy"
+    },
+    {
+      "name": "actia-translation-app",
+      "health": "healthy"
+    },
+    {
+      "name": "actia-notepreso-app-live-rotated",
+      "health": "healthy"
+    },
+    {
+      "name": "actia-presentation-app",
+      "health": "healthy"
+    },
+    {
+      "name": "notepreso-contact-ui-20261026t050754z",
+      "health": "healthy"
+    }
+  ],
+  "presentation_contract": "passed isolated",
+  "markdown_pptx_layout": "passed isolated",
+  "nora_preview": [
+    "translator passed",
+    "feedback passed"
+  ],
+  "cekat_preview_credits_displayed": 11
+}
