@@ -1,0 +1,11 @@
+[Unit]
+Description=NotePreso production health snapshot
+After=docker.service network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/notepreso-ops/check.py
+TimeoutStartSec=120
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/notepreso-ops

@@ -1,0 +1,36 @@
+{
+  "cases": [
+    {
+      "name": "table",
+      "status": "passed",
+      "slides": 2,
+      "bytes": 19763
+    },
+    {
+      "name": "equation",
+      "status": "passed",
+      "slides": 1,
+      "bytes": 16816
+    },
+    {
+      "name": "unicode",
+      "status": "passed",
+      "slides": 1,
+      "bytes": 16917
+    },
+    {
+      "name": "long-text",
+      "status": "passed",
+      "slides": 4,
+      "bytes": 24532
+    },
+    {
+      "name": "lists",
+      "status": "passed",
+      "slides": 1,
+      "bytes": 16570
+    }
+  ],
+  "paidCalls": 0,
+  "nativePowerPointVisualReview": false
+}

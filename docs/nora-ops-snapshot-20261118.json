@@ -1,0 +1,66 @@
+{
+  "utc": "2026-11-18T03:22:02.402194+00:00",
+  "services": [
+    {
+      "name": "actia-notepreso-app-live-rotated",
+      "running": true,
+      "health": "healthy",
+      "restarts": 0,
+      "oom": false
+    },
+    {
+      "name": "actia-presentation-app",
+      "running": true,
+      "health": "healthy",
+      "restarts": 0,
+      "oom": false
+    },
+    {
+      "name": "actia-presentation-worker",
+      "running": true,
+      "health": null,
+      "restarts": 0,
+      "oom": false
+    },
+    {
+      "name": "actia-translation-app",
+      "running": true,
+      "health": "healthy",
+      "restarts": 0,
+      "oom": false
+    },
+    {
+      "name": "notepreso-contact-ui-20261026t050754z",
+      "running": true,
+      "health": "healthy",
+      "restarts": 0,
+      "oom": false
+    },
+    {
+      "name": "notepreso-translation-monitor",
+      "running": true,
+      "health": "healthy",
+      "restarts": 0,
+      "oom": false
+    }
+  ],
+  "http": [
+    {
+      "url": "https://notepreso.com/",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "url": "https://presentation.notepreso.com/",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "url": "https://notepreso.com/support",
+      "status": 200,
+      "passed": true
+    }
+  ],
+  "alerts": [],
+  "disk_used_percent": 61.1
+}
