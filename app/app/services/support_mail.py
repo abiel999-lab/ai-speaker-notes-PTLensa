@@ -12,6 +12,7 @@ from app.core.config import Settings
 
 
 REQUEST_TYPES = {
+    "feedback": "Feedback / feature request",
     "technical": "Technical support",
     "billing": "Billing question",
     "refund": "Refund request",

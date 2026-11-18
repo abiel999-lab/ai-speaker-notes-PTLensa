@@ -1,0 +1,38 @@
+{
+  "utc": "2026-11-18T03:09:16.047599+00:00",
+  "support_feedback_option": true,
+  "support_csp_self": true,
+  "services": [
+    {
+      "name": "notepreso-contact-ui-20261026t050754z",
+      "health": "healthy",
+      "image": "sha256:6b7c15d4e9a1d1a684c23cc2e4cd3075bf66b0c7fc4dd21bc59d88cc1baed789"
+    },
+    {
+      "name": "actia-notepreso-app-live-rotated",
+      "health": "healthy",
+      "image": "sha256:41835bda43c23ef2fb171185913fa5a9ff2e6c26cb7f9d79c61495a37b034e4b"
+    },
+    {
+      "name": "actia-presentation-app",
+      "health": "healthy",
+      "image": "sha256:2a606ce307bde6e99ae670c4ba30b4e4c027a96fd8e14592e368d08fb6cee665"
+    },
+    {
+      "name": "actia-translation-app",
+      "health": "healthy",
+      "image": "sha256:6098518a8e1aa0de4b22aade26ea21727e972e9dfe46780e712e85638303d076"
+    },
+    {
+      "name": "notepreso-translation-monitor",
+      "health": "healthy",
+      "image": "sha256:318b358c955e5c6d3fc2762b89c19a70e09784c9c3fc35faddbbdcf13a461a25"
+    }
+  ],
+  "staging_feedback": "passed fake mailer",
+  "csp_regression": "passed",
+  "memory_isolation": "passed temporary SQLite",
+  "cekat_feedback_label": "assigned successfully in Preview",
+  "followup": "OFF unproven cancellation",
+  "actual_email_sent_this_release": false
+}
