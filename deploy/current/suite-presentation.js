@@ -39,9 +39,24 @@
     const current = u.origin === location.origin && u.pathname === location.pathname;
     return `<a class="${className}" href="${href}"${current?' aria-current="page"':''}>${name}</a>`;
   };
+  const workspaceActive = (href) => {
+    const destination = new URL(href);
+    if (destination.origin !== location.origin) return false;
+    if (!isPresentation) return true;
+    const journalOpen = location.pathname === '/app' && new URLSearchParams(location.search).get('tool') === 'journal';
+    return (destination.searchParams.get('tool') === 'journal') === journalOpen;
+  };
+  const syncCurrentWorkspace = () => {
+    for (const option of shadow.querySelectorAll('.workspace-option')) {
+      if (workspaceActive(option.href)) option.setAttribute('aria-current', 'true');
+      else option.removeAttribute('aria-current');
+    }
+  };
+  window.addEventListener('np:workspace-format', syncCurrentWorkspace);
+  window.addEventListener('popstate', syncCurrentWorkspace);
   const productLink = (entry) => {
     const [name, href, hint] = entry;
-    const active = new URL(href).origin === location.origin;
+    const active = workspaceActive(href);
     const icon = name === 'Speaker Notes' ? '<path d="M5 4h14v13H9l-4 3zM8 8h8M8 12h6"/>' :
       name === 'Presentation' ? '<path d="M3 5h18v12H3zM12 17v4M8 21h8M8 13l3-3 2 2 3-4"/>' :
       '<path d="M3 5h11M8 3v2m4 0c0 5-4 8-8 10m2-7c2 3 4 5 7 6m1 6 4-10 4 10m-6-3h4"/>';

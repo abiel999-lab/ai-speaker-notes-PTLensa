@@ -1,4 +1,10 @@
-.np-typography input[type=range]{width:100%}
-.np-unified-document{max-width:690px;margin-inline:auto}
-.np-unified-document .np-attach{margin:1rem 0}
-.np-unified-document .button{margin-top:.75rem}
+.np-workspace-cover-fields { border: 0; min-inline-size: 0; margin: 0; padding: 0; }
+.np-journal-review { display: grid; gap: 12px; min-width: 0; }
+.np-journal-review p { margin: 0; }
+.np-journal-review p:empty { display: none; }
+.np-journal-thumbnails { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.np-journal-review-slide { background: #f3f6fa; padding: 16px; border-radius: 9px; overflow-wrap: anywhere; }
+.np-journal-review-slide h3 { margin: 0 0 10px; }
+.np-journal-review-slide ul { margin: 0 0 12px; padding-inline-start: 20px; }
+.np-journal-review-slide li + li { margin-top: 6px; }
+.np-journal-review > .button { justify-self: start; }

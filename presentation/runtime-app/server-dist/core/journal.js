@@ -81,14 +81,18 @@ export function parseJournalLayout(xml, { allowImageOnly = false } = {}) {
     return pages;
 }
 
-export function journalMetadata(pages, filename) {
+export function journalMetadata(pages, filename, {includeUpperTitle=false}={}) {
     const first=pages[0];
-    const candidates=first.lines.filter(l=>l.yMin>first.height*.09&&l.yMin<first.height*.35&&l.text.length>20&&!/https?:/.test(l.text));
+    const top = first.height * (includeUpperTitle ? .035 : .09);
+    const firstSection = includeUpperTitle && first.lines.find(line =>
+        /^(Abstract|Introduction|Background|Materials and Methods|Methodology|Methods?|Conclusion)$/i.test(sectionLabel(line.text)));
+    const end = Math.min(first.height * .35, firstSection?.yMin ?? Infinity);
+    const candidates=first.lines.filter(l=>l.yMin>top&&l.yMin<end&&l.text.length>20&&!/https?:/.test(l.text));
     const max=Math.max(...candidates.map(l=>l.font));
     const titleLines=candidates.filter(l=>l.font>=max*.88);
     const title=textOf(titleLines)||filename.replace(/\.pdf$/i,'');
     const titleEnd=Math.max(0,...titleLines.map(l=>l.yMax));
-    const authorLines=first.lines.filter(l=>l.yMin>titleEnd&&l.yMin<titleEnd+48&&!/^(Department|Received|©)/i.test(l.text));
+    const authorLines=first.lines.filter(l=>l.yMin>titleEnd&&l.yMin<titleEnd+48&&(!firstSection||l.yMin<firstSection.yMin)&&!/^(Department|Received|©)/i.test(l.text));
     const all=pages.flatMap(p=>p.lines.map(l=>l.text)).join('\n');
     const doi=all.match(/10\.\d{4,9}\/[A-Za-z0-9._;()/:+-]+/)?.[0]?.replace(/[.,;]+$/,'')||'';
     return {title,authors:textOf(authorLines),doi,kind:/\b(systematic review|meta-analysis|REVIEW)\b/i.test(first.lines.map(l=>l.text).join(' '))?'review':'research',filename};

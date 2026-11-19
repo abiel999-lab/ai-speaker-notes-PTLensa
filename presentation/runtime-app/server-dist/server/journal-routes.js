@@ -21,7 +21,11 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
         req.raw.once('aborted',abort);
         reply.raw.once('close',abort);
         try {
-            const result=await generate(bytes,req.body.name,{signal:controller.signal,inspectOnly:action==='inspect',standardHeadings:true,fontFamily:req.body.fontFamily});
+            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext} = req.body;
+            const result=await generate(bytes,name,{
+                signal:controller.signal,inspectOnly:action==='inspect',standardHeadings:true,
+                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,
+            });
             if(action==='inspect')return reply.header('Cache-Control','private, no-store').send(result.manifest);
             return reply.header('Cache-Control','private, no-store')
                 .header('Content-Type','application/vnd.openxmlformats-officedocument.presentationml.presentation')
