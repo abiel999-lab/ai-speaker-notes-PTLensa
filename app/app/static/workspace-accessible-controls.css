@@ -17,3 +17,7 @@
 #home-preview-form#home-preview-form #home-settings>summary{padding:13px!important}
 #home-preview-form#home-preview-form .disclosure-action{white-space:normal!important;text-align:right;gap:8px}
 #workspace-main#workspace-main :is(#workspace-settings-summary,.workspace-account-details>summary>strong){font-size:16px!important}
+
+#workspace-main#workspace-main .disclosure-action,#home-preview-form#home-preview-form .disclosure-action{display:inline-flex!important;align-items:center!important;justify-content:flex-end;gap:9px!important}
+#workspace-main#workspace-main .disclosure-action>span[aria-hidden=true]{display:block!important;flex:0 0 20px;width:20px!important;height:20px!important;font-size:0!important;color:transparent!important;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 8 5 5 5-5' fill='none' stroke='%23173657' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px 20px no-repeat}
+#workspace-main#workspace-main details[open]>summary .disclosure-action>span[aria-hidden=true]{transform:rotate(180deg)}
