@@ -1,5 +1,4 @@
-#np-journal-mode summary{cursor:pointer;font-weight:700}
-.np-journal-form label{display:block;margin:.8rem 0;font-weight:600}
-.np-journal-form label :is(select,input){display:block;max-width:100%;margin-top:.35rem}
-.np-journal-form .np-journal-summary{overflow-wrap:anywhere}
 .np-typography input[type=range]{width:100%}
+.np-unified-document{max-width:690px;margin-inline:auto}
+.np-unified-document .np-attach{margin:1rem 0}
+.np-unified-document .button{margin-top:.75rem}
