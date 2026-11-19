@@ -16,12 +16,15 @@ export async function documentManifest(root,owner,id){
  const dir=path.join(root,'document-imports',ownerKey(owner),id);
  return {dir,manifest:JSON.parse(await fs.readFile(path.join(dir,'manifest.json'),'utf8'))};
 }
+export function visualsForResource(manifest, role) {
+ return role === 'full-copy' && manifest.fullCopyVisuals ? manifest.fullCopyVisuals : manifest.visuals;
+}
 export async function snapshotDocumentAssets(project,root){
  if(project.workspace?.kind!=='document')return [];
  const result=[];
  for(const resource of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role))){
   const {dir,manifest}=await documentManifest(root,project.ownerId,resource.documentId);
-  for(const v of manifest.visuals){
+  for(const v of visualsForResource(manifest,resource.role)){
    const target=path.join(root,'assets',project.id);await fs.mkdir(target,{recursive:true});
    const bytes=await fs.readFile(path.join(dir,v.assetId+'.png'));
    if(createHash('sha256').update(bytes).digest('hex')!==v.hash)throw Error('DOCUMENT_INVALID');
@@ -33,7 +36,7 @@ export async function snapshotDocumentAssets(project,root){
 }
 export async function documentVisualCount(project,root){
  let count=0;if(project.workspace?.kind!=='document')return 0;
- for(const r of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role)))count+=(await documentManifest(root,project.ownerId,r.documentId)).manifest.visuals.length;
+ for(const r of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role)))count+=visualsForResource((await documentManifest(root,project.ownerId,r.documentId)).manifest,r.role).length;
  return count;
 }
 export function appendDocumentVisuals(scene,assets){
@@ -55,29 +58,41 @@ export function registerDocumentRoutes(app,{auth,cfg}){
   const bytes=Buffer.from(body.base64,'base64');if(bytes.length>10*1024*1024||bytes.toString('base64')!==body.base64)return reply.code(400).send({error:'DOCUMENT_SIZE_LIMIT'});
   busy=true;
   try{
-   let source,structuredWord,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[];
-   if(/\.(pdf|docx)$/i.test(body.name)){
+   let source,structuredWord,fullCopyVisuals,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[];
+   if(/\.pdf$/i.test(body.name)){
+    decodeJournal({name:body.name,base64:body.base64});
+    const result=await createJournalDeck(bytes,body.name,{signal:AbortSignal.timeout(240000),capturePdfVisuals:true});
+    source=result.extractedSource;title=result.title;
+    const storeVisual=({data,...metadata})=>{
+     const assetId=randomUUID();
+     images.push({assetId,data});
+     return {...metadata,assetId,hash:createHash('sha256').update(data).digest('hex')};
+    };
+    visuals=result.figures.map(storeVisual);
+    fullCopyVisuals=result.fullCopyVisuals.map(storeVisual);
+   }else if(/\.docx$/i.test(body.name)){
     let pdf=bytes;
-    if(/\.docx$/i.test(body.name)){
+    {
      structuredWord=await readDocx(bytes,{referenceOnly:true});
      const temporaryRoot=path.resolve(os.tmpdir()),dir=await fs.mkdtemp(path.join(temporaryRoot,'document-word-'));
      if(path.dirname(dir)!==temporaryRoot)throw Error('DOCUMENT_INVALID');
      try{await fs.writeFile(path.join(dir,'source.docx'),bytes,{mode:0o600});await promisify(execFile)('soffice',['-env:UserInstallation='+pathToFileURL(path.join(dir,'profile')).href,'--headless','--convert-to','pdf','--outdir',dir,path.join(dir,'source.docx')],{timeout:90000,env:{...process.env,FONTCONFIG_FILE:'/app/assets/fonts/notepreso-fonts.conf'}});pdf=await fs.readFile(path.join(dir,'source.pdf'));}finally{await fs.rm(dir,{recursive:true,force:true});}
-    }else decodeJournal({name:body.name,base64:body.base64});
+    }
     const result=await createJournalDeck(pdf,body.name,{signal:AbortSignal.timeout(240000),captureSource:true});
     source=result.extractedSource;title=result.manifest.metadata.title;
     const zip=await JSZip.loadAsync(result.bytes);const media=new Map();
     for(const file of Object.values(zip.files).filter(f=>/^ppt\/media\//.test(f.name)&&!f.dir)){const data=await file.async('nodebuffer');media.set(createHash('sha256').update(data).digest('hex'),data);}
     for(const visual of result.manifest.visuals){const mapped=result.manifest.mapping.find(v=>v.id===visual.id),data=media.get(mapped.imageHash),assetId=randomUUID();if(!data)throw Error('DOCUMENT_INVALID');images.push({assetId,data});visuals.push({assetId,caption:visual.caption,page:visual.page,hash:mapped.imageHash});}
-   }else source=/\.docx$/i.test(body.name)?await readDocx(bytes,{referenceOnly:true}):decodeSource(bytes);
+   }else source=decodeSource(bytes);
    if(!source?.trim()||source.length>240000)throw Error('DOCUMENT_TEXT_LIMIT');
    const documentId=randomUUID(),dir=path.join(cfg.root,'document-imports',ownerKey(req.user.id),documentId);
    await fs.mkdir(dir,{recursive:true,mode:0o700});
    for(const image of images)await fs.writeFile(path.join(dir,image.assetId+'.png'),image.data,{mode:0o600});
    await fs.writeFile(path.join(dir,'source.txt'),source,{mode:0o600});
    if(structuredWord)await fs.writeFile(path.join(dir,'structured-word.md'),structuredWord,{mode:0o600});
-   await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
-   return {source,title,documentId,visuals:visuals.length};
+   await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,fullCopyVisuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
+   const pdfPages=fullCopyVisuals?.filter(visual=>visual.visualKind==='pdf-page').length;
+   return {source,title,documentId,visuals:visuals.length,pdfPages};
   }catch(e){const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
  });
 }

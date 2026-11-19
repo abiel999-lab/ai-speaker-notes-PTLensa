@@ -28,7 +28,7 @@ function bodyFontFor(pages) {
     return [...counts].sort((a,b)=>b[1]-a[1])[0]?.[0]||13;
 }
 
-export function parseJournalLayout(xml) {
+export function parseJournalLayout(xml, { allowImageOnly = false } = {}) {
     const pages=[];
     for (const p of xml.matchAll(/<page\s+([^>]+)>([\s\S]*?)<\/page>/g)) {
         const size=attrs(p[1]);
@@ -77,7 +77,7 @@ export function parseJournalLayout(xml) {
     }
     if(!pages.length || pages.length>40)throw Error('JOURNAL_PAGE_LIMIT');
     if(pages.reduce((n,p)=>n+p.lines.reduce((s,l)=>s+l.text.length,0),0)>240000)throw Error('JOURNAL_TEXT_LIMIT');
-    if(pages.reduce((n,p)=>n+p.lines.length,0)<10)throw Error('JOURNAL_OCR_REQUIRED');
+    if(!allowImageOnly&&pages.reduce((n,p)=>n+p.lines.length,0)<10)throw Error('JOURNAL_OCR_REQUIRED');
     return pages;
 }
 

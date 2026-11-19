@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {documentManifest} from './document-workflow.js';
+import {documentManifest,visualsForResource} from './document-workflow.js';
 import {parseSource,hash} from '../core/source.js';
 import {wrapText,textHeight} from '../core/layout.js';
 import {buildFullCopyScene,parseFullCopySource} from '../core/full-copy.js';
@@ -45,7 +45,7 @@ export async function documentDraftContext(root,owner,body,copyRole){
    const {dir,manifest}=await documentManifest(root,owner,r.documentId);
    text=await fs.readFile(path.join(dir,'source.txt'),'utf8');title=manifest.title;
    if(copyRole&&/\.docx$/i.test(r.name))try{text=await fs.readFile(path.join(dir,'structured-word.md'),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
-   if(r.role==='content'||r.role==='full-copy')for(const a of manifest.visuals){
+   if(r.role==='content'||r.role==='full-copy')for(const a of visualsForResource(manifest,r.role)){
     const png=await fs.readFile(path.join(dir,a.assetId+'.png'));
     if(png.length<24||png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('DOCUMENT_INVALID');
     visuals.push({...a,width:png.readUInt32BE(16),height:png.readUInt32BE(20),sourceId:r.id,documentId:r.documentId,sourceName:r.name});
@@ -138,7 +138,7 @@ export async function saveFullCopyPlan(root, owner, workspace, settings, recover
  const temporary = file + '.' + randomUUID() + '.tmp';
  await fs.writeFile(temporary, JSON.stringify(plan), {mode:0o600});
  await fs.rename(temporary,file);
- return {source,slideCount:scene.slides.length,visualCount:assets.length,...(recoveryCode?{recovery:true}:{})};
+ return {source,slideCount:scene.slides.length,visualCount:scene.documentCoverage.included,...(recoveryCode?{recovery:true}:{})};
 }
 
 export async function loadDocumentPlan(project,root,settings={}){

@@ -1,6 +1,8 @@
 import{verifyEquations}from'./native-equations.js';
 import{visualCoverTitle,visualCoverSubtitle,technicalSectionTitle}from'./visual-cover.js';
 import JSZip from "jszip";
+import { createHash } from "node:crypto";
+import { posix } from "node:path";
 import { verifyCoverBranding } from "./cover-branding.js";
 import { XMLParser } from "fast-xml-parser";
 import { WIDTH, HEIGHT } from "./layout.js";
@@ -110,7 +112,23 @@ function paragraphText(tx) {
             .join(""))
         .join("\n");
 }
-export async function verifyPptx(doc, bytes, branding) {
+async function verifyPdfPicture(zip, parser, tree, filename, expected) {
+    const picture = arr(tree["p:pic"]).find(item =>
+        item["p:nvPicPr"]?.["p:cNvPr"]?.["@_descr"] === expected.altText);
+    const fill = picture?.["p:blipFill"];
+    const relId = fill?.["a:blip"]?.["@_r:embed"];
+    if (!relId || (fill["a:srcRect"] && Object.values(fill["a:srcRect"]).some(value => Number(value) !== 0)))
+        throw Error("DOCUMENT_VISUAL_EXPORT_MISMATCH");
+    const relPath = "ppt/slides/_rels/" + posix.basename(filename) + ".rels";
+    const relations = parser.parse(await zip.file(relPath)?.async("string") || "");
+    const target = arr(relations.Relationships?.Relationship).find(rel => rel["@_Id"] === relId)?.["@_Target"];
+    const assetPath = target && posix.join(posix.dirname(filename), target);
+    const data = assetPath?.startsWith("ppt/media/") && await zip.file(assetPath)?.async("nodebuffer");
+    if (!data || createHash("sha256").update(data).digest("hex") !== expected.originalPdfHash)
+        throw Error("DOCUMENT_VISUAL_EXPORT_MISMATCH");
+}
+
+export async function verifyPptx(doc, bytes, branding, pdfPictures = new Map()) {
     const zip = await JSZip.loadAsync(bytes);
     const brandingReport = await verifyCoverBranding(zip, branding);
     const parser = new XMLParser({
@@ -123,9 +141,11 @@ export async function verifyPptx(doc, bytes, branding) {
     const files = Object.keys(zip.files)
         .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
         .sort((a, b) => Number(a.match(/slide(\d+)/)[1]) - Number(b.match(/slide(\d+)/)[1]));
-    for (const file of files) {
+    for (const [slideIndex, file] of files.entries()) {
         const xml = await zip.file(file).async("string");
         const tree = parser.parse(xml)["p:sld"]["p:cSld"]["p:spTree"];
+        const expectedPdfPicture = pdfPictures.get(slideIndex);
+        if (expectedPdfPicture) await verifyPdfPicture(zip, parser, tree, file, expectedPdfPicture);
         // Exporter emits source-bearing objects in source order; collect using shape IDs.
         const onSlide = verifyEquations(arr(tree["p:sp"]),doc,paragraphText);
         for(const s of arr(tree['p:sp'])){const name=s['p:nvSpPr']?.['p:cNvPr']?.['@_name'];if(name==='np-visual-cover-title'&&(file!=='ppt/slides/slide1.xml'||paragraphText(s['p:txBody'])!==visualCoverTitle(doc)))throw Error('COVER_METADATA_MISMATCH');if(/^np-section-title-b\d+$/.test(name||'')&&paragraphText(s['p:txBody'])!==technicalSectionTitle(doc,name.replace('np-section-title-','')))throw Error('SOURCE_FIDELITY_FAILED');if(name==='np-visual-cover-subtitle'&&(file!=='ppt/slides/slide1.xml'||paragraphText(s['p:txBody'])!==visualCoverSubtitle(doc)))throw Error('COVER_METADATA_MISMATCH');}
@@ -166,6 +186,7 @@ export async function verifyPptx(doc, bytes, branding) {
         if (entries[i].id === entries[i - 1].id &&
             doc.blocks.find((b) => b.id === entries[i].id)?.kind === "table")
             entries[i].text = "\n" + entries[i].text;
+    if ([...pdfPictures.keys()].some(index => index >= files.length)) throw Error("DOCUMENT_VISUAL_EXPORT_MISMATCH");
     const report = contentReport(doc, entries, true);
     report.coverBranding = brandingReport;
     return report;

@@ -90,16 +90,39 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
             if (from < lines.length) startSlide();
         }
     }
+    const requiredImages = assets.filter(asset => asset.visualKind !== 'pdf-detail').length;
+    let remainingDetails = 80 - slides.length - requiredImages;
+    if (remainingDetails < 0) throw Error('DOCUMENT_SLIDE_LIMIT');
+    let included = 0;
     for (const asset of assets) {
-        startSlide();
-        slide.layout = 'photo';
-        slide.documentVisual = true;
-        slide.objects.push({ type: 'image', asset: asset.assetId, x, y, w, h: 6.12, fit: 'contain', imageTreatment: 'none' });
+        if (asset.visualKind === 'pdf-detail') {
+            if (remainingDetails === 0) continue;
+            remainingDetails--;
+        }
+        if (asset.visualKind === 'pdf-page' || asset.visualKind === 'pdf-detail') {
+            slides.push({
+                id: `full-copy-${slides.length}`, layout: 'photo', background: '#FFFFFF',
+                blockIds: [], documentVisual: true, documentCaption: asset.caption,
+                objects: [{ type: 'image', asset: asset.assetId, x: 0.15, y: 0.12,
+                    w: 13.03, h: 7.26, fit: 'contain', imageTreatment: 'none',
+                    altText: asset.caption, originalPdfHash: asset.hash }],
+            });
+        } else {
+            startSlide();
+            slide.layout = 'photo';
+            slide.documentVisual = true;
+            slide.objects.push({ type: 'image', asset: asset.assetId, x, y, w, h: 6.12, fit: 'contain', imageTreatment: 'none' });
+        }
+        included++;
     }
     const scene = {
         theme: 'ivory', sourceHash: doc.sha256, documentMode: true, fullCopy: true,
         includeSpeakerNotes: settings.includeSpeakerNotes === true,
-        documentCoverage: { expected: assets.length, included: assets.length, sourceBound: true }, slides,
+        documentCoverage: {
+            expected: included, included, sourceBound: true,
+            pdfPages: assets.filter(asset => asset.visualKind === 'pdf-page').length,
+            skippedOptionalDetails: assets.length - included,
+        }, slides,
     };
     if (!slides.length || !validateScene(doc, scene).passed) throw Error('SOURCE_FIDELITY_FAILED');
     return scene;
