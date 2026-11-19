@@ -24,10 +24,17 @@
 }
 
 #np-nora-launch[aria-disabled="true"] { cursor: wait; }
+#np-nora-launch {
+  width: 52px;
+  height: 52px;
+  padding: 3px;
+  border-radius: 50%;
+}
+#np-nora-launch img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 #np-nora :focus-visible { outline: 3px solid #157da8; outline-offset: 3px; }
 #np-nora-status { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: #fff; }
 .np-nora-obscured { visibility: hidden !important; pointer-events: none !important; }
 
 @media (max-width: 480px) {
-  #np-nora { right: 12px; bottom: 64px; }
+  #np-nora { right: 12px; bottom: 24px; }
 }

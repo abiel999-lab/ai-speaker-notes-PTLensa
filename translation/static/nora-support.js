@@ -12,7 +12,9 @@
   const root = document.createElement('section');
   root.id = 'np-nora';
   root.setAttribute('aria-label', 'NotePreso support');
-  root.innerHTML = '<button id="np-nora-launch" type="button">Chatbot Support</button>' +
+  const assetPrefix = location.hostname === 'presentation.notepreso.com' ? '/assets/' : '/static/';
+  root.innerHTML = '<button id="np-nora-launch" type="button" aria-label="Chatbot Support"><img src="' +
+    assetPrefix + 'nora-avatar.png" alt=""></button>' +
     '<p id="np-nora-status" role="status"></p>' +
     '<a id="np-nora-fallback" href="https://notepreso.com/support" hidden>Contact support</a>';
   document.body.append(root);
@@ -52,7 +54,7 @@
     }
     loading = true;
     launcher.setAttribute('aria-disabled', 'true');
-    launcher.textContent = 'Opening chat…';
+    status.textContent = 'Opening chat…';
     // Positive offsetX anchors the launcher on the right; the widget opens left.
     window.mychat = {
       server: vendorOrigin + '/widget.js',
@@ -60,7 +62,7 @@
       iframeHeight: 'calc(100dvh - 100px)',
       accessKey: 'NotePreso-TawWFQU9',
       offsetX: 16,
-      offsetY: 72,
+      offsetY: window.matchMedia('(max-width: 480px)').matches ? 24 : 72,
       position: 'bottom-left',
     };
     const queue = [];
@@ -88,6 +90,7 @@
         }
         clearTimeout(timer);
         loading = false;
+        status.textContent = '';
         if (document.activeElement === launcher) frame.focus();
         launcher.hidden = true;
       }, { once: true });
