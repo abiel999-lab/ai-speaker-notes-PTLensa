@@ -14,7 +14,14 @@ export function verifySharedTicket(ticket,{secret,issuer,origin,state,now=Date.n
 }
 export function registerSharedSignin(app,repo,cfg){
  const settings=()=>cfg.platform??JSON.parse(fs.readFileSync('/app/.notepreso-platform-v2.json','utf8'));
- const begin=async(req,reply)=>{const browser=random(),state=random();const returnTo=['/app/how-to','/app?tool=journal','/app?new=1','/app?new=1&author=1'].includes(new URL(req.url,cfg.origin).searchParams.get('returnTo'))?new URL(req.url,cfg.origin).searchParams.get('returnTo'):'/app';await repo.saveLoginFlow(hash(browser),{kind:'notes-shared',state,returnTo},Date.now()+600000);return reply.header('Cache-Control','no-store').header('Referrer-Policy','no-referrer').header('Set-Cookie',set(FLOW,browser,600)).redirect('https://notepreso.com/auth/presentation/connect?state='+encodeURIComponent(state));};
+ const begin=async(req,reply)=>{
+  const browser=random(),state=random();
+  const url=new URL(req.url,cfg.origin);
+  const requested=url.pathname==='/api/auth/login'?url.searchParams.get('returnTo'):url.pathname+url.search;
+  const returnTo=['/app/how-to','/app?tool=journal','/app?new=1','/app?new=1&author=1'].includes(requested)?requested:'/app';
+  await repo.saveLoginFlow(hash(browser),{kind:'notes-shared',state,returnTo},Date.now()+600000);
+  return reply.header('Cache-Control','no-store').header('Referrer-Policy','no-referrer').header('Set-Cookie',set(FLOW,browser,600)).redirect('https://notepreso.com/auth/presentation/connect?state='+encodeURIComponent(state));
+ };
  app.addHook('preHandler',async(req,reply)=>{
   const path=req.url.split('?')[0];if(req.method!=='GET'||!(path==='/app'||path.startsWith('/app/')||path==='/'&&cookie(req,SESSION)))return;
   const marker=cookie(req,ENTRY);if(marker){const proof=await repo.consumeLoginFlow(hash(marker));reply.header('Set-Cookie',set(ENTRY,'',0));if(proof?.kind==='shared-entry'&&proof.session===hash(cookie(req,SESSION)))return;}
