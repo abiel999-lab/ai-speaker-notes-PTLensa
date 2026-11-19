@@ -94,14 +94,15 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
     let remainingDetails = 80 - slides.length - requiredImages;
     if (remainingDetails < 0) throw Error('DOCUMENT_SLIDE_LIMIT');
     let included = 0;
+    const pdfSlides = [];
     for (const asset of assets) {
         if (asset.visualKind === 'pdf-detail') {
             if (remainingDetails === 0) continue;
             remainingDetails--;
         }
         if (asset.visualKind === 'pdf-page' || asset.visualKind === 'pdf-detail') {
-            slides.push({
-                id: `full-copy-${slides.length}`, layout: 'photo', background: '#FFFFFF',
+            pdfSlides.push({
+                id: `full-copy-pdf-${asset.assetId}`, layout: 'photo', background: '#FFFFFF',
                 blockIds: [], documentVisual: true, documentCaption: asset.caption,
                 objects: [{ type: 'image', asset: asset.assetId, x: 0.15, y: 0.12,
                     w: 13.03, h: 7.26, fit: 'contain', imageTreatment: 'none',
@@ -115,6 +116,9 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         }
         included++;
     }
+    // Keep the first text slide for titles and optional branding, then show the
+    // source pages and their close-ups before the rest of the extracted text.
+    slides.splice(slides.length ? 1 : 0, 0, ...pdfSlides);
     const scene = {
         theme: 'ivory', sourceHash: doc.sha256, documentMode: true, fullCopy: true,
         includeSpeakerNotes: settings.includeSpeakerNotes === true,
