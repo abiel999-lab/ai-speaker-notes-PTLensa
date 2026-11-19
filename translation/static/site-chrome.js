@@ -31,14 +31,12 @@
   const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const header = document.createElement('header'); header.id = 'np-global-header';
   const shadow = header.attachShadow({mode:'open'});
-  let menuOpen = false, accountOpen = false, session = null, csrf = '', sessionBusy = false;
-  let restoreOverflow = '', priorFocus = null;
-  const inertState = new Map();
+  let accountOpen = false, session = null, csrf = '', sessionBusy = false;
   let localButtons = [];
-  const link = ([name, href]) => {
+  const link = ([name, href], className = 'nav-link') => {
     const u = new URL(href);
     const current = u.origin === location.origin && u.pathname === location.pathname;
-    return `<a href="${href}"${current?' aria-current="page"':''}>${name}</a>`;
+    return `<a class="${className}" href="${href}"${current?' aria-current="page"':''}>${name}</a>`;
   };
   const productLink = (entry) => {
     const [name, href, hint] = entry;
@@ -47,42 +45,121 @@
       name === 'Presentation' ? '<path d="M3 5h18v12H3zM12 17v4M8 21h8M8 13l3-3 2 2 3-4"/>' :
       '<path d="M3 5h11M8 3v2m4 0c0 5-4 8-8 10m2-7c2 3 4 5 7 6m1 6 4-10 4 10m-6-3h4"/>';
     const symbol = `<span class="workspace-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>`;
-    return `<a class="workspace-option" href="${href}"${active?' aria-current="true"':''}>${symbol}<span class="workspace-copy"><strong>${name}</strong><small>${hint}</small></span><span class="workspace-arrow" aria-hidden="true">→</span></a>`;
+    return `<a class="panel-link workspace-option" href="${href}"${active?' aria-current="true"':''}>${symbol}<span class="workspace-copy"><strong>${name}</strong><small>${hint}</small></span><span class="workspace-arrow" aria-hidden="true">→</span></a>`;
   };
+  const chevron = '<span class="chevron" aria-hidden="true"></span>';
+  const workspaceLinks = products.map(productLink).join('');
+  const documentationLinks = secondary.map(entry => link(entry, 'panel-link')).join('');
+  const navigation = (label) => `<nav class="${label}-nav" aria-label="Main navigation">
+    ${link(home)}
+    <details class="workspace-menu">
+      <summary>Workspace ${chevron}</summary>
+      <div class="nav-panel">${workspaceLinks}<div class="local-tools"></div></div>
+    </details>
+    ${primary.map(entry => link(entry)).join('')}
+    <details class="documentation-menu">
+      <summary>Documentation ${chevron}</summary>
+      <div class="nav-panel">${documentationLinks}</div>
+    </details>
+  </nav>`;
+
+  const workspace = isTranslation ? '/' : isPresentation ? '/app' : notes + '/app';
+  const login = isTranslation ? '/auth/login' : isPresentation ? '/api/auth/login'
+    : '/auth/login?return_to=' + encodeURIComponent(location.pathname);
+  const assetPath = isPresentation ? '/assets/' : '/static/';
   const controlsStyle = document.createElement('link');
   controlsStyle.rel = 'stylesheet';
-  controlsStyle.href = (isPresentation ? '/assets/' : '/static/') + 'workspace-accessible-controls.css?v=5';
+  controlsStyle.href = assetPath + 'workspace-accessible-controls.css?v=5';
   document.head.append(controlsStyle);
-  shadow.innerHTML = `<link rel="stylesheet" href="${isPresentation?'/assets':'/static'}/site-header-readable.css?v=5">
-    <div class="bar"><a class="brand" href="${home[1]}" aria-label="NotePreso home"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+CjxyZWN0IHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjciIGZpbGw9IiNGN0Y5RkMiLz4KPHBhdGggZD0iTTE2IDI1SDVhMiAyIDAgMCAxLTItMlY3YTIgMiAwIDAgMSAyLTJoMjNhMiAyIDAgMCAxIDIgMnY5IgogZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTcyQjREIiBzdHJva2Utd2lkdGg9IjIuNSIvPgo8cGF0aCBkPSJNMTAgMTB2NWg1YTUgNSAwIDEgMS01LTVaIiBmaWxsPSIjMTcyQjREIi8+CjxwYXRoIGQ9Ik0xOCAxMGg4TTE4IDE0aDYiIHN0cm9rZT0iIzE3MkI0RCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHJlY3QgeD0iMTYiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjMDg3RjhDIi8+CjxwYXRoIGQ9Ik0yMCAyM2gxME0yMCAyN2g3IiBzdHJva2U9IiNGN0Y5RkMiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg==" alt="" width="36" height="36"><span><strong>NotePreso</strong><small>Your expertise. Clearly spoken.</small></span></a>
-    <nav class="desktop-nav" aria-label="Main navigation">${link(home)}<details class="more workspace-menu"><summary>Workspace <svg class="chevron" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="m5 8 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="more-panel">${products.map(productLink).join('')}<div class="local-desktop"></div></div></details>${primary.map(link).join('')}<details class="more documentation-menu"><summary>Documentation <svg class="chevron" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="more-panel">${secondary.map(link).join('')}</div></details></nav>
-    <div class="desktop-account session-slot"><a class="sign-in" href="${isTranslation?'/auth/login':isPresentation?'/api/auth/login':'/auth/login?return_to='+encodeURIComponent(location.pathname)}">Account</a></div>
-    <button class="toggle" type="button" aria-label="Open navigation menu" aria-controls="mobile-menu" aria-expanded="false"><span class="menu-lines" aria-hidden="true"></span></button></div>
-    <div class="backdrop" hidden></div><section id="mobile-menu" class="drawer" role="dialog" aria-label="Navigation menu" aria-modal="true" hidden><div class="drawer-heading">Menu<button type="button" class="close" aria-label="Close navigation menu">×</button></div><nav class="mobile-nav" aria-label="Mobile navigation">${link(home)}<details class="mobile-workspace"><summary>Workspace</summary>${products.map(productLink).join('')}</details>${primary.map(link).join('')}<details class="mobile-documentation"><summary>Documentation</summary>${secondary.map(link).join('')}</details></nav><div class="local-mobile"></div><div class="drawer-account session-slot"></div></section>`;
-  const toggle = shadow.querySelector('.toggle'), drawer = shadow.querySelector('.drawer'), backdrop = shadow.querySelector('.backdrop');
+  shadow.innerHTML = `<link rel="stylesheet" href="${assetPath}site-header-responsive.css">
+    <div class="bar">
+      <a class="brand" href="${home[1]}" aria-label="NotePreso home"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+CjxyZWN0IHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjciIGZpbGw9IiNGN0Y5RkMiLz4KPHBhdGggZD0iTTE2IDI1SDVhMiAyIDAgMCAxLTItMlY3YTIgMiAwIDAgMSAyLTJoMjNhMiAyIDAgMCAxIDIgMnY5IgogZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTcyQjREIiBzdHJva2Utd2lkdGg9IjIuNSIvPgo8cGF0aCBkPSJNMTAgMTB2NWg1YTUgNSAwIDEgMS01LTVaIiBmaWxsPSIjMTcyQjREIi8+CjxwYXRoIGQ9Ik0xOCAxMGg4TTE4IDE0aDYiIHN0cm9rZT0iIzE3MkI0RCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHJlY3QgeD0iMTYiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjMDg3RjhDIi8+CjxwYXRoIGQ9Ik0yMCAyM2gxME0yMCAyN2g3IiBzdHJva2U9IiNGN0Y5RkMiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg==" alt="" width="36" height="36"><span><strong>NotePreso</strong><small>Your expertise. Clearly spoken.</small></span></a>
+      ${navigation('desktop')}
+      <div class="desktop-account session-slot"><a class="sign-in" href="${workspace}">Account</a></div>
+      <button class="toggle" type="button" aria-label="Open navigation menu"
+        aria-haspopup="dialog" aria-controls="mobile-menu" aria-expanded="false">
+        <span class="menu-icon" aria-hidden="true"></span><span class="toggle-label">Menu</span>
+      </button>
+    </div>
+    <dialog id="mobile-menu" class="drawer" aria-labelledby="mobile-menu-title">
+      <div class="drawer-heading">
+        <span id="mobile-menu-title">Menu</span>
+        <button type="button" class="close" aria-label="Close navigation menu" autofocus>×</button>
+      </div>
+      <div class="drawer-content">
+        ${navigation('mobile')}
+        <div class="drawer-account session-slot"><a class="sign-in" href="${workspace}">Account</a></div>
+      </div>
+    </dialog>`;
+
+  const toggle = shadow.querySelector('.toggle');
+  const drawer = shadow.querySelector('.drawer');
   const slots = [...shadow.querySelectorAll('.session-slot')];
-  function closeMenu(returnFocus=true) {
-    if (!menuOpen) return;
-    menuOpen=false; drawer.hidden=true; backdrop.hidden=true; toggle.setAttribute('aria-expanded','false'); toggle.setAttribute('aria-label','Open navigation menu');
-    inertState.forEach((wasInert,node)=>{node.inert=wasInert;}); inertState.clear(); document.documentElement.style.overflow=restoreOverflow;
-    if(returnFocus)(priorFocus?.isConnected?priorFocus:toggle).focus();
+  const desktopMenus = [...shadow.querySelectorAll('.desktop-nav details')];
+  const mobileMenus = [...drawer.querySelectorAll('details')];
+  let restoreOverflow = null;
+
+  function closeDesktopMenus(except) {
+    for (const menu of desktopMenus) {
+      if (menu !== except) menu.open = false;
+    }
   }
+
+  function setAccountOpen(open) {
+    accountOpen = open;
+    shadow.querySelector('.profile')?.setAttribute('aria-expanded', String(open));
+    const panel = shadow.querySelector('.account-panel');
+    if (panel) panel.hidden = !open;
+  }
+
   function openMenu() {
-    priorFocus=shadow.activeElement || document.activeElement; menuOpen=true; accountOpen=false;
-    restoreOverflow=document.documentElement.style.overflow;
-    [...document.body.children].forEach(node=>{if(node!==header&&!['SCRIPT','STYLE','LINK'].includes(node.tagName)){inertState.set(node,node.inert);node.inert=true;}});
-    document.documentElement.style.overflow='hidden'; drawer.hidden=false; backdrop.hidden=false; toggle.setAttribute('aria-expanded','true');toggle.setAttribute('aria-label','Close navigation menu');
-    shadow.querySelector('.close').focus();
+    closeDesktopMenus();
+    setAccountOpen(false);
+    restoreOverflow ??= document.documentElement.style.overflow;
+    drawer.scrollTop = 0;
+    drawer.showModal();
+    document.documentElement.style.overflow = 'hidden';
+    toggle.setAttribute('aria-expanded', 'true');
   }
+
+  drawer.addEventListener('close', () => {
+    if (drawer.open) return;
+    document.documentElement.style.overflow = restoreOverflow ?? '';
+    restoreOverflow = null;
+    toggle.setAttribute('aria-expanded', 'false');
+    for (const menu of mobileMenus) menu.open = false;
+  });
+
   function renderSession() {
-    slots.forEach(slot=>{
-      if(session===null){slot.innerHTML=`<a class="sign-in" href="${isTranslation?'/':isPresentation?'/app':notes+'/app'}">Account</a>`;return;}
-      if(!session.authenticated){slot.innerHTML=`<a class="sign-in" href="${isTranslation?'/auth/login':isPresentation?'/api/auth/login':'/auth/login?return_to='+encodeURIComponent(location.pathname)}">Sign in <span aria-hidden="true">↗</span></a>`;return;}
-      const name=session.name||'Your account', initial=Array.from(name.trim())[0]||'U', plan=session.plan?`<span class="plan">${esc(session.plan)}</span>`:'';
-      const identity=`<span class="avatar" aria-hidden="true">${esc(initial.toUpperCase())}</span><span class="identity"><strong>${esc(name)}</strong>${plan}</span>`;
-      if(slot.classList.contains('desktop-account'))slot.innerHTML=`<button class="profile" type="button" aria-label="Account menu" aria-expanded="${accountOpen}">${identity}<svg class="chevron" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="account-panel" ${accountOpen?'':'hidden'}><a href="${isTranslation?'/':isPresentation?'/app':notes+'/app'}">Open workspace</a><a href="${notes}/pricing">Manage plan</a><button type="button" data-sign-out>Sign out</button></div>`;
-      else slot.innerHTML=`<div class="session-identity">${identity}</div><div class="session-actions"><a href="${isTranslation?'/':isPresentation?'/app':notes+'/app'}">My workspace</a><button type="button" data-sign-out>Sign out</button></div>`;
-    });
+    for (const slot of slots) {
+      if (session === null) {
+        slot.innerHTML = `<a class="sign-in" href="${workspace}">Account</a>`;
+        continue;
+      }
+      if (!session.authenticated) {
+        slot.innerHTML = `<a class="sign-in" href="${login}">Sign in</a>`;
+        continue;
+      }
+
+      const name = session.name || 'Your account';
+      const initial = Array.from(name.trim())[0] || 'U';
+      const plan = session.plan ? `<span class="plan">${esc(session.plan)}</span>` : '';
+      const identity = `<span class="avatar" aria-hidden="true">${esc(initial.toUpperCase())}</span>
+        <span class="identity"><strong>${esc(name)}</strong>${plan}</span>`;
+      const actions = `<a class="panel-link" href="${workspace}">Open workspace</a>
+        <a class="panel-link" href="${notes}/pricing">Manage plan</a>
+        <button class="panel-link" type="button" data-sign-out>Sign out</button>`;
+
+      if (slot.classList.contains('desktop-account')) {
+        slot.innerHTML = `<button class="profile" type="button"
+          aria-label="Account menu for ${esc(name)}" aria-controls="account-panel"
+          aria-expanded="${accountOpen}">${identity}${chevron}</button>
+          <div id="account-panel" class="account-panel" ${accountOpen ? '' : 'hidden'}>${actions}</div>`;
+      } else {
+        slot.innerHTML = `<div class="session-identity">${identity}</div>
+          <div class="session-actions">${actions}</div>`;
+      }
+    }
   }
   async function refreshSession() {
     if(sessionBusy)return;sessionBusy=true;
@@ -112,27 +189,79 @@
     try { await logoutRequest('/api/auth/logout',csrf); location.assign('/'); }
     catch (_) { button.disabled=false;button.textContent='Retry sign out'; }
   }
-  shadow.addEventListener('click',event=>{
-    if(event.target.closest('.toggle')){menuOpen?closeMenu():openMenu();return;}
-    if(event.target.closest('.close,.backdrop')){closeMenu();return;}
-    if(event.target.closest('.profile')){accountOpen=!accountOpen;if(accountOpen)shadow.querySelectorAll('.desktop-nav .more').forEach(menu=>{menu.open=false;});renderSession();return;}
-    const logout=event.target.closest('[data-sign-out]');if(logout){void signOut(logout);return;}
-    const proxy=event.target.closest('[data-local-action]');if(proxy){closeMenu(false);localButtons[Number(proxy.dataset.localAction)]?.click();return;}
-    if(event.target.closest('a'))closeMenu(false);
+  shadow.addEventListener('click', event => {
+    const target = event.target;
+    if (target.closest('.toggle')) {
+      if (!drawer.open) openMenu();
+      return;
+    }
+    if (target.closest('.close') || target === drawer) {
+      drawer.close();
+      return;
+    }
+    if (target.closest('.profile')) {
+      closeDesktopMenus();
+      setAccountOpen(!accountOpen);
+      return;
+    }
+    const logout = target.closest('[data-sign-out]');
+    if (logout) {
+      void signOut(logout);
+      return;
+    }
+    const proxy = target.closest('[data-local-action]');
+    if (proxy) {
+      if (drawer.open) drawer.close();
+      closeDesktopMenus();
+      localButtons[Number(proxy.dataset.localAction)]?.click();
+      return;
+    }
+    if (target.closest('a') && drawer.open && !event.ctrlKey && !event.metaKey) drawer.close();
   });
-  const desktopMenus=[...shadow.querySelectorAll('.desktop-nav .more')];
-  desktopMenus.forEach(menu=>menu.addEventListener('toggle',()=>{
-    if(!menu.open)return;
-    desktopMenus.filter(other=>other!==menu).forEach(other=>{other.open=false;});
-    if(accountOpen){accountOpen=false;renderSession();}
-  }));
-  document.addEventListener('click',event=>{if(!event.composedPath().includes(header))desktopMenus.forEach(menu=>{menu.open=false;});});
-  document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'){if(menuOpen){event.preventDefault();closeMenu();}if(accountOpen){accountOpen=false;renderSession();shadow.querySelector('.profile')?.focus();}shadow.querySelectorAll('.more,.mobile-workspace,.mobile-documentation').forEach(menu=>{menu.open=false;});}
-    if(event.key==='Tab'&&menuOpen){const nodes=[...drawer.querySelectorAll('a[href],button:not([disabled])')].filter(n=>n.getClientRects().length),first=nodes[0],last=nodes.at(-1),active=shadow.activeElement;if(event.shiftKey&&active===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&active===last){event.preventDefault();first.focus();}}
+
+  for (const menu of desktopMenus) {
+    menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      closeDesktopMenus(menu);
+      setAccountOpen(false);
+    });
+  }
+
+  function dismissOutside(event) {
+    if (drawer.open) return;
+    const path = event.composedPath();
+    const activeMenu = desktopMenus.find(menu => path.includes(menu));
+    closeDesktopMenus(activeMenu);
+    if (!path.includes(shadow.querySelector('.desktop-account'))) setAccountOpen(false);
+  }
+
+  document.addEventListener('click', dismissOutside);
+  document.addEventListener('focusin', dismissOutside);
+  shadow.addEventListener('focusin', dismissOutside);
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || drawer.open) return;
+    const menu = desktopMenus.find(item => item.open);
+    if (menu) {
+      event.preventDefault();
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    } else if (accountOpen) {
+      event.preventDefault();
+      setAccountOpen(false);
+      shadow.querySelector('.profile')?.focus();
+    }
   });
-  document.addEventListener('click',event=>{if(!event.composedPath().includes(header)&&accountOpen){accountOpen=false;renderSession();}});
-  matchMedia('(max-width: 900px)').addEventListener('change',()=>closeMenu(false));
+
+  matchMedia('(min-width: 1024px)').addEventListener('change', event => {
+    if (event.matches && drawer.open) {
+      drawer.close();
+      shadow.querySelector('.desktop-nav .nav-link').focus();
+    } else if (!event.matches) {
+      closeDesktopMenus();
+      setAccountOpen(false);
+    }
+  });
   let localSignature='';
   function mountHeader() {
     const originals=[...document.querySelectorAll('header.topbar,header.site-header,header.np7d-nav,header.user-topnav')];
@@ -144,8 +273,16 @@
     originals.forEach(node=>{node.dataset.npReplacedHeader='true';});
     const buttons=[...document.querySelectorAll('header.user-topnav .user-topnav-links button,header.user-topnav .user-create-button,header .language-toggle button,header .language-button')].filter(button=>!(button.matches('.user-topnav-links button')&&button.textContent.trim()==='Editor'));
     const tools = isPresentation ? buttons.filter(button=>!button.matches('.user-create-button,.user-topnav-links button')) : buttons;
-    const signature=tools.map(button=>button.textContent.trim()).join('|');localButtons=tools;
-    if(signature!==localSignature){localSignature=signature;for(const node of shadow.querySelectorAll('.local-desktop,.local-mobile'))node.innerHTML=tools.length?`<p class="local-title">Workspace tools</p>`+tools.map((button,i)=>`<button type="button" data-local-action="${i}">${esc(button.textContent.trim()||button.getAttribute('aria-label')||'Workspace action')}</button>`).join(''):'';}
+    const toolLabels = tools.map(button => button.textContent.trim()
+      || button.getAttribute('aria-label') || 'Workspace action');
+    const signature = JSON.stringify(toolLabels);
+    localButtons = tools;
+    if (signature !== localSignature) {
+      localSignature = signature;
+      const actions = toolLabels.map((label, index) =>
+        `<button type="button" data-local-action="${index}">${esc(label)}</button>`).join('');
+      for (const node of shadow.querySelectorAll('.local-tools')) node.innerHTML = actions;
+    }
   }
 
   let skipLink;
