@@ -1,5 +1,5 @@
 /* NotePreso Nora adapter. Load the Cekat widget when the visitor opens chat. */
-(() => {
+(async () => {
   'use strict';
   const preview = document.currentScript?.dataset.preview === 'true' &&
     ['localhost', '127.0.0.1'].includes(location.hostname);
@@ -7,6 +7,30 @@
   if ((!preview && !hosts.includes(location.hostname)) || window.__npNora) return;
   if (/^\/(auth|login|admin|api|docs|redoc|realms)(\/|$)/.test(location.pathname)) return;
   window.__npNora = true;
+
+  const presentation = location.hostname === 'presentation.notepreso.com';
+  const translation = location.hostname === 'translation.notepreso.com';
+  async function readAccount(path) {
+    const response = await fetch(path, {
+      credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok ? response.json() : null;
+  }
+
+  async function canOpenChat() {
+    if (preview) return true;
+    try {
+      const session = await readAccount(presentation || translation ? '/api/session' : '/api/v1/auth/me');
+      const signedIn = presentation ? session?.authentication === 'oidc' && !!session.user : session?.authenticated === true;
+      if (!signedIn) return false;
+      const account = await readAccount(presentation ? '/api/platform/account' : translation ? '/api/account' : '/api/v1/account/plan');
+      return (presentation || translation ? account?.account?.plan : account?.plan) === 'pro';
+    } catch {
+      return false;
+    }
+  }
+  if (!(await canOpenChat())) return;
 
   const vendorOrigin = 'https://live.cekat.ai';
   const root = document.createElement('section');
@@ -46,7 +70,7 @@
     launcher.hidden = true;
   }
 
-  launcher.addEventListener('click', () => {
+  launcher.addEventListener('click', async () => {
     if (loading || failed || launcher.hidden) return;
     if (window.mychat || document.getElementById('iframe1')) {
       fail();
@@ -55,6 +79,10 @@
     loading = true;
     launcher.setAttribute('aria-disabled', 'true');
     status.textContent = 'Opening chat…';
+    if (!(await canOpenChat())) {
+      root.remove();
+      return;
+    }
     // Positive offsetX anchors the launcher on the right; the widget opens left.
     window.mychat = {
       server: vendorOrigin + '/widget.js',
