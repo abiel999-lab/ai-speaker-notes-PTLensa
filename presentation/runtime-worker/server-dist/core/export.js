@@ -127,7 +127,8 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
                 const imageFile=file||path.resolve("public/assets/city.jpg");
                 const meta=await sharp(imageFile).metadata();if(!meta.width||!meta.height)throw Error("IMAGE_NOT_FOUND");const ratio=meta.width/meta.height;let sizing;
                 if(o.backgroundImage&&o.fit!=="contain")sizing={x:o.x,y:o.y,w:ratio*o.h,h:o.h,sizing:{type:"cover",w:o.w,h:o.h}};else{const w=Math.min(o.w,o.h*ratio),h=w/ratio;sizing={x:o.x+(o.w-w)/2,y:o.y+(o.h-h)/2,w,h};}
-                slide.addImage({ path:imageFile,...sizing, altText: o.altText, objectName: motion === "keynote" && !o.backgroundImage ? `motion-inline-image-${object}` : name });
+                slide.addImage({ path:imageFile,...sizing, altText: o.altText, objectName: o.inlineSourceImage
+                    ? 'ordered-source-image-'+o.asset : motion === "keynote" && !o.backgroundImage ? `motion-inline-image-${object}` : name });
                 if (o.imageTreatment && o.imageTreatment !== "none")
                     slide.addShape(pptx.ShapeType.rect, {
                         x: o.backgroundImage && o.imageTextSide === "right" ? 13.333333 - 8.4 : o.x,
@@ -248,8 +249,8 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     await verifyInternalSlideLinks(bytes);
     const pdfPictures = new Map();
     for (const [index, slide] of exportScene.slides.entries()) {
-        const picture = slide.objects.find(object => object.type === "image" && object.originalPdfHash);
-        if (picture) pdfPictures.set(index, picture);
+        const pictures = slide.objects.filter(object => object.type === "image" && object.originalPdfHash);
+        if (pictures.length) pdfPictures.set(index, pictures);
     }
     const report = await verifyPptx(doc, bytes, branding, pdfPictures);
     report.quality = validateScene(doc, exportScene).quality;
@@ -258,7 +259,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     report.designAudit = auditDesignScene(exportScene, preparedSlides.map(p => p.chart ? 1 : 0));
     report.designSearch = optimization.diagnostic;
     if(scene.documentMode)report.documentCoverage=scene.documentCoverage;
-    if(pdfPictures.size)report.documentCoverage={...report.documentCoverage,verifiedPdfPictures:pdfPictures.size};
+    if(pdfPictures.size)report.documentCoverage={...report.documentCoverage,verifiedPdfPictures:[...pdfPictures.values()].flat().length};
     if (features.links || features.uploadedImages || features.menuSlide)
         report.interactive = features;
     if (motionStoryboard)

@@ -1,14 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
-import JSZip from 'jszip';
+import sharp from 'sharp';
 import {createJournalDeck,decodeJournal} from './journal-service.js';
-import {readDocx} from '../core/structured-import.js';
+import {readDocxWithImages} from '../core/structured-import.js';
 import {decodeSource} from '../core/source.js';
-import {execFile} from 'node:child_process';
-import {promisify} from 'node:util';
-import os from 'node:os';
-import {pathToFileURL} from 'node:url';
 const ownerKey=id=>createHash('sha256').update(id).digest('hex');
 const uuid=/^[0-9a-f-]{36}$/;
 export async function documentManifest(root,owner,id){
@@ -58,41 +54,39 @@ export function registerDocumentRoutes(app,{auth,cfg}){
   const bytes=Buffer.from(body.base64,'base64');if(bytes.length>10*1024*1024||bytes.toString('base64')!==body.base64)return reply.code(400).send({error:'DOCUMENT_SIZE_LIMIT'});
   busy=true;
   try{
-   let source,structuredWord,fullCopyVisuals,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[];
+   let source,fullCopyVisuals,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[],pdfPages;
+   const storeVisual=({data,...metadata})=>{
+    const assetId=randomUUID();
+    images.push({assetId,data});
+    return {...metadata,assetId,hash:createHash('sha256').update(data).digest('hex')};
+   };
    if(/\.pdf$/i.test(body.name)){
     decodeJournal({name:body.name,base64:body.base64});
     const result=await createJournalDeck(bytes,body.name,{signal:AbortSignal.timeout(240000),capturePdfVisuals:true});
     source=result.extractedSource;title=result.title;
-    const storeVisual=({data,...metadata})=>{
-     const assetId=randomUUID();
-     images.push({assetId,data});
-     return {...metadata,assetId,hash:createHash('sha256').update(data).digest('hex')};
-    };
+    pdfPages=result.pageCount;
     visuals=result.figures.map(storeVisual);
     fullCopyVisuals=result.fullCopyVisuals.map(storeVisual);
    }else if(/\.docx$/i.test(body.name)){
-    let pdf=bytes;
-    {
-     structuredWord=await readDocx(bytes,{referenceOnly:true});
-     const temporaryRoot=path.resolve(os.tmpdir()),dir=await fs.mkdtemp(path.join(temporaryRoot,'document-word-'));
-     if(path.dirname(dir)!==temporaryRoot)throw Error('DOCUMENT_INVALID');
-     try{await fs.writeFile(path.join(dir,'source.docx'),bytes,{mode:0o600});await promisify(execFile)('soffice',['-env:UserInstallation='+pathToFileURL(path.join(dir,'profile')).href,'--headless','--convert-to','pdf','--outdir',dir,path.join(dir,'source.docx')],{timeout:90000,env:{...process.env,FONTCONFIG_FILE:'/app/assets/fonts/notepreso-fonts.conf'}});pdf=await fs.readFile(path.join(dir,'source.pdf'));}finally{await fs.rm(dir,{recursive:true,force:true});}
+    const word=await readDocxWithImages(bytes);
+    source=word.source||`# ${title}`;
+    fullCopyVisuals=[];
+    for(const image of word.images){
+     let data;
+     try{data=await sharp(image.data,{limitInputPixels:32e6}).resize({width:2200,height:2200,fit:'inside',withoutEnlargement:true}).png().toBuffer();}
+     catch{throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');}
+     fullCopyVisuals.push(storeVisual({...image,data,page:1}));
     }
-    const result=await createJournalDeck(pdf,body.name,{signal:AbortSignal.timeout(240000),captureSource:true});
-    source=result.extractedSource;title=result.manifest.metadata.title;
-    const zip=await JSZip.loadAsync(result.bytes);const media=new Map();
-    for(const file of Object.values(zip.files).filter(f=>/^ppt\/media\//.test(f.name)&&!f.dir)){const data=await file.async('nodebuffer');media.set(createHash('sha256').update(data).digest('hex'),data);}
-    for(const visual of result.manifest.visuals){const mapped=result.manifest.mapping.find(v=>v.id===visual.id),data=media.get(mapped.imageHash),assetId=randomUUID();if(!data)throw Error('DOCUMENT_INVALID');images.push({assetId,data});visuals.push({assetId,caption:visual.caption,page:visual.page,hash:mapped.imageHash});}
+    visuals=fullCopyVisuals;
    }else source=decodeSource(bytes);
    if(!source?.trim()||source.length>240000)throw Error('DOCUMENT_TEXT_LIMIT');
    const documentId=randomUUID(),dir=path.join(cfg.root,'document-imports',ownerKey(req.user.id),documentId);
    await fs.mkdir(dir,{recursive:true,mode:0o700});
    for(const image of images)await fs.writeFile(path.join(dir,image.assetId+'.png'),image.data,{mode:0o600});
    await fs.writeFile(path.join(dir,'source.txt'),source,{mode:0o600});
-   if(structuredWord)await fs.writeFile(path.join(dir,'structured-word.md'),structuredWord,{mode:0o600});
-   await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,fullCopyVisuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
-   const pdfPages=fullCopyVisuals?.filter(visual=>visual.visualKind==='pdf-page').length;
-   return {source,title,documentId,visuals:visuals.length,pdfPages};
+   const orderedVisuals=fullCopyVisuals!==undefined;
+   await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,fullCopyVisuals,orderedVisuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
+   return {source,title,documentId,visuals:visuals.length,pdfPages,orderedVisuals,inlineImageCount:fullCopyVisuals?.length};
   }catch(e){const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
  });
 }

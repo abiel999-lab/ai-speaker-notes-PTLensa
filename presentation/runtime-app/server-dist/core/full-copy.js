@@ -38,7 +38,26 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         slide.objects.push({ ...object, sourceId: block.id, x, y, w });
         y += object.h + gap;
     };
+    const inlineAssets = assets.filter(asset=>asset.visualKind==='inline')
+        .sort((first,second)=>first.sourceOffset-second.sourceOffset);
+    let nextImage=0;
+    function addImagesThrough(offset){
+        while(nextImage<inlineAssets.length&&inlineAssets[nextImage].sourceOffset<=offset){
+            const asset=inlineAssets[nextImage++];
+            const ratio=asset.width/asset.height;
+            if(!Number.isFinite(ratio)||ratio<=0)throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
+            const desiredHeight=Math.min(5.4,w/ratio);
+            if(!slide||maxY-y-.6<Math.min(desiredHeight,Math.max(2.5,desiredHeight*.7))) startSlide();
+            const h=Math.min(desiredHeight,maxY-y-.6);
+            const width=h*ratio;
+            slide.objects.push({type:'image',asset:asset.assetId,x:x+(w-width)/2,y,w:width,h,fit:'contain',
+                imageTreatment:'none',altText:asset.caption,originalPdfHash:asset.hash,inlineSourceImage:true});
+            slide.documentCaption ||= asset.caption;
+            y+=h+gap;
+        }
+    }
     for (const block of doc.blocks) {
+        addImagesThrough(block.start);
         const heading = block.kind === 'heading';
         if (!slide || (heading && (block.level <= 2 || y > 5.55) && slide.blockIds.length)) startSlide(!slides.length && heading && block.level === 1);
         if (block.kind === 'table') {
@@ -90,12 +109,14 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
             if (from < lines.length) startSlide();
         }
     }
-    const requiredImages = assets.filter(asset => asset.visualKind !== 'pdf-detail').length;
+    addImagesThrough(Infinity);
+    const separatedAssets=assets.filter(asset=>asset.visualKind!=='inline');
+    const requiredImages = separatedAssets.filter(asset => asset.visualKind !== 'pdf-detail').length;
     let remainingDetails = 80 - slides.length - requiredImages;
     if (remainingDetails < 0) throw Error('DOCUMENT_SLIDE_LIMIT');
-    let included = 0;
+    let included = inlineAssets.length;
     const pdfSlides = [];
-    for (const asset of assets) {
+    for (const asset of separatedAssets) {
         if (asset.visualKind === 'pdf-detail') {
             if (remainingDetails === 0) continue;
             remainingDetails--;

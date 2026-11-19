@@ -75,8 +75,8 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
             await native('pdftohtml',['-xml','-nomerge','-noroundcoord','-zoom','1','-fmt','png',pdf,output],{signal});
             layout=await fs.readFile(output,'utf8');
         } catch {
-            // Full page images already contain every visible element.
             signal?.throwIfAborted();
+            throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
         }
     }
     const regionsByPage=new Map();
@@ -87,34 +87,46 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
         const regions=[];
         for(const [imageTag] of body.matchAll(/<image\b[^>]+>/g)){
             const {left:x,top:y,width:w,height:h}=numericAttributes(imageTag);
-            // Leading logos, tiny icons and complete scanned sheets remain
-            // visible on the original page. Reserve close-ups for larger images.
-            if(!(w>=page.width*0.14&&h>=page.height*0.045)
-                ||(w>=page.width*0.92&&h>=page.height*0.88)||!Number.isFinite(x)||!Number.isFinite(y))continue;
-            const key=[x,y,w,h].map(Math.round).join(',');
+            if(!(w>0&&h>0)||!Number.isFinite(x)||!Number.isFinite(y))continue;
+            const file=path.basename(imageTag.match(/\bsrc="([^"]+)"/)?.[1] || '');
+            if(imageLayoutXml===undefined&&!/^embedded-images-[\w.-]+\.(?:png|jpe?g)$/i.test(file))
+                throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
+            const key=[x,y,w,h,file].join(',');
             if(seen.has(key))continue;
             seen.add(key);
-            regions.push({x,y,w,h});
+            regions.push({x,y,w,h,file});
         }
         regionsByPage.set(page.number,{page,regions:regions.sort((a,b)=>a.y-b.y||a.x-b.x)});
     }
     const fullCopyVisuals=[];
-    let detailCount=0;
+    let source='';
+    const addText = text => { source += (source ? '\n' : '') + text; };
     for(const original of pages){
-        const image=images.get(original.number);
-        fullCopyVisuals.push({page:original.number,caption:`Original PDF page ${original.number}`,visualKind:'pdf-page',data:image.data});
         const layout=regionsByPage.get(original.number);
-        if(!layout)continue;
-        for(const region of layout.regions){
-            if(detailCount>=80)break;
-            signal?.throwIfAborted();
-            const data=await cropRegion(image,layout.page,region);
-            if(!data)continue;
-            fullCopyVisuals.push({page:original.number,caption:`Image detail from PDF page ${original.number}`,visualKind:'pdf-detail',data});
-            detailCount++;
+        const events=original.lines.map(line=>({y:line.yMin,x:line.xMin,text:line.text}));
+        for(const region of layout?.regions || []){
+            events.push({y:region.y/layout.page.height*original.height,x:region.x/layout.page.width*original.width,region});
+        }
+        for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
+            if(event.text!==undefined){
+                addText(event.text);
+                continue;
+            }
+            const {region}=event;
+            let data;
+            if(region.file){
+                data=await sharp(await fs.readFile(path.join(dir,region.file)),{limitInputPixels:32e6})
+                    .resize({width:2200,height:2200,fit:'inside',withoutEnlargement:true}).png().toBuffer();
+            }else{
+                // Geometry supplied by the local verification fixture.
+                data=await cropRegion(images.get(original.number),layout.page,region);
+            }
+            if(fullCopyVisuals.length>=200)throw Error('DOCUMENT_IMAGE_LIMIT');
+            if(data)fullCopyVisuals.push({page:original.number,caption:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
+                visualKind:'inline',sourceOffset:source.length+(source?1:0),data});
         }
     }
-    return {figures,fullCopyVisuals};
+    return {figures,fullCopyVisuals,source};
 }
 
 export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml}={}) {
@@ -144,10 +156,8 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             images.set(page.number,{data,width:info.width,height:info.height});
         }
         if(capturePdfVisuals){
-            const extractedSource=pages.filter(page=>page.lines.length)
-                .map(page=>`\n## Source page ${page.number}\n`+page.lines.map(line=>line.text).join('\n')).join('\n');
-            return {title:meta.title,extractedSource:extractedSource||`# ${name.replace(/\.pdf$/i,'')}`,
-                ...await collectPdfVisuals(pdf,dir,pages,images,visuals,signal,imageLayoutXml)};
+            const result=await collectPdfVisuals(pdf,dir,pages,images,visuals,signal,imageLayoutXml);
+            return {title:meta.title,extractedSource:result.source||`# ${name.replace(/\.pdf$/i,'')}`,pageCount:pages.length,...result};
         }
         const pptx=new pptxgen();pptx.layout='LAYOUT_WIDE';pptx.author=meta.authors;pptx.title=meta.title;pptx.subject='Research journal presentation';pptx.lang='en-US';
         const notes=[],mapping=[];

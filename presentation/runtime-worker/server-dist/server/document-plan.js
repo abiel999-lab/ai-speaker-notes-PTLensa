@@ -43,6 +43,7 @@ export async function documentDraftContext(root,owner,body,copyRole){
   let text=r.text,title=r.name;
   if(r.documentId){
    const {dir,manifest}=await documentManifest(root,owner,r.documentId);
+   if(copyRole==='full-copy'&&/\.(pdf|docx)$/i.test(r.name)&&!manifest.orderedVisuals)throw Error('DOCUMENT_REUPLOAD_REQUIRED');
    text=await fs.readFile(path.join(dir,'source.txt'),'utf8');title=manifest.title;
    if(copyRole&&/\.docx$/i.test(r.name))try{text=await fs.readFile(path.join(dir,'structured-word.md'),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
    if(r.role==='content'||r.role==='full-copy')for(const a of visualsForResource(manifest,r.role)){
@@ -130,7 +131,14 @@ export async function saveFullCopyPlan(root, owner, workspace, settings, recover
  const source = sources.map(document => document.text).join('\n\n---\n\n');
  if (!source.trim()) throw Error('CONTENT_SOURCE_REQUIRED');
  const doc = parseFullCopySource(source);
- const assets = context.visuals;
+ let offset=0;
+ const starts=new Map();
+ for(const document of sources){
+  starts.set(document.sourceId,offset);
+  offset+=document.text.length+'\n\n---\n\n'.length;
+ }
+ const assets = context.visuals.map(asset=>asset.visualKind==='inline'&&Number.isFinite(asset.sourceOffset)
+  ?{...asset,sourceOffset:starts.get(asset.sourceId)+asset.sourceOffset}:asset);
  const scene = buildFullCopyScene(doc, assets, settings);
  const plan = {version:2, sourceHash:doc.sha256, resourcesKey:resourcesKey(workspace), assets, recoveryCode};
  const file = fileFor(root, owner, source, workspace);

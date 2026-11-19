@@ -113,8 +113,12 @@ function paragraphText(tx) {
         .join("\n");
 }
 async function verifyPdfPicture(zip, parser, tree, filename, expected) {
-    const picture = arr(tree["p:pic"]).find(item =>
-        item["p:nvPicPr"]?.["p:cNvPr"]?.["@_descr"] === expected.altText);
+    const picture = arr(tree["p:pic"]).find(item => {
+        const metadata=item["p:nvPicPr"]?.["p:cNvPr"];
+        return expected.inlineSourceImage
+            ? metadata?.["@_name"] === 'ordered-source-image-'+expected.asset
+            : metadata?.["@_descr"] === expected.altText;
+    });
     const fill = picture?.["p:blipFill"];
     const relId = fill?.["a:blip"]?.["@_r:embed"];
     if (!relId || (fill["a:srcRect"] && Object.values(fill["a:srcRect"]).some(value => Number(value) !== 0)))
@@ -144,8 +148,8 @@ export async function verifyPptx(doc, bytes, branding, pdfPictures = new Map()) 
     for (const [slideIndex, file] of files.entries()) {
         const xml = await zip.file(file).async("string");
         const tree = parser.parse(xml)["p:sld"]["p:cSld"]["p:spTree"];
-        const expectedPdfPicture = pdfPictures.get(slideIndex);
-        if (expectedPdfPicture) await verifyPdfPicture(zip, parser, tree, file, expectedPdfPicture);
+        for(const expectedPicture of pdfPictures.get(slideIndex)||[])
+            await verifyPdfPicture(zip, parser, tree, file, expectedPicture);
         // Exporter emits source-bearing objects in source order; collect using shape IDs.
         const onSlide = verifyEquations(arr(tree["p:sp"]),doc,paragraphText);
         for(const s of arr(tree['p:sp'])){const name=s['p:nvSpPr']?.['p:cNvPr']?.['@_name'];if(name==='np-visual-cover-title'&&(file!=='ppt/slides/slide1.xml'||paragraphText(s['p:txBody'])!==visualCoverTitle(doc)))throw Error('COVER_METADATA_MISMATCH');if(/^np-section-title-b\d+$/.test(name||'')&&paragraphText(s['p:txBody'])!==technicalSectionTitle(doc,name.replace('np-section-title-','')))throw Error('SOURCE_FIDELITY_FAILED');if(name==='np-visual-cover-subtitle'&&(file!=='ppt/slides/slide1.xml'||paragraphText(s['p:txBody'])!==visualCoverSubtitle(doc)))throw Error('COVER_METADATA_MISMATCH');}
