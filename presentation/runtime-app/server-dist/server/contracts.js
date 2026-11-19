@@ -3,6 +3,8 @@ import { z } from "zod";
 export const settingsSchema = z
     .object({
     documentMode:z.boolean().optional(),
+    fontFamily:z.enum(['Arial','Calibri','Times New Roman','Georgia','Verdana']).optional(),
+    includeSpeakerNotes:z.boolean().optional(),
     creationMode: z.enum(["template", "creative"]).optional(),
     creativeAssets: z.array(z.object({ id: z.string().uuid(), description: z.string().trim().min(1).max(160) }).strict()).max(12).refine(v => new Set(v.map(a => a.id)).size === v.length).optional(),
     coverLogos: z.array(z.string().uuid()).max(4).refine(v => new Set(v).size === v.length).optional(),

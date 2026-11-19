@@ -1,3 +1,4 @@
+import { recordPresentationFailure } from './job-failure-events.js';
 import { createHash, randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
@@ -399,6 +400,10 @@ export class Repository {
                 status: "failed",
                 error: "PROCESS_INTERRUPTED",
                 stage: "Process interrupted. You can retry safely.",
+            });
+            await recordPresentationFailure(this.root ?? process.env.DATA_DIR ?? "data", {
+                id: j.id, owner: j.ownerId, project: j.projectId,
+                status: "failed", code: "PROCESS_INTERRUPTED", stage: j.stage,
             });
         }
     }

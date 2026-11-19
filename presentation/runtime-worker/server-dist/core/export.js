@@ -1,5 +1,5 @@
 import {withoutSpeakerNotes} from './document-notes.js';
-import{fontForText}from'./script-fonts.js';
+import{fontForText as automaticFont}from'./script-fonts.js';
 import{fitEquationScene}from'./equation-layout.js';
 import sharp from'sharp';
 import{reserveStructuredChart}from'./chart-tables.js';
@@ -24,7 +24,13 @@ import { composeCreativeCover, marginGraphics } from "./editorial-stage.js";
 import { composeSourceInfographic } from "./source-infographics.js";
 import { auditDesignScene } from "./design-audit.js";
 import { searchSafeDesignCandidates } from "./design-candidate-search.js";
-export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", branding) {
+function preferredFont(text,doc,family) { const font=automaticFont(text,doc.raw,doc.presentationLanguage); return font==='Arial'&&family ? family : font; }
+export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", branding, fontFamily) {
+    const selectedFont = ["Arial", "Calibri", "Times New Roman", "Georgia", "Verdana"].includes(fontFamily) ? fontFamily : null;
+    const fontForText = (...args) => {
+        const font = automaticFont(...args);
+        return font === "Arial" && selectedFont ? selectedFont : font;
+    };
     const features = sceneFeatures(scene);
     const check = validateScene(doc, scene);
     if (!check.passed)
@@ -65,7 +71,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     let exportScene = { ...designScene, slides: preparedSlides.map(s => s.slide) };
     exportScene = reserveCoverBranding(doc, exportScene, branding);
     preparedSlides[0] = { slide: exportScene.slides[0], chart: branding ? null : preparedSlides[0].chart };
-    const mathFit=fitEquationScene(doc,exportScene);exportScene=mathFit.scene;
+    const mathFit=scene.fullCopy?{scene:exportScene,changed:[]}:fitEquationScene(doc,exportScene);exportScene=mathFit.scene;
     preparedSlides=preparedSlides.map((p,i)=>({...p,slide:exportScene.slides[i],...(mathFit.changed.includes(i)?{chart:null,graph:null}:{})}));
     // Re-verify the complete assembled deck: no optimization may change source.
     if (!validateScene(doc, exportScene).passed)
@@ -84,7 +90,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
         const s = prepared.slide;
         const slide = pptx.addSlide();
         slide.background = { color: s.background.slice(1) };
-        if(!scene.documentMode)slide.addNotes(speakerNotes[slideIndex]);
+        if(!scene.documentMode||scene.includeSpeakerNotes)slide.addNotes(speakerNotes[slideIndex]);
         if(s.sectionTitle&&s.objects[0]?.sourceId)slide.addText(technicalSectionTitle(doc,s.objects[0].sourceId),{x:.78,y:.13,w:11.78,h:.32,fontFace:fontForText(technicalSectionTitle(doc,s.objects[0].sourceId),doc.raw,doc.presentationLanguage),fontSize:14,color:t.muted.slice(1),margin:0,objectName:'np-section-title-'+s.objects[0].sourceId});
         if(s.id==='np-visual-cover'){
             slide.addText(visualCoverTitle(doc),{x:.86,y:1.65,w:7.25,h:2.4,fontFace:fontForText(visualCoverTitle(doc),doc.raw,doc.presentationLanguage),fontSize:46,bold:true,color:'FFFFFF',margin:0,objectName:'np-visual-cover-title'});
@@ -126,7 +132,8 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
                 const imageFile=file||path.resolve("public/assets/city.jpg");
                 const meta=await sharp(imageFile).metadata();if(!meta.width||!meta.height)throw Error("IMAGE_NOT_FOUND");const ratio=meta.width/meta.height;let sizing;
                 if(o.backgroundImage&&o.fit!=="contain")sizing={x:o.x,y:o.y,w:ratio*o.h,h:o.h,sizing:{type:"cover",w:o.w,h:o.h}};else{const w=Math.min(o.w,o.h*ratio),h=w/ratio;sizing={x:o.x+(o.w-w)/2,y:o.y+(o.h-h)/2,w,h};}
-                slide.addImage({ path:imageFile,...sizing, objectName: motion === "keynote" && !o.backgroundImage ? `motion-inline-image-${object}` : name });
+                slide.addImage({ path:imageFile,...sizing, altText: o.altText, objectName: o.inlineSourceImage
+                    ? 'ordered-source-image-'+o.asset : motion === "keynote" && !o.backgroundImage ? `motion-inline-image-${object}` : name });
                 if (o.imageTreatment && o.imageTreatment !== "none")
                     slide.addShape(pptx.ShapeType.rect, {
                         x: o.backgroundImage && o.imageTextSide === "right" ? 13.333333 - 8.4 : o.x,
@@ -141,14 +148,14 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
                         objectName: `image-scrim-edge-${o.imageTextSide}-${o.imageTreatment}-${object}`,
                     });
             }
-            if(o.type==="text"&&isEquation(o.text)){drawEquation(slide,pptx,o,name);continue;}
+            if(!scene.fullCopy&&o.type==="text"&&isEquation(o.text)){drawEquation(slide,pptx,o,name);continue;}
             if (o.type === "text")
                 slide.addText(o.text || "", {
                     x: o.x,
                     y: o.y,
                     w: o.w,
                     h: o.h,
-                    fontFace: fontForText(o.text||o.rows?.flat().join(" ")||"",doc.raw,doc.presentationLanguage),
+                    fontFace: preferredFont(o.text||o.rows?.flat().join(" ")||"",doc,selectedFont||o.fontFamily),
                     fontSize: o.fontSize,
                     bold: o.bold,
                     align: o.align || "left",
@@ -156,25 +163,30 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
                     margin: 0,
                     breakLine: false,
                     paraSpaceAfter: 0,
-                    lineSpacing: o.fontSize * 1.28,
+                    lineSpacing: o.lineSpacing ?? o.fontSize * 1.28,
                     valign: "top",
                     objectName: name,
                     lang: "en-US",
                     ...(o.targetSlide ? { hyperlink: { slide: o.targetSlide, tooltip: "Go to slide " + o.targetSlide } } : {}),
                 });
             if (o.type === "table")
-                slide.addTable(o.rows.map((row) => row.map((text) => ({ text, options:{fontFace:fontForText(text,doc.raw,doc.presentationLanguage)} }))), {
+                slide.addTable(o.rows.map((row, index) => row.map((text) => {
+                    const rowIndex=(o.firstRow??0)+index;
+                    const style=scene.fullCopy?{bold:rowIndex===0,color:rowIndex===0?'FFFFFF':'20332B',fill:{color:rowIndex===0?'153D34':rowIndex%2?'FFFDF9':'EBE8DE'}}:{};
+                    return {text, options:{fontFace:preferredFont(text,doc,selectedFont||o.fontFamily),...style}};
+                })), {
                     x: o.x,
                     y: o.y,
                     w: o.w,
                     h: o.h,
-                    fontFace: fontForText(o.text||o.rows?.flat().join(" ")||"",doc.raw,doc.presentationLanguage),
+                    fontFace: preferredFont(o.text||o.rows?.flat().join(" ")||"",doc,selectedFont||o.fontFamily),
                     fontSize: o.fontSize,
                     color: o.color.slice(1),
                     fill: { color: o.fill.slice(1) },
                     border: { type: "solid", pt: 0.5, color: t.bg.slice(1) },
                     margin: 0.1,
                     autoPage: false,
+                    ...(o.columnWidths?{colW:o.columnWidths}:{}),
                     objectName: name,
                 });
         }
@@ -238,15 +250,21 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     if (motionResult)
         bytes = motionResult.bytes;
     bytes = await finalizePptxPackage(bytes);
-    if(scene.documentMode)bytes=await withoutSpeakerNotes(bytes);
+    if(scene.documentMode&&!scene.includeSpeakerNotes)bytes=await withoutSpeakerNotes(bytes);
     await verifyInternalSlideLinks(bytes);
-    const report = await verifyPptx(doc, bytes, branding);
+    const pdfPictures = new Map();
+    for (const [index, slide] of exportScene.slides.entries()) {
+        const pictures = slide.objects.filter(object => object.type === "image" && object.originalPdfHash);
+        if (pictures.length) pdfPictures.set(index, pictures);
+    }
+    const report = await verifyPptx(doc, bytes, branding, pdfPictures);
     report.quality = validateScene(doc, exportScene).quality;
     // The export report now includes source-private, geometry-only design diagnostics.
     // Visual judgment requires the actual rendered deck and remains a manual release gate.
     report.designAudit = auditDesignScene(exportScene, preparedSlides.map(p => p.chart ? 1 : 0));
     report.designSearch = optimization.diagnostic;
     if(scene.documentMode)report.documentCoverage=scene.documentCoverage;
+    if(pdfPictures.size)report.documentCoverage={...report.documentCoverage,verifiedPdfPictures:[...pdfPictures.values()].flat().length};
     if (features.links || features.uploadedImages || features.menuSlide)
         report.interactive = features;
     if (motionStoryboard)

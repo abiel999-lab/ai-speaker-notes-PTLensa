@@ -1,0 +1,11 @@
+[Unit]
+Description=Deliver NotePreso job failure diagnostics
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/notepreso-ops/dispatch-job-alerts.py
+TimeoutStartSec=180
+PrivateTmp=true
+ProtectHome=true
+UMask=0077

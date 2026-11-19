@@ -9,7 +9,7 @@ const secret = () => randomBytes(32).toString("base64url");
 export const SESSION_COOKIE = "vb_oidc_session";
 const FLOW_COOKIE = "vb_oidc_flow";
 export function workspaceReturnPath(value) {
-    return value === "/app/how-to" || value === "/app?new=1" || value === "/app?new=1&author=1" ? value : "/app";
+    return value === "/app/how-to" || value === "/app?tool=journal" || value === "/app?new=1" || value === "/app?new=1&author=1" ? value : "/app";
 }
 export function csrfToken(token) { return digest("csrf:" + token); }
 function equal(a, b) {

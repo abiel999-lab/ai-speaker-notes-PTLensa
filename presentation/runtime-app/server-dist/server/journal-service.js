@@ -10,7 +10,7 @@ const W=13.333333,H=7.5;
 export const MAX_JOURNAL_BYTES=10*1024*1024;
 
 export function decodeJournal(body) {
-    if(!body||Object.keys(body).some(k=>!['name','base64'].includes(k))||typeof body.name!=='string'||body.name.length>120||!/\.pdf$/i.test(body.name)||typeof body.base64!=='string'||body.base64.length>Math.ceil(MAX_JOURNAL_BYTES/3)*4||/[^A-Za-z0-9+/=]/.test(body.base64))throw Error('JOURNAL_INVALID');
+    if(!body||Object.keys(body).some(k=>!['name','base64','fontFamily'].includes(k))||(body.fontFamily!==undefined&&!['Arial','Calibri','Times New Roman'].includes(body.fontFamily))||typeof body.name!=='string'||body.name.length>120||!/\.pdf$/i.test(body.name)||typeof body.base64!=='string'||body.base64.length>Math.ceil(MAX_JOURNAL_BYTES/3)*4||/[^A-Za-z0-9+/=]/.test(body.base64))throw Error('JOURNAL_INVALID');
     const bytes=Buffer.from(body.base64,'base64');
     if(!bytes.length||bytes.length>MAX_JOURNAL_BYTES||bytes.toString('base64')!==body.base64||!bytes.subarray(0,5).equals(Buffer.from('%PDF-')))throw Error('JOURNAL_INVALID');
     return bytes;
@@ -36,17 +36,118 @@ function contain(iw,ih,box) {
     return {x:box.x+(box.w-w)/2,y:box.y+(box.h-h)/2,w,h};
 }
 function addText(slide,text,box,extra={}) {
-    slide.addText(text,{...box,fontFace:'Arial',fontSize:20,color:'193550',margin:0,breakLine:false,vertAlign:'top',...extra});
+    slide.addText(text,{...box,fontFace:slide.journalFont||'Arial',fontSize:20,color:'193550',margin:0,breakLine:false,vertAlign:'top',...extra});
 }
 function newSlide(pptx,title,number) {
-    const slide=pptx.addSlide();slide.background={color:'FFFFFF'};
+    const slide=pptx.addSlide();slide.journalFont=pptx.journalFont;slide.background={color:'FFFFFF'};
     addText(slide,title,{x:.55,y:.3,w:12.1,h:.7},{fontSize:27,bold:true});
     addText(slide,String(number),{x:12.2,y:7.12,w:.5,h:.2},{fontSize:10,color:'62758A'});
     return slide;
 }
 function sourceNote(meta,page) {return `${meta.filename} — PDF page ${page}${meta.doi?' — https://doi.org/'+meta.doi:''}`;}
 
-export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false}={}) {
+async function cropRegion(im, page, region) {
+    const x=Math.max(0,Math.floor(region.x/page.width*im.width));
+    const y=Math.max(0,Math.floor(region.y/page.height*im.height));
+    const width=Math.min(im.width-x,Math.ceil((region.x+region.w)/page.width*im.width)-x);
+    const height=Math.min(im.height-y,Math.ceil((region.y+region.h)/page.height*im.height)-y);
+    if(width<1||height<1)return;
+    return sharp(im.data).extract({left:x,top:y,width,height}).png().toBuffer();
+}
+
+function numericAttributes(tag) {
+    return Object.fromEntries([...tag.matchAll(/\b(number|width|height|left|top)="(-?\d+(?:\.\d+)?)"/g)]
+        .map(([,key,value])=>[key,Number(value)]));
+}
+
+async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, imageLayoutXml) {
+    const figures=[];
+    for (const visual of visuals) {
+        const page=pages[visual.page-1];
+        const data=await cropRegion(images.get(page.number),page,visual.region);
+        if(data)figures.push({page:page.number,caption:visual.caption,data});
+    }
+    let layout=imageLayoutXml;
+    if(layout===undefined){
+        layout='';
+        try {
+            const output=path.join(dir,'embedded-images.xml');
+            await native('pdftohtml',['-xml','-nomerge','-noroundcoord','-zoom','1','-fmt','png',pdf,output],{signal});
+            layout=await fs.readFile(output,'utf8');
+        } catch {
+            signal?.throwIfAborted();
+            throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
+        }
+    }
+    const regionsByPage=new Map();
+    for(const [,tag,body] of layout.matchAll(/<page\s+([^>]+)>([\s\S]*?)<\/page>/g)){
+        const page=numericAttributes(tag);
+        if(!images.has(page.number)||!page.width||!page.height)continue;
+        const seen=new Set();
+        const regions=[];
+        for(const [imageTag] of body.matchAll(/<image\b[^>]+>/g)){
+            const {left:x,top:y,width:w,height:h}=numericAttributes(imageTag);
+            if(!(w>0&&h>0)||!Number.isFinite(x)||!Number.isFinite(y))continue;
+            const file=path.basename(imageTag.match(/\bsrc="([^"]+)"/)?.[1] || '');
+            if(imageLayoutXml===undefined&&!/^embedded-images-[\w.-]+\.(?:png|jpe?g)$/i.test(file))
+                throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
+            const key=[x,y,w,h,file].join(',');
+            if(seen.has(key))continue;
+            seen.add(key);
+            regions.push({x,y,w,h,file});
+        }
+        regionsByPage.set(page.number,{page,regions:regions.sort((a,b)=>a.y-b.y||a.x-b.x)});
+    }
+    const fullCopyVisuals=[];
+    let source='';
+    const addText = text => { source += (source ? '\n' : '') + text; };
+    for(const original of pages){
+        const layout=regionsByPage.get(original.number);
+        const events=original.lines.map(line=>({y:line.yMin,x:line.xMin,text:line.text}));
+        for(const region of layout?.regions || []){
+            events.push({y:region.y/layout.page.height*original.height,x:region.x/layout.page.width*original.width,region});
+        }
+        for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
+            if(event.text!==undefined){
+                addText(event.text);
+                continue;
+            }
+            const {region}=event;
+            let data;
+            if(region.file){
+                data=await sharp(await fs.readFile(path.join(dir,region.file)),{limitInputPixels:32e6})
+                    .resize({width:2200,height:2200,fit:'inside',withoutEnlargement:true}).png().toBuffer();
+            }else{
+                // Geometry supplied by the local verification fixture.
+                data=await cropRegion(images.get(original.number),layout.page,region);
+            }
+            if(fullCopyVisuals.length>=200)throw Error('DOCUMENT_IMAGE_LIMIT');
+            if(data)fullCopyVisuals.push({page:original.number,caption:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
+                visualKind:'inline',sourceOffset:source.length+(source?1:0),data});
+        }
+    }
+    return {figures,fullCopyVisuals,source};
+}
+
+function standardizeJournalSections(sections) {
+    const required = [
+        ['Introduction', /^(Introduction|Background)$/i],
+        ['Methodology', /^(Methods?|Methodology|Materials and Methods|Methods and Materials|Experimental(?: Methods| Procedures| Section)?|Study Design)$/i],
+        ['Conclusion', /^Conclusions?$/i],
+    ];
+    for (const [title, match] of required) {
+        const section = sections.find(value => match.test(value.title));
+        if (section) {
+            if (!(title === 'Introduction' && /^Background$/i.test(section.title))) section.title = title;
+        } else {
+            const before = title === 'Introduction' ? sections.findIndex(value => value.title !== 'Study overview')
+                : title === 'Methodology' ? sections.findIndex(value => /^Results|^Discussion|^Conclusion/i.test(value.title)) : -1;
+            sections.splice(before < 0 ? sections.length : before, 0, {title,pages:[],paragraphs:[],missing:true});
+        }
+    }
+}
+
+export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial'}={}) {
     const temporaryRoot=path.resolve(os.tmpdir());
     const dir=await fs.mkdtemp(path.join(temporaryRoot,'notepreso-journal-'));
     if(path.dirname(path.resolve(dir))!==temporaryRoot)throw Error('JOURNAL_INVALID');
@@ -54,7 +155,8 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
         if(!bytes.length||bytes.length>MAX_JOURNAL_BYTES||!bytes.subarray(0,5).equals(Buffer.from('%PDF-')))throw Error('JOURNAL_INVALID');
         const pdf=path.join(dir,'source.pdf');await fs.writeFile(pdf,bytes,{mode:0o600});
         const xml=layoutXml??(await native('pdftotext',['-bbox-layout','-enc','UTF-8',pdf,'-'],{signal})).toString('utf8');
-        const pages=parseJournalLayout(xml),meta=journalMetadata(pages,name),visuals=inventoryJournal(pages),sections=journalSections(pages);
+        const pages=parseJournalLayout(xml,{allowImageOnly:capturePdfVisuals}),meta=journalMetadata(pages,name),visuals=inventoryJournal(pages),sections=journalSections(pages,{includeFirstPage:standardHeadings});
+        if(standardHeadings)standardizeJournalSections(sections);
         const manifest={version:'journal-v1',sourceHash:digest(bytes),metadata:meta,pages:pages.length,visuals,sections:sections.map(s=>({title:s.title,pages:s.pages})),coverage:{strategy:'all-original-pages',sourcePages:pages.map(p=>p.number)},warnings:[]};
         if(inspectOnly)return {manifest};
         if(!sections.length)sections.push({title:'Document content',pages:pages.map(p=>p.number),paragraphs:pages.flatMap(p=>p.blocks.filter(b=>b.text.length>100).map(b=>({text:b.text,page:p.number})))});
@@ -72,10 +174,14 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             if(!info.width||!info.height)throw Error('JOURNAL_PDF_UNREADABLE');
             images.set(page.number,{data,width:info.width,height:info.height});
         }
-        const pptx=new pptxgen();pptx.layout='LAYOUT_WIDE';pptx.author=meta.authors;pptx.title=meta.title;pptx.subject='Research journal presentation';pptx.lang='en-US';
+        if(capturePdfVisuals){
+            const result=await collectPdfVisuals(pdf,dir,pages,images,visuals,signal,imageLayoutXml);
+            return {title:meta.title,extractedSource:result.source||`# ${name.replace(/\.pdf$/i,'')}`,pageCount:pages.length,...result};
+        }
+        const pptx=new pptxgen();pptx.journalFont=fontFamily;pptx.theme={headFontFace:fontFamily,bodyFontFace:fontFamily};pptx.layout='LAYOUT_WIDE';pptx.author=meta.authors;pptx.title=meta.title;pptx.subject='Research journal presentation';pptx.lang='en-US';
         const notes=[],mapping=[];
         const note=(slide,text)=>{slide.addNotes(text);notes.push(text);};
-        const cover=pptx.addSlide();cover.background={color:'102D49'};
+        const cover=pptx.addSlide();cover.journalFont=fontFamily;cover.background={color:'102D49'};
         addText(cover,meta.kind==='review'?'RESEARCH REVIEW':'RESEARCH PRESENTATION',{x:.7,y:.7,w:11.8,h:.4},{fontSize:14,color:'A7CBE8'});
         addText(cover,meta.title,{x:.7,y:1.65,w:11.8,h:2.6},{fontSize:33,color:'FFFFFF',bold:true});
         addText(cover,meta.authors,{x:.72,y:4.8,w:11.7,h:1.1},{fontSize:17,color:'DDEAF6'});
@@ -100,9 +206,22 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
         };
         const remaining=new Set(visuals.map(v=>v.id));
         for(const section of sections) {
-            const evidence=sentenceEvidence(section);
+            let evidence=sentenceEvidence(section);
+            if (standardHeadings && !evidence.length)
+                evidence=section.paragraphs.slice(0,3).map(p=>({
+                    text:p.text.length<=240?p.text:p.text.slice(0,237).replace(/\s+\S*$/,'')+'…',
+                    context:p.text,page:p.page,
+                }));
             const selected=evidence.map((e,i)=>({...e,score:(/\d|significant|however|limitation|aim|objective|collected|found|result|conclu/i.test(e.text)?2:0)-i*.005})).sort((a,b)=>b.score-a.score).slice(0,6);
-            if(!selected.length)continue;
+            if (!selected.length) {
+                if (section.missing) {
+                    const slide = newSlide(pptx, section.title, pptx._slides.length + 1);
+                    const message = "No matching section was identified in this PDF. Check the original journal in the appendix.";
+                    addText(slide, message, {x:.8,y:1.7,w:11.6,h:1.5});
+                    note(slide, message + "\n\n" + sourceNote(meta,1));
+                }
+                continue;
+            }
             for(let i=0;i<selected.length;i+=3) {
                 const group=selected.slice(i,i+3),slide=newSlide(pptx,section.title+(i?' (continued)':''),pptx._slides.length+1);
                 for(const [j,e]of group.entries())addText(slide,e.text,{x:.78,y:1.45+j*1.52,w:11.7,h:1.32},{fontSize:21,bullet:{indent:15},paraSpaceAfterPt:12});

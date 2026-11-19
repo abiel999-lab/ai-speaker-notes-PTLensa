@@ -1,23 +1,25 @@
 // Independent workflow: never replaces or saves an existing presentation.
+if (location.pathname === '/app' && new URLSearchParams(location.search).get('tool') === 'journal') {
 const session = await fetch('/api/session',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).catch(()=>null);
 if(session?.user){
  const capability=await fetch('/api/journal/capabilities',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).catch(()=>null);
  if(capability?.enabled)mount();
 }
+}
 function mount(){
  const style=document.createElement('link');style.rel='stylesheet';style.href='/assets/journal-to-ppt-v1.css';document.head.append(style);
- const launcher=document.createElement('button');launcher.type='button';launcher.className='np-journal-launch';launcher.textContent='Journal to PPT';document.body.append(launcher);
  const dialog=document.createElement('dialog');dialog.className='np-journal-dialog';
  // Static markup only. All strings from the PDF enter through textContent.
- dialog.innerHTML='<form method="dialog"><button class="np-journal-close" aria-label="Close">×</button></form><h2>Journal to PPT</h2><p>Upload a research journal PDF to create a presentation with a cover, original visuals, source-based points and speaker notes. Complete source pages are included.</p><label>Research journal PDF<input type="file" accept="application/pdf,.pdf"></label><p class="np-journal-summary" role="status" aria-live="polite"></p><button class="np-journal-export" type="button" disabled>Create PPTX</button>';
+ dialog.innerHTML='<form method="dialog"><button class="np-journal-close" aria-label="Close">×</button></form><h2>Journal to PPT</h2><p>Upload one research journal PDF (up to 10 MB and 40 pages) to create one PowerPoint with Introduction or Background, Methodology, and Conclusion. The original pages are included.</p><label>Research journal PDF<input type="file" accept="application/pdf,.pdf"></label><label>PowerPoint font<select id="np-journal-font"><option>Arial</option><option>Calibri</option><option>Times New Roman</option></select></label><p class="np-journal-summary" role="status" aria-live="polite"></p><button class="np-journal-export" type="button" disabled>Create PPTX</button>';
  document.body.append(dialog);
  const input=dialog.querySelector('input'),status=dialog.querySelector('[role=status]'),button=dialog.querySelector('.np-journal-export');
  let payload=null,controller=null;
- launcher.onclick=()=>dialog.showModal();
- dialog.addEventListener('close',()=>{controller?.abort();controller=null;input.value='';payload=null;button.disabled=true;input.disabled=false;status.textContent='';});
+ const font=dialog.querySelector('#np-journal-font');
+ dialog.showModal();
+ dialog.addEventListener('close',()=>{controller?.abort();controller=null;input.value='';payload=null;button.disabled=true;input.disabled=false;status.textContent='';dialog.remove();const url=new URL(location.href);url.searchParams.delete('tool');history.replaceState(history.state,'',url);});
  const errors={JOURNAL_OCR_REQUIRED:'This PDF needs OCR before it can be converted.',JOURNAL_PAGE_LIMIT:'Use a PDF with at most 40 pages.',JOURNAL_BUSY:'Another journal is being processed. Please try again shortly.',JOURNAL_STRUCTURE_REVIEW_REQUIRED:'The journal sections could not be identified. Please use a journal with readable text.',AUTH_REQUIRED:'Please sign in again.',CSRF_REJECTED:'Please refresh the page and try again.'};
  async function request(action,signal){
-  const response=await fetch('/api/journal/'+action,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken||''},body:JSON.stringify(payload),signal});
+  const response=await fetch('/api/journal/'+action,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken||''},body:JSON.stringify({...payload,fontFamily:font.value}),signal});
   if(!response.ok){const e=await response.json().catch(()=>({}));throw Error(errors[e.error]||'The journal could not be processed. Please try again.');}
   return response;
  }

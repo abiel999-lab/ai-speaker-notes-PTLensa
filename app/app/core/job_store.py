@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.job_failure_events import record_failure
+
 import json
 import threading
 from datetime import UTC, datetime, timedelta
@@ -82,6 +84,8 @@ class FileJobStore:
             job.error = "Job was interrupted by a server restart before completion."
             job.message = "Interrupted job is safe to retry; existing AI checkpoints are preserved."
             self.save(job)
+            record_failure(self.base_dir, "NotePreso", job.id, job.owner, "PROCESS_INTERRUPTED",
+                           status="failed", stage="Restart recovery", attempt=job.attempt_count)
             recovered += 1
         return recovered
 

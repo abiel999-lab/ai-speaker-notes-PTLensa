@@ -22,13 +22,13 @@ function positionedText(words,font) {
     }
     return text;
 }
-function bodyFontFor(pages) {
-    const values=pages.slice(1,7).flatMap(p=>p.lines.filter(l=>l.text.length>40&&l.font>=10&&l.font<18).map(l=>Math.round(l.font*4)/4));
+function bodyFontFor(pages, includeFirstPage = false) {
+    const values=pages.slice(includeFirstPage?0:1,7).flatMap(p=>p.lines.filter(l=>l.text.length>40&&l.font>=(includeFirstPage?7:10)&&l.font<18).map(l=>Math.round(l.font*4)/4));
     const counts=new Map();for(const v of values)counts.set(v,(counts.get(v)||0)+1);
     return [...counts].sort((a,b)=>b[1]-a[1])[0]?.[0]||13;
 }
 
-export function parseJournalLayout(xml) {
+export function parseJournalLayout(xml, { allowImageOnly = false } = {}) {
     const pages=[];
     for (const p of xml.matchAll(/<page\s+([^>]+)>([\s\S]*?)<\/page>/g)) {
         const size=attrs(p[1]);
@@ -77,7 +77,7 @@ export function parseJournalLayout(xml) {
     }
     if(!pages.length || pages.length>40)throw Error('JOURNAL_PAGE_LIMIT');
     if(pages.reduce((n,p)=>n+p.lines.reduce((s,l)=>s+l.text.length,0),0)>240000)throw Error('JOURNAL_TEXT_LIMIT');
-    if(pages.reduce((n,p)=>n+p.lines.length,0)<10)throw Error('JOURNAL_OCR_REQUIRED');
+    if(!allowImageOnly&&pages.reduce((n,p)=>n+p.lines.length,0)<10)throw Error('JOURNAL_OCR_REQUIRED');
     return pages;
 }
 
@@ -152,18 +152,18 @@ function visualRegion(page,caption,kind,bodyFont) {
 }
 
 const sectionLabel = s => s.replace(/^\d+(?:\.\d+)*\.?\s*/,'').trim();
-export function journalSections(pages) {
+export function journalSections(pages,{includeFirstPage=false}={}) {
     const sections=[]; let current=null;
-    const font=bodyFontFor(pages);
+    const font=bodyFontFor(pages,includeFirstPage);
     const visuals=inventoryJournal(pages);
     for(const page of pages) {
-        if(page.number===1)continue;
+        if(page.number===1&&!includeFirstPage)continue;
         let pending=[],previous=null;
-        const flush=()=>{if(current&&pending.length){const text=textOf(pending).replace(/-\s+(?=[a-z])/g,'-');if(text.length>100){current.paragraphs.push({text,page:page.number});if(!current.pages.includes(page.number))current.pages.push(page.number);}}pending=[];};
+        const flush=()=>{if(current&&pending.length){const text=textOf(pending).replace(/-\s+(?=[a-z])/g,'-');if(text.length>(includeFirstPage?40:100)){current.paragraphs.push({text,page:page.number});if(!current.pages.includes(page.number))current.pages.push(page.number);}}pending=[];};
         const lines=[...page.lines].sort((a,b)=>((a.xMin>page.width*.49?1:0)-(b.xMin>page.width*.49?1:0))||a.yMin-b.yMin||a.xMin-b.xMin);
         for(const line of lines) {
             const label=sectionLabel(line.text);
-            if(line.text.length<95&&/^(Introduction|Background|Methods?|Materials and Methods|Results(?: and Discussion)?|Discussion|Conclusions?|Limitations?|Future (?:Research|Directions))$/i.test(label)) {
+            if(line.text.length<95&&/^(Introduction|Background|Methods?|Methodology|Materials and Methods|Methods and Materials|Experimental(?: Methods| Procedures| Section)?|Study Design|Results(?: and Discussion)?|Discussion|Conclusions?|Limitations?|Future (?:Research|Directions))$/i.test(label)) {
                 flush();
                 current={title:label,pages:[],paragraphs:[]};sections.push(current);continue;
             }

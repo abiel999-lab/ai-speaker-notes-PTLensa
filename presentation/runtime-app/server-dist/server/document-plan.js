@@ -2,9 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {documentManifest} from './document-workflow.js';
+import {documentManifest,visualsForResource} from './document-workflow.js';
 import {parseSource,hash} from '../core/source.js';
 import {wrapText,textHeight} from '../core/layout.js';
+import {buildFullCopyScene,parseFullCopySource} from '../core/full-copy.js';
 import {buildDocumentScene} from '../core/document-scene.js';
 
 const ownerKey=id=>hash(id);
@@ -35,14 +36,17 @@ export function documentPlanFormatFor(context){
  return format;
 }
 
-export async function documentDraftContext(root,owner,body){
+export async function documentDraftContext(root,owner,body,copyRole){
  const documents=[],visuals=[];
  for(const r of body.workspace.resources){
+  if(copyRole&&r.role!==copyRole)continue;
   let text=r.text,title=r.name;
   if(r.documentId){
    const {dir,manifest}=await documentManifest(root,owner,r.documentId);
+   if(copyRole==='full-copy'&&/\.(pdf|docx)$/i.test(r.name)&&!manifest.orderedVisuals)throw Error('DOCUMENT_REUPLOAD_REQUIRED');
    text=await fs.readFile(path.join(dir,'source.txt'),'utf8');title=manifest.title;
-   if(r.role==='content')for(const a of manifest.visuals){
+   if(copyRole&&/\.docx$/i.test(r.name))try{text=await fs.readFile(path.join(dir,'structured-word.md'),'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
+   if(r.role==='content'||r.role==='full-copy')for(const a of visualsForResource(manifest,r.role)){
     const png=await fs.readFile(path.join(dir,a.assetId+'.png'));
     if(png.length<24||png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('DOCUMENT_INVALID');
     visuals.push({...a,width:png.readUInt32BE(16),height:png.readUInt32BE(20),sourceId:r.id,documentId:r.documentId,sourceName:r.name});
@@ -52,6 +56,7 @@ export async function documentDraftContext(root,owner,body){
  }
  // Every original gets a full evidence panel. A requested count is a target,
  // never permission to discard or shrink evidence into a thumbnail gallery.
+ if(copyRole)return {documents,visuals};
  const range=body.workspace.brief.match(/\b(\d{1,2})\s*[–—-]\s*(\d{1,2})\s+slides\b/i);
  const single=body.workspace.brief.match(/\b(?:approximately|about|around|exactly|generate|create)\s+(\d{1,2})\s+slides\b/i);
  const requested=range?Number(range[2]):single?Number(single[1]):body.sections+1;
@@ -109,10 +114,50 @@ export async function saveDocumentPlan(root,owner,workspace,context,output){
  return {source,slideCount:plan.slides.length,visualCount:seen.size};
 }
 
-export async function loadDocumentPlan(project,root){
+
+export const fullCopySettingsSchema = z.object({
+ fontFamily:z.enum(['Arial','Calibri','Times New Roman','Georgia','Verdana']).optional(),
+ fontScale:z.number().min(0.85).max(1.15).optional(),
+ density:z.enum(['comfortable','compact']).optional(),
+ includeSpeakerNotes:z.boolean().optional(),
+}).strict();
+
+export const isFullCopy = workspace => workspace?.kind === 'document' && workspace.resources.some(resource => resource.role === 'full-copy');
+
+export async function saveFullCopyPlan(root, owner, workspace, settings, recoveryCode) {
+ if (!recoveryCode&&workspace.resources.some(resource => resource.role === 'content')) throw Error('DOCUMENT_MIXED_COPY_MODE');
+ const context = await documentDraftContext(root, owner, {workspace, sections:3}, recoveryCode?'content':'full-copy');
+ const sources = context.documents;
+ const source = sources.map(document => document.text).join('\n\n---\n\n');
+ if (!source.trim()) throw Error('CONTENT_SOURCE_REQUIRED');
+ const doc = parseFullCopySource(source);
+ let offset=0;
+ const starts=new Map();
+ for(const document of sources){
+  starts.set(document.sourceId,offset);
+  offset+=document.text.length+'\n\n---\n\n'.length;
+ }
+ const assets = context.visuals.map(asset=>asset.visualKind==='inline'&&Number.isFinite(asset.sourceOffset)
+  ?{...asset,sourceOffset:starts.get(asset.sourceId)+asset.sourceOffset}:asset);
+ const scene = buildFullCopyScene(doc, assets, settings);
+ const plan = {version:2, sourceHash:doc.sha256, resourcesKey:resourcesKey(workspace), assets, recoveryCode};
+ const file = fileFor(root, owner, source, workspace);
+ await fs.mkdir(path.dirname(file), {recursive:true,mode:0o700});
+ const temporary = file + '.' + randomUUID() + '.tmp';
+ await fs.writeFile(temporary, JSON.stringify(plan), {mode:0o600});
+ await fs.rename(temporary,file);
+ return {source,slideCount:scene.slides.length,visualCount:scene.documentCoverage.included,...(recoveryCode?{recovery:true}:{})};
+}
+
+export async function loadDocumentPlan(project,root,settings={}){
  if(project.workspace?.kind!=='document')return undefined;
  let plan;try{plan=JSON.parse(await fs.readFile(fileFor(root,project.ownerId,project.source,project.workspace),'utf8'));}catch{throw Error('DOCUMENT_PLAN_REQUIRED');}
- if(plan.version!==1||plan.sourceHash!==hash(project.source)||plan.resourcesKey!==resourcesKey(project.workspace))throw Error('DOCUMENT_PLAN_REQUIRED');
- buildDocumentScene(parseSource(project.source,'markdown'),plan);
+ if(plan.sourceHash!==hash(project.source)||plan.resourcesKey!==resourcesKey(project.workspace))throw Error('DOCUMENT_PLAN_REQUIRED');
+ if(plan.version===2&&(isFullCopy(project.workspace)||plan.recoveryCode)){
+  const scene=buildFullCopyScene(parseFullCopySource(project.source),plan.assets,settings);
+  return {...plan,slideCount:scene.slides.length};
+ }
+ if(plan.version!==1||isFullCopy(project.workspace))throw Error('DOCUMENT_PLAN_REQUIRED');
+ buildDocumentScene(parseSource(project.source,'markdown'),plan,settings);
  return plan;
 }
