@@ -47,7 +47,7 @@
   };
   const controlsStyle = document.createElement('link');
   controlsStyle.rel = 'stylesheet';
-  controlsStyle.href = (isPresentation ? '/assets/' : '/static/') + 'workspace-accessible-controls.css?v=1';
+  controlsStyle.href = (isPresentation ? '/assets/' : '/static/') + 'workspace-accessible-controls.css?v=2';
   document.head.append(controlsStyle);
   shadow.innerHTML = `<link rel="stylesheet" href="${isPresentation?'/assets':'/static'}/site-header.css?v=phase02r-2">
     <div class="bar"><a class="brand" href="${home[1]}" aria-label="NotePreso home"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+CjxyZWN0IHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjciIGZpbGw9IiNGN0Y5RkMiLz4KPHBhdGggZD0iTTE2IDI1SDVhMiAyIDAgMCAxLTItMlY3YTIgMiAwIDAgMSAyLTJoMjNhMiAyIDAgMCAxIDIgMnY5IgogZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTcyQjREIiBzdHJva2Utd2lkdGg9IjIuNSIvPgo8cGF0aCBkPSJNMTAgMTB2NWg1YTUgNSAwIDEgMS01LTVaIiBmaWxsPSIjMTcyQjREIi8+CjxwYXRoIGQ9Ik0xOCAxMGg4TTE4IDE0aDYiIHN0cm9rZT0iIzE3MkI0RCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHJlY3QgeD0iMTYiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjMDg3RjhDIi8+CjxwYXRoIGQ9Ik0yMCAyM2gxME0yMCAyN2g3IiBzdHJva2U9IiNGN0Y5RkMiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg==" alt="" width="36" height="36"><span><strong>NotePreso</strong><small>Your expertise. Clearly spoken.</small></span></a>

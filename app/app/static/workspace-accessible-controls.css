@@ -1,12 +1,12 @@
 
-#workspace-main :is(.disclosure-action,[data-disclosure-label],.step-badge,.step-badge *, .settings-disclosure-head strong),#root .np-workspace :is(.np-attach strong,.np-advanced>summary,.np-paste-content>summary,.np-resource>details>summary){
+#workspace-main#workspace-main :is(.disclosure-action,[data-disclosure-label],.step-badge,.step-badge *, .settings-disclosure-head strong),#root .np-workspace :is(.np-attach strong,.np-advanced>summary,.np-paste-content>summary,.np-resource>details>summary){
  font-size:18px!important;font-weight:700!important;line-height:1.4!important;color:#173657!important
 }
-#workspace-main :is(.start-settings,.workspace-account-details)>summary,#root .np-workspace :is(.np-advanced,.np-paste-content,.np-resource>details)>summary{
+#workspace-main#workspace-main :is(.start-settings,.workspace-account-details)>summary,#root .np-workspace :is(.np-advanced,.np-paste-content,.np-resource>details)>summary{
  min-height:52px!important;padding-block:12px!important;box-sizing:border-box
 }
-#workspace-main .disclosure-action{gap:8px!important}
-#workspace-main .disclosure-action :is(svg,[aria-hidden]){width:22px!important;height:22px!important;font-size:20px!important}
-#workspace-main .step-badge{padding:8px 14px!important}
-#workspace-main :is(.start-settings,.workspace-account-details)>summary:focus-visible,#root .np-workspace summary:focus-visible{outline:3px solid #087c8d;outline-offset:3px}
-@media(max-width:480px){#workspace-main .disclosure-action{white-space:normal!important;text-align:right}#workspace-main .settings-disclosure-head{gap:12px!important}}
+#workspace-main#workspace-main .disclosure-action{gap:8px!important}
+#workspace-main#workspace-main .disclosure-action :is(svg,[aria-hidden]){width:22px!important;height:22px!important;font-size:20px!important}
+#workspace-main#workspace-main .step-badge{padding:8px 14px!important}
+#workspace-main#workspace-main :is(.start-settings,.workspace-account-details)>summary:focus-visible,#root .np-workspace summary:focus-visible{outline:3px solid #087c8d;outline-offset:3px}
+@media(max-width:480px){#workspace-main#workspace-main .disclosure-action{white-space:normal!important;text-align:right}#workspace-main#workspace-main .settings-disclosure-head{gap:12px!important}}
