@@ -3,13 +3,13 @@ from pathlib import Path
 from uuid import UUID,uuid4
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager,contextmanager
-import asyncio,base64,hashlib,hmac,json,os,re,secrets,sqlite3,threading,time
+import asyncio,base64,hashlib,hmac,json,os,re,secrets,sqlite3,subprocess,threading,time
 import httpx
 from fastapi import FastAPI,Request,HTTPException
 from fastapi.responses import HTMLResponse,JSONResponse,RedirectResponse,FileResponse
 from fastapi.staticfiles import StaticFiles
 from session_auth import SessionManager
-from translator import translate_file,OpenAITranslator,TranslationError,MAX_UPLOAD,package,xml,P
+from translator import translate_file,OpenAITranslator,TranslationError,MAX_UPLOAD,package,xml,P,normalize_ooxml_variant,recover_translation
 from normalize_legacy import normalize_legacy
 
 ROOT=Path(os.getenv('TRANSLATION_STORAGE','/data'));ROOT.mkdir(parents=True,exist_ok=True)
@@ -76,6 +76,12 @@ def worker(job):
      d.update(provider_retries=retries+1,status='reconciling',next_retry_at=int(time.time())+[30,120,300][retries],message='The translation provider is temporarily unavailable. Retrying automatically; saved progress and the existing credit reservation are preserved.')
      save(p,d);return
     d['error_code']='TRANSLATION_VALIDATION_FAILED' if isinstance(error,TranslationError) else 'PROVIDER_UNAVAILABLE' if transient else 'PROCESSING_FAILED'
+    print(json.dumps({'event':'translation_failure','code':d['error_code'],'jobId':job}),flush=True)
+    try:
+     recovery=recover_translation(p/'input.pptx',p/'translation-recovery.pptx',p/'checkpoint.json',d['source'],d['target'],CONFIG['model'])
+     d['recovery']={key:recovery[key] for key in ('status','translated_segments','untranslated_segments')}
+    except Exception:
+     print(json.dumps({'event':'translation_recovery_failed','code':'RECOVERY_COPY_FAILED','jobId':job}),flush=True)
     diagnostic={'type':type(error).__name__,'status':getattr(error,'status_code',None),'reason':str(error)[:250] if isinstance(error,TranslationError) else 'Provider or processing failure; content omitted'}
     diagnostic_path=p/'error.private.json';diagnostic_path.write_text(json.dumps(diagnostic));diagnostic_path.chmod(0o600)
     d['phase']='refunding';save(p,d)
@@ -85,7 +91,9 @@ def worker(job):
    d.update(phase='done',status='completed',message='Translation ready. Review layout in PowerPoint before use.',charged_credits=d['slides']);save(p,d)
   elif d['phase']=='refunding':
    receipt=billing('refund',d['owner'],operationId=d['operation']);assert receipt['state']=='refunded'
-   d.update(phase='refunded',status='failed',message='Translation stopped. Reserved credits were returned where still valid; completed segments are saved for retry.');save(p,d)
+   recovered=bool(d.get('recovery'))
+   message='A recovery PowerPoint is ready. Unfinished text stays in its original language. Credits were returned where still valid; retry the saved job to continue.' if recovered else 'Translation stopped. Reserved credits were returned where still valid; completed segments are saved for retry.'
+   d.update(phase='refunded',status='recovered' if recovered else 'failed',message=message);save(p,d)
  except BillingUnavailable:
   d.update(status='reconciling',message='Reconnecting to NotePreso billing. Your job is saved; no new charge is created.');save(p,d)
  except BillingRejected as e:
@@ -215,7 +223,7 @@ async def create(request:Request,filename:str,job_id:str,source:str='auto',targe
   if (source,target,fit)!=(existing['source'],existing['target'],existing['fit']):raise HTTPException(409,'Job settings differ; create a new job')
   return {'id':job_id}
  suffix=Path(filename).suffix.lower()
- if suffix not in {'.ppt','.pptx'} or (suffix=='.ppt' and not allow_legacy):raise HTTPException(400,'Choose PPTX or allow legacy conversion')
+ if suffix not in {'.ppt','.pptx','.ppsx','.potx'} or (suffix=='.ppt' and not allow_legacy):raise HTTPException(400,'Choose PPTX, PPSX or POTX, or enable conversion for legacy PPT')
  with LOCK:
   if sum(f.stat().st_size for f in ROOT.glob('*/input.pptx'))>4*1024*1024*1024:raise HTTPException(507,'Upload storage is full. Please contact support.')
   if len(ACTIVE)+len(UPLOADING)>=4 or owner in UPLOADING or any(read(job_path(x))['owner']==owner for x in ACTIVE):raise HTTPException(429,'Please wait for your current job')
@@ -228,16 +236,19 @@ async def create(request:Request,filename:str,job_id:str,source:str='auto',targe
     if size>MAX_UPLOAD:raise HTTPException(413,'Upload limit: 100 MB')
     f.write(chunk)
   if suffix=='.ppt':normalize_legacy(upload,p/'input.pptx')
+  elif suffix in {'.ppsx','.potx'}:normalize_ooxml_variant(upload,p/'input.pptx',suffix)
   else:os.replace(upload,p/'input.pptx')
   data=(p/'input.pptx').read_bytes();z=package(data);root=xml(z.read('ppt/presentation.xml'));slides=len(root.findall('./{'+P+'}sldIdLst/{'+P+'}sldId'))
-  if not 1<=slides<=5000:raise HTTPException(400,'This release supports 1Ã¢â‚¬â€œ5,000 slides within the file-size limit')
+  if not 1<=slides<=5000:raise HTTPException(400,'Use a file with 1 to 5,000 slides within the upload limit')
   d={'id':job_id,'owner':owner,'filename':Path(filename).name[:150],'source':source,'target':target,'fit':fit,'source_hash':hashlib.sha256(data).hexdigest(),'slides':slides,'operation':str(uuid4()),'phase':'reserving','status':'queued','created_at':int(time.time()),'message':'Reserving shared credits: 1 per slide.'};save(p,d);enqueue(job_id);return {'id':job_id}
- except (TranslationError,KeyError):raise HTTPException(400,'The PowerPoint file could not be safely read') from None
+ except (TranslationError,KeyError,subprocess.TimeoutExpired):
+  print(json.dumps({'event':'translation_upload_failed','code':'POWERPOINT_INVALID','jobId':job_id}),flush=True)
+  raise HTTPException(400,'The PowerPoint file could not be safely read. If it opens in PowerPoint, save a new macro-free PPTX and retry.') from None
  finally:
   with LOCK:UPLOADING.discard(owner)
   if not (p/'job.json').exists():
    # Only this request's unaccepted upload; never touch another job's data.
-   for name in ['original.ppt','original.pptx','input.pptx']:(p/name).unlink(missing_ok=True)
+   for name in ['original'+suffix,'input.pptx']:(p/name).unlink(missing_ok=True)
 @app.get('/api/jobs')
 def history(request:Request):
  owner=request.state.identity.subject;items=[]
@@ -253,7 +264,7 @@ def status(job:str,request:Request):
 @app.post('/api/jobs/{job}/retry')
 def retry(job:str,request:Request):
  p=owned(job,request.state.identity.subject);d=read(p)
- if d['status']!='failed':raise HTTPException(409,'This job cannot be retried yet')
+ if d['status'] not in {'failed','recovered'}:raise HTTPException(409,'This job cannot be retried yet')
  with LOCK:
   if len(ACTIVE)>=4 or any(read(job_path(x))['owner']==d['owner'] for x in ACTIVE):raise HTTPException(429,'Please wait for your current job')
  if d['phase']=='refunded':d.update(operation=str(uuid4()),phase='reserving')
@@ -268,6 +279,8 @@ def translated_filename(job):
 @app.get('/api/jobs/{job}/{artifact}')
 def artifact(job:str,artifact:str,request:Request):
  p=owned(job,request.state.identity.subject);d=read(p)
+ if d.get('recovery') and artifact=='recovery':return FileResponse(p/'translation-recovery.pptx',filename='translation-recovery.pptx',media_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+ if d.get('recovery') and artifact=='recovery-report':return FileResponse(p/'translation-recovery.report.json',filename='translation-recovery.json')
  if d['status']!='completed':raise HTTPException(409,'Translation is not ready')
  if artifact=='result':return FileResponse(p/'translated.pptx',filename=translated_filename(d),media_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
  if artifact=='report':return FileResponse(p/'translated.report.json',filename='translation-review.json')

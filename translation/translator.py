@@ -86,6 +86,21 @@ def package(data):
   if 'vbaproject' in i.filename.lower() or i.filename.startswith('_xmlsignatures/'):raise TranslationError('Macro-enabled or signed presentations need a separate conversion/review workflow')
  return z
 
+def normalize_ooxml_variant(source,output,suffix):
+ """Turn a macro-free slideshow or template into a PPTX without relayout."""
+ kinds={'.ppsx':'slideshow','.potx':'template'}
+ mime_prefix='application/vnd.openxmlformats-officedocument.presentationml.'
+ expected=mime_prefix+kinds[suffix]+'.main+xml'
+ with package(Path(source).read_bytes()) as archive:
+  types=xml(archive.read('[Content_Types].xml'))
+  main=types.xpath('./*[local-name()="Override" and @PartName="/ppt/presentation.xml"]')
+  if len(main)!=1 or main[0].get('ContentType')!=expected:
+   raise TranslationError('The file contents do not match its PowerPoint extension')
+  main[0].set('ContentType',mime_prefix+'presentation.main+xml')
+  with zipfile.ZipFile(output,'w') as result:
+   for entry in archive.infolist():
+    result.writestr(copy.copy(entry), ET.tostring(types,encoding='utf-8') if entry.filename=='[Content_Types].xml' else archive.read(entry))
+
 @dataclass(frozen=True)
 class Segment:
  id:str
@@ -108,7 +123,7 @@ def text_nodes(root):
 
 def lexical_texts(data,root):
  """Map XML nodes to byte spans; preserve every byte outside text content."""
- pattern=rb'<(?P<qname>(?:(?P<prefix>[A-Za-z_][\w.-]*):)?(?P<tag>t|v))(?:\s[^<>]*?)?>(?P<text>[^<]*)</(?P=qname)\s*>'
+ pattern=rb'<(?P<qname>(?:(?P<prefix>[A-Za-z_][\w.-]*):)?(?P<tag>t|v))(?=[\s/>])(?:\s[^<>]*?)?(?:(?P<empty>/>)|>(?P<text>[^<]*)</(?P=qname)\s*>)'
  nodes=list(root.iter());textual=[n for n in nodes if isinstance(n.tag,str) and ET.QName(n).localname in {'t','v'}]
  spans=list(re.finditer(pattern,data,re.DOTALL))
  # OOXML text never contains child elements. Unknown serializations fail closed.
@@ -117,6 +132,9 @@ def lexical_texts(data,root):
  for n,m in zip(textual,spans):
   prefix=m.group('prefix').decode() if m.group('prefix') else None;uri=n.nsmap.get(prefix)
   if n.tag!='{'+str(uri)+'}'+m.group('tag').decode():raise TranslationError('Text namespace mismatch')
+  if m.group('empty'):
+   if n.text:raise TranslationError('Unexpected content in empty XML element')
+   continue
   literal=xml(b'<r>'+m.group('text')+b'</r>').text or ''
   if literal!=(n.text or ''):raise TranslationError('Text span mismatch')
   result[n]=(m.start('text'),m.end('text'))
@@ -299,6 +317,41 @@ def translate_file(source_path,output_path,provider,*,source_language='auto',tar
  os.replace(tmp,output_path)
  report={'input_sha256':hashlib.sha256(data).hexdigest(),'output_sha256':hashlib.sha256(translated).hexdigest(),'source_language':source_language,'target_language':target_language,'segments':len(segments),'changed_parts':changed,'unchanged_parts':len(package(data).namelist())-sum('!' not in x for x in changed),'overflow_review':risks,'warnings':warnings,'fit':fit,'native_powerpoint_verified':False,'status':'needs_native_review' if risks else 'package_verified'}
  output_path.with_suffix('.report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
+ return report
+
+def recover_translation(source, output, checkpoint, source_language, target_language, model):
+ """Publish a separate verified recovery copy with untranslated text kept as source."""
+ data=Path(source).read_bytes()
+ with package(data) as original:
+  xml(original.read('ppt/presentation.xml'))
+ recovered=data; applied=[]; total=None; changed=[]
+ try:
+  segments,_=collect(data)
+  total=len(segments)
+  identity=hashlib.sha256(data+source_language.encode()+target_language.encode()+model.encode()+b'prompt-v1').hexdigest()
+  saved=json.loads(Path(checkpoint).read_text())
+  if saved.get('identity')==identity:
+   translations={}
+   for segment in segments:
+    value=saved['translations'].get(segment.id)
+    try:validate_translation(segment.text,value)
+    except TranslationError:continue
+    translations[segment.id]=value
+    applied.append(segment)
+   if applied:
+    candidate,changed,_=apply_package(data,translations,applied,fit='review')
+    verify_preservation(data,candidate,changed)
+    recovered=candidate
+ except (TranslationError, OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile):
+  applied=[]; changed=[]
+ report={'status':'partial' if applied else 'original_recovery_copy','total_segments':total,'translated_segments':len(applied),
+         'untranslated_segments':None if total is None else total-len(applied),'translated_parts':changed,
+         'warnings':['Untranslated material retains its original text. Retry the saved job to continue.']}
+ output=Path(output)
+ temporary=output.with_suffix('.tmp')
+ temporary.write_bytes(recovered);os.replace(temporary,output)
+ report_path=output.with_suffix('.report.json');temporary=report_path.with_suffix('.tmp')
+ temporary.write_text(json.dumps(report),encoding='utf-8');os.replace(temporary,report_path)
  return report
 
 if __name__=='__main__':

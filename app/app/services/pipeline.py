@@ -16,6 +16,7 @@ from app.domain.models import (
 )
 from app.services.integrity import IntegrityCheckError, PptxIntegrityValidator
 from app.services.notes.factory import NotesGeneratorFactory
+from app.services.notes.openai_generator import OpenAINotesGenerator
 from app.services.notes_writer import PptxNotesWriter
 from app.services.ppt_parser import PptxParser
 from app.services.ppt_renderer import SlideRenderer
@@ -300,6 +301,47 @@ class PresentationPipeline:
         if limit is None or len(deck.slides) <= limit:
             return deck
         return PresentationDeck(slide_count=deck.slide_count, slides=deck.slides[:limit])
+
+    def recover_notes(self, input_path: Path, output_path: Path, options: GenerationOptions) -> PipelineResult:
+        """Keep valid checkpoints and fill missing notes from extracted slide text."""
+        deck = self.parser.parse(input_path)
+        eligible = self._select_generation_deck(deck, options.notes_mode)
+        target = self._limit_generation_deck(eligible, options.target_slide_limit)
+        notes: dict[int, str] = {}
+        try:
+            generator = self.generator_factory.get(options.engine, options.model.value)
+            if isinstance(generator, OpenAINotesGenerator):
+                variants = [(options, False), (options, True)]
+                if options.use_vision:
+                    variants.append((options.model_copy(update={'use_vision': False}), False))
+                for variant, vision in variants:
+                    signature = generator._checkpoint_signature(deck, target, variant, vision)
+                    checkpoint = generator._load_checkpoint(input_path.parent/'ai-checkpoint.json', signature)
+                    if checkpoint:
+                        notes = {int(number): text for number, text in checkpoint.notes.items()
+                                 if str(number).isdigit() and isinstance(text, str) and text.strip()}
+                        break
+        except (RuntimeError, ValueError, AttributeError):
+            notes = {}
+        numbers = {slide.number for slide in target.slides}
+        notes = {number: text for number, text in notes.items() if number in numbers}
+        resumed = len(notes)
+        for slide in target.slides:
+            if slide.number in notes:
+                continue
+            content = list(dict.fromkeys(text for text in [slide.title, *slide.texts] if text and text.strip()))
+            content.extend(' | '.join(row) for table in slide.tables for row in table)
+            notes[slide.number] = '\n'.join(content) or 'Visual slide. Review the slide before presenting.'
+        self.notes_writer.write(input_path, notes, output_path, mode=options.notes_mode)
+        self.integrity_validator.validate(input_path, output_path, generated_notes=notes, mode=options.notes_mode)
+        changed_existing = sum(slide.number in notes and slide.has_existing_notes for slide in deck.slides)
+        preserved = deck.existing_notes_count - (changed_existing if options.notes_mode == NotesMode.replace_all else 0)
+        remaining = len(eligible.slides) - len(target.slides)
+        return PipelineResult(deck=deck, slide_count=deck.slide_count, target_slide_count=len(target.slides),
+                              remaining_unprocessed_slides=remaining, preview_limited=options.target_slide_limit is not None and remaining > 0,
+                              existing_notes_count=deck.existing_notes_count, generated_notes_count=len(notes),
+                              preserved_existing_notes_count=preserved, provider='source-recovery', resumed_slide_count=resumed,
+                              warnings=['Recovered notes use slide text where AI notes were unavailable. Review wording, language and visual-only slides.'])
 
     @staticmethod
     def _select_generation_deck(deck: PresentationDeck, mode: NotesMode) -> PresentationDeck:

@@ -1,3 +1,4 @@
+import {parseFullCopySource} from '../core/full-copy.js';
 import {parseSource, hash} from '../core/source.js';
 
 // Read the immutable generation snapshot. Download paths must never translate,
@@ -16,7 +17,7 @@ export function generationDocument(job) {
         source = snapshot.source;
     }
     let doc;
-    try { doc = parseSource(source, job.settings.mode); }
+    try { doc = job.documentPlan?.version===2 || job.scene?.fullCopy ? parseFullCopySource(source) : parseSource(source, job.settings.mode); }
     catch { throw Error('EXPORT_CORRUPTED'); }
     if (!job.scene || doc.sha256 !== job.scene.sourceHash ||
         doc.sha256 !== job.report?.sourceHash)

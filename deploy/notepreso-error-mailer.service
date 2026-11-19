@@ -1,0 +1,21 @@
+[Unit]
+Description=Send NotePreso processing failure alerts
+After=docker.service network-online.target
+ConditionPathExists=/etc/notepreso/error-alerts.env
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/notepreso/error-alerts.env
+ExecStart=/usr/bin/python3 /usr/local/lib/notepreso-ops/error-mailer.py
+StateDirectory=notepreso-alerts
+StateDirectoryMode=0700
+UMask=0077
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

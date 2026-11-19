@@ -19,7 +19,7 @@ export async function documentManifest(root,owner,id){
 export async function snapshotDocumentAssets(project,root){
  if(project.workspace?.kind!=='document')return [];
  const result=[];
- for(const resource of project.workspace.resources.filter(r=>r.documentId&&r.role==='content')){
+ for(const resource of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role))){
   const {dir,manifest}=await documentManifest(root,project.ownerId,resource.documentId);
   for(const v of manifest.visuals){
    const target=path.join(root,'assets',project.id);await fs.mkdir(target,{recursive:true});
@@ -33,7 +33,7 @@ export async function snapshotDocumentAssets(project,root){
 }
 export async function documentVisualCount(project,root){
  let count=0;if(project.workspace?.kind!=='document')return 0;
- for(const r of project.workspace.resources.filter(r=>r.documentId&&r.role==='content'))count+=(await documentManifest(root,project.ownerId,r.documentId)).manifest.visuals.length;
+ for(const r of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role)))count+=(await documentManifest(root,project.ownerId,r.documentId)).manifest.visuals.length;
  return count;
 }
 export function appendDocumentVisuals(scene,assets){
@@ -55,11 +55,11 @@ export function registerDocumentRoutes(app,{auth,cfg}){
   const bytes=Buffer.from(body.base64,'base64');if(bytes.length>10*1024*1024||bytes.toString('base64')!==body.base64)return reply.code(400).send({error:'DOCUMENT_SIZE_LIMIT'});
   busy=true;
   try{
-   let source,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[];
+   let source,structuredWord,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[];
    if(/\.(pdf|docx)$/i.test(body.name)){
     let pdf=bytes;
     if(/\.docx$/i.test(body.name)){
-     await readDocx(bytes,{referenceOnly:true});
+     structuredWord=await readDocx(bytes,{referenceOnly:true});
      const temporaryRoot=path.resolve(os.tmpdir()),dir=await fs.mkdtemp(path.join(temporaryRoot,'document-word-'));
      if(path.dirname(dir)!==temporaryRoot)throw Error('DOCUMENT_INVALID');
      try{await fs.writeFile(path.join(dir,'source.docx'),bytes,{mode:0o600});await promisify(execFile)('soffice',['-env:UserInstallation='+pathToFileURL(path.join(dir,'profile')).href,'--headless','--convert-to','pdf','--outdir',dir,path.join(dir,'source.docx')],{timeout:90000,env:{...process.env,FONTCONFIG_FILE:'/app/assets/fonts/notepreso-fonts.conf'}});pdf=await fs.readFile(path.join(dir,'source.pdf'));}finally{await fs.rm(dir,{recursive:true,force:true});}
@@ -75,8 +75,9 @@ export function registerDocumentRoutes(app,{auth,cfg}){
    await fs.mkdir(dir,{recursive:true,mode:0o700});
    for(const image of images)await fs.writeFile(path.join(dir,image.assetId+'.png'),image.data,{mode:0o600});
    await fs.writeFile(path.join(dir,'source.txt'),source,{mode:0o600});
+   if(structuredWord)await fs.writeFile(path.join(dir,'structured-word.md'),structuredWord,{mode:0o600});
    await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
    return {source,title,documentId,visuals:visuals.length};
-  }catch(e){return reply.code(422).send({error:/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID'});}finally{busy=false;}
+  }catch(e){const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
  });
 }

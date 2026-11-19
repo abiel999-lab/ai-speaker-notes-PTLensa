@@ -1,5 +1,6 @@
 import{composeTechnicalDocument}from'../core/document-composition.js';
 import{withVisualCover}from'../core/visual-cover.js';
+import {buildFullCopyScene,parseFullCopySource} from '../core/full-copy.js';
 /** Immutable price quotes and durable job-level billing; service secrets never enter job JSON. */
 import {loadDocumentPlan} from './document-plan.js';
 import fs from'node:fs';import{createHmac,timingSafeEqual,createHash}from'node:crypto';
@@ -8,10 +9,20 @@ import{parseSource}from'../core/source.js';import{creativeAtoms}from'../core/cre
 const SECRET='/app/.notepreso-platform-v2.json';
 export const usesPlatform=cfg=>!!cfg.production||!!cfg.platform;
 const config=cfg=>cfg.platform??JSON.parse(fs.readFileSync(SECRET,'utf8'));
-export function safeBillingScene(source,settings){const doc=parseSource(source,settings.mode);return settings.creationMode==='creative'&&!settings.creativeSlideCount&&!settings.assetId&&doc.blocks.some(b=>b.equation)?withVisualCover(doc,composeTechnicalDocument(doc,settings.theme,settings.creativeAssets)):settings.creationMode==='creative'?withVisualCover(doc,buildCreativeRescueScene(doc,creativeAtoms(doc),settings.theme,{assets:settings.creativeAssets,slideCount:settings.creativeSlideCount,interactiveLinks:settings.interactiveLinks,motion:settings.motion==='keynote'}).scene,settings.creativeSlideCount):buildScene(doc,rulesPlan(doc,settings.images),settings.theme,settings);}
+export function safeBillingScene(source,settings){
+ try {
+  const doc=parseSource(source,settings.mode);
+  if(settings.creationMode!=='creative')return buildScene(doc,rulesPlan(doc,settings.images),settings.theme,settings);
+  if(!settings.creativeSlideCount&&!settings.assetId&&doc.blocks.some(b=>b.equation))return withVisualCover(doc,composeTechnicalDocument(doc,settings.theme,settings.creativeAssets));
+  return withVisualCover(doc,buildCreativeRescueScene(doc,creativeAtoms(doc),settings.theme,{assets:settings.creativeAssets,slideCount:settings.creativeSlideCount,interactiveLinks:settings.interactiveLinks,motion:settings.motion==='keynote'}).scene,settings.creativeSlideCount);
+ } catch (error) {
+  const scene=buildFullCopyScene(parseFullCopySource(source),[],{...settings,fontScale:0.85,density:'compact'});
+  return {...scene,quoteRecovery:true};
+ }
+}
 function settingsHash(settings){return createHash('sha256').update(JSON.stringify(Object.fromEntries(Object.entries(settings).sort(([a],[b])=>a.localeCompare(b))))).digest('hex');}
 export async function createQuote(project,settings,user,cfg){
- const identity=platformIdentity(user,cfg),model=customerModel(settings.model),documentPlan=await loadDocumentPlan(project,cfg.root),maxSlides=documentPlan?documentPlan.slides.length:safeBillingScene(project.source,settings).slides.length;
+ const identity=platformIdentity(user,cfg),model=customerModel(settings.model),documentPlan=await loadDocumentPlan(project,cfg.root,settings),maxSlides=documentPlan?(documentPlan.slideCount??documentPlan.slides.length):safeBillingScene(project.source,settings).slides.length;
  const account=(await platformCall(identity,'account',{}, {settings:config(cfg)})).account;
  if(account.plan!=='pro'&&model!=='gpt-6-luna')throw Error('TERRA_REQUIRES_PRO');
  if(account.plan!=='pro'&&maxSlides>Number(account.limits?.preview_slides||5))throw Error('FREE_SLIDE_LIMIT');

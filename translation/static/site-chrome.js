@@ -10,12 +10,10 @@
     ? [['Translator', productHome], ['Guide', translation + '/how-to'], ['Pricing', notes + '/pricing']]
     : isPresentation
     ? [['Home', productHome], ['Projects', presentation + '/app'], ['Create', presentation + '/app?new=1'], ['Pricing', notes + '/pricing']]
-    : [['Home', productHome], ['Workspace', notes + '/app'], ['Chat', notes + '/chat'], ['Pricing', notes + '/pricing']];
-  const products = isTranslation ? [['Speaker Notes', notes + '/'], ['Presentation Generator', presentation + '/']]
-    : isPresentation ? [['Speaker Notes', notes + '/'], ['Translator', translation + '/']]
-    : [['Presentation Generator', presentation + '/'], ['Translator', translation + '/']];
-  const secondary = [...products, ['Help', notes + '/support'], ...(!isTranslation ? [['Guide', productHome + 'how-to']] : []), ['Terms', notes + '/terms'], ['Privacy', notes + '/privacy'], ['Refund Policy', notes + '/refund-policy']];
-  const destinations = [...primary, ...secondary];
+    : [['Home', productHome], ['Speaker Notes', notes + '/app'], ['Chat', notes + '/chat'], ['Pricing', notes + '/pricing']];
+  const products = [['Presentation', presentation + '/app'], ['Translation', translation + '/']];
+  const secondary = [['Help', notes + '/support'], ['Guide', productHome + 'how-to'], ['Terms', notes + '/terms'], ['Privacy', notes + '/privacy'], ['Refund Policy', notes + '/refund-policy']];
+  const destinations = [...primary, ...products, ...secondary];
   function footer() {
     const originals = [...document.querySelectorAll('footer')].filter(node => node.id !== 'np-global-footer' && !node.closest('dialog, [role="dialog"]'));
     if (!originals.length) return;
@@ -43,12 +41,12 @@
       (!isPresentation || u.pathname !== '/app' || (name === 'Create') === creating);
     return `<a href="${href}"${current?' aria-current="page"':''}>${name}</a>`;
   };
-  shadow.innerHTML = `<link rel="stylesheet" href="${isPresentation?'/assets':'/static'}/site-header.css?v=${isPresentation?'phase02r-2':'touch-1'}">
+  shadow.innerHTML = `<link rel="stylesheet" href="${isPresentation?'/assets':'/static'}/site-header.css?v=workspace-docs-20261119">
     <div class="bar"><a class="brand" href="${productHome}" aria-label="NotePreso home"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+CjxyZWN0IHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjciIGZpbGw9IiNGN0Y5RkMiLz4KPHBhdGggZD0iTTE2IDI1SDVhMiAyIDAgMCAxLTItMlY3YTIgMiAwIDAgMSAyLTJoMjNhMiAyIDAgMCAxIDIgMnY5IgogZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTcyQjREIiBzdHJva2Utd2lkdGg9IjIuNSIvPgo8cGF0aCBkPSJNMTAgMTB2NWg1YTUgNSAwIDEgMS01LTVaIiBmaWxsPSIjMTcyQjREIi8+CjxwYXRoIGQ9Ik0xOCAxMGg4TTE4IDE0aDYiIHN0cm9rZT0iIzE3MkI0RCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHJlY3QgeD0iMTYiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjMDg3RjhDIi8+CjxwYXRoIGQ9Ik0yMCAyM2gxME0yMCAyN2g3IiBzdHJva2U9IiNGN0Y5RkMiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg==" alt="" width="36" height="36"><span><strong>NotePreso</strong><small>Your expertise. Clearly spoken.</small></span></a>
-    <nav class="desktop-nav" aria-label="Main navigation">${primary.map(link).join('')}<details class="more"><summary>More <svg class="chevron" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="more-panel">${secondary.map(link).join('')}<div class="local-desktop"></div></div></details></nav>
+    <nav class="desktop-nav" aria-label="Main navigation">${primary.map(link).join('')}<details class="more workspace-menu"><summary>Workspace <span class="chevron" aria-hidden="true">⌄</span></summary><div class="more-panel">${products.map(link).join('')}<div class="local-desktop"></div></div></details><details class="more documentation-menu"><summary>Documentation <svg class="chevron" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="more-panel">${secondary.map(link).join('')}</div></details></nav>
     <div class="desktop-account session-slot"><a class="sign-in" href="${isTranslation?'/auth/login':isPresentation?'/api/auth/login':'/auth/login?return_to='+encodeURIComponent(location.pathname)}">Account</a></div>
     <button class="toggle" type="button" aria-label="Open navigation menu" aria-controls="mobile-menu" aria-expanded="false"><span class="menu-lines" aria-hidden="true"></span></button></div>
-    <div class="backdrop" hidden></div><section id="mobile-menu" class="drawer" role="dialog" aria-label="Navigation menu" aria-modal="true" hidden><div class="drawer-heading">Menu<button type="button" class="close" aria-label="Close navigation menu">×</button></div><nav class="mobile-nav" aria-label="Mobile navigation">${primary.map(link).join('')}${secondary.map(link).join('')}</nav><div class="local-mobile"></div><div class="drawer-account session-slot"></div></section>`;
+    <div class="backdrop" hidden></div><section id="mobile-menu" class="drawer" role="dialog" aria-label="Navigation menu" aria-modal="true" hidden><div class="drawer-heading">Menu<button type="button" class="close" aria-label="Close navigation menu">×</button></div><nav class="mobile-nav" aria-label="Mobile navigation">${primary.map(link).join('')}<details class="mobile-workspace"><summary>Workspace</summary>${products.map(link).join('')}</details><details class="mobile-documentation"><summary>Documentation</summary>${secondary.map(link).join('')}</details></nav><div class="local-mobile"></div><div class="drawer-account session-slot"></div></section>`;
   const toggle = shadow.querySelector('.toggle'), drawer = shadow.querySelector('.drawer'), backdrop = shadow.querySelector('.backdrop');
   const slots = [...shadow.querySelectorAll('.session-slot')];
   function closeMenu(returnFocus=true) {
@@ -105,15 +103,20 @@
   shadow.addEventListener('click',event=>{
     if(event.target.closest('.toggle')){menuOpen?closeMenu():openMenu();return;}
     if(event.target.closest('.close,.backdrop')){closeMenu();return;}
-    if(event.target.closest('.profile')){accountOpen=!accountOpen;if(accountOpen)shadow.querySelector('.more').open=false;renderSession();return;}
+    if(event.target.closest('.profile')){accountOpen=!accountOpen;if(accountOpen)shadow.querySelectorAll('.desktop-nav .more').forEach(menu=>{menu.open=false;});renderSession();return;}
     const logout=event.target.closest('[data-sign-out]');if(logout){void signOut(logout);return;}
     const proxy=event.target.closest('[data-local-action]');if(proxy){closeMenu(false);localButtons[Number(proxy.dataset.localAction)]?.click();return;}
     if(event.target.closest('a'))closeMenu(false);
   });
-  shadow.querySelector('.more').addEventListener('toggle',event=>{if(event.target.open&&accountOpen){accountOpen=false;renderSession();}});
-  document.addEventListener('click',event=>{if(!event.composedPath().includes(header))shadow.querySelector('.more').open=false;});
+  const desktopMenus=[...shadow.querySelectorAll('.desktop-nav .more')];
+  desktopMenus.forEach(menu=>menu.addEventListener('toggle',()=>{
+    if(!menu.open)return;
+    desktopMenus.filter(other=>other!==menu).forEach(other=>{other.open=false;});
+    if(accountOpen){accountOpen=false;renderSession();}
+  }));
+  document.addEventListener('click',event=>{if(!event.composedPath().includes(header))desktopMenus.forEach(menu=>{menu.open=false;});});
   document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'){if(menuOpen){event.preventDefault();closeMenu();}if(accountOpen){accountOpen=false;renderSession();shadow.querySelector('.profile')?.focus();}shadow.querySelectorAll('.more,.mobile-more').forEach(menu=>{menu.open=false;});}
+    if(event.key==='Escape'){if(menuOpen){event.preventDefault();closeMenu();}if(accountOpen){accountOpen=false;renderSession();shadow.querySelector('.profile')?.focus();}shadow.querySelectorAll('.more,.mobile-workspace,.mobile-documentation').forEach(menu=>{menu.open=false;});}
     if(event.key==='Tab'&&menuOpen){const nodes=[...drawer.querySelectorAll('a[href],button:not([disabled])')].filter(n=>n.getClientRects().length),first=nodes[0],last=nodes.at(-1),active=shadow.activeElement;if(event.shiftKey&&active===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&active===last){event.preventDefault();first.focus();}}
   });
   document.addEventListener('click',event=>{if(!event.composedPath().includes(header)&&accountOpen){accountOpen=false;renderSession();}});

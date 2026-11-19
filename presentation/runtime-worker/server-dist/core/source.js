@@ -21,7 +21,7 @@ function inline(text) {
         .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "$1")
         .replace(/`([^`\n]+)`/g, "$1");
 }
-export function parseSource(raw, mode = "markdown") {
+export function parseSource(raw, mode = "markdown", { tolerateMalformedMarkup = false } = {}) {
     if (Buffer.byteLength(raw, "utf8") > MAX_SOURCE_BYTES)
         throw new Error("SOURCE_TOO_LARGE");
     if (!raw.trim())
@@ -48,7 +48,7 @@ export function parseSource(raw, mode = "markdown") {
         if(mode==='markdown'&&!fenced&&line.trim()==='\\['){
             let mathRaw=original,closed=false;
             while(i+1<lines.length){const next=lines[++i];cursor+=next.length;mathRaw+=next;if(next.trim()==='\\]'){closed=true;break;}}
-            if(!closed)throw Error('MATH_SYNTAX');
+            if(!closed&&!tolerateMalformedMarkup)throw Error('MATH_SYNTAX');
             blocks.push({id:`b${blocks.length}`,start,end:cursor,raw:mathRaw,text:mathRaw.trim(),kind:'paragraph',level:0,equation:true});ledger.push({start,end:cursor,role:'content'});continue;
         }
         let text = line, kind = "paragraph", level = 0, cells;
@@ -86,8 +86,8 @@ export function parseSource(raw, mode = "markdown") {
                     .trim()
                     .replace(/^\|/, "")
                     .replace(/\|$/, "")
-                    .split("|")
-                    .map((x) => inline(x.trim()));
+                    .split(tolerateMalformedMarkup ? /(?<!\\)\|/ : "|")
+                    .map((x) => inline((tolerateMalformedMarkup ? x.replace(/\\\|/g, '|') : x).trim()));
                 cells = [row(line)];
                 let tableRaw = original;
                 cursor += lines[i + 1].length;
@@ -99,8 +99,13 @@ export function parseSource(raw, mode = "markdown") {
                     tableRaw += lines[++i];
                     cells.push(row(lines[i]));
                 }
-                if (cells.some((r) => r.length !== cells[0].length))
-                    throw new Error("TABLE_COLUMNS");
+                if (cells.some((r) => r.length !== cells[0].length)) {
+                    if (!tolerateMalformedMarkup) throw new Error("TABLE_COLUMNS");
+                    blocks.push({ id:`b${blocks.length}`, start, end:cursor, raw:tableRaw,
+                        text:tableRaw.replace(/\r\n?/g, '\n').replace(/\n$/, ''), kind:'code', level:0 });
+                    ledger.push({ start, end:cursor, role:'content' });
+                    continue;
+                }
                 text = cells.map((r) => r.join("\t")).join("\n");
                 kind = "table";
                 blocks.push({

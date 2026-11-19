@@ -43,7 +43,7 @@
    if(!selected)return false;
    if(state.file===selected&&state.data)return true;
    if(state.file===selected&&state.promise)return state.promise;
-   state.controller?.abort();state.controller=new AbortController();const revision=++state.revision;state.file=selected;state.data=null;ack.checked=false;warning.hidden=true;summary.textContent='Checking slide count and credit estimate...';
+   state.controller?.abort();state.controller=new AbortController();const revision=++state.revision;state.file=selected;state.data=null;ack.checked=false;warning.hidden=true;summary.setAttribute('role','status');summary.classList.remove('np-preflight-error');summary.textContent='Checking slide count and credit estimate...';
    state.promise=(async()=>{
     try{
      const authRes=await fetch('/api/v1/auth/me',{headers:{Accept:'application/json'},cache:'no-store'});if(!authRes.ok)throw Error('Account could not be checked. Please try again.');
@@ -55,7 +55,7 @@
      const data=await res.json();
      if(!Number.isInteger(data.slide_count)||!Number.isInteger(data.empty_notes_count)||!Number.isInteger(data.existing_notes_count)||!['free','pro'].includes(data.plan)||!data.credits_per_slide)throw Error('The file check returned an invalid result.');
      if(state.revision!==revision)return false;state.data=data;chooseLanguage(data);render();return true;
-    }catch(error){if(error.name!=='AbortError'&&state.revision===revision)summary.textContent=error.message;return false;}
+    }catch(error){if(error.name!=='AbortError'&&state.revision===revision){summary.setAttribute('role','alert');summary.classList.add('np-preflight-error');summary.textContent=error.message;}return false;}
     finally{if(state.revision===revision)state.promise=null;}
    })();return state.promise;
   }

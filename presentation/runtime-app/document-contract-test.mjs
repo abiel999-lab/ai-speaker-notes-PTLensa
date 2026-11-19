@@ -10,7 +10,7 @@ try{
  const workspace={kind:'document',brief:'Explain this research',policy:'draft',resources:[{id:randomUUID(),name:'Research.txt',role:'content',text:'Research evidence. '.repeat(5000)}]};
  async function request(){return app.inject({method:'POST',url:'/api/workspace/draft',headers:{host:'localhost:14310'},payload:{workspace,model:'gpt-6.1-terra',language:'English',reasoningEffort:'high',sections:3}});}
  let response=await request();assert.equal(response.statusCode,200,response.body);assert.equal(response.json().slideCount,4);
- for(const [type,code]of [['schema','DOCUMENT_PLAN_SCHEMA_INVALID'],['json','DOCUMENT_PLAN_JSON_INVALID'],['empty','DOCUMENT_PLAN_EMPTY_OUTPUT']]){failure=type;response=await request();assert.equal(response.statusCode,422,response.body);assert.equal(response.json().error,code);}
+ for(const type of ['schema','json','empty']){failure=type;response=await request();assert.equal(response.statusCode,200,response.body);assert.equal(response.json().recovery,true);assert.equal(response.json().source,workspace.resources[0].text);}
  const id=randomUUID(),sourceId=workspace.resources[0].id;const visualFormat=documentPlanFormatFor({visuals:[{assetId:id}],documents:[{sourceId}]});assert.deepEqual(visualFormat.schema.properties.slides.items.properties.visualIds.items.enum,[id]);
- console.log(JSON.stringify({status:'passed',longDocument:true,providerAndValidatorConstraintsAligned:true,knownIdsOnly:true,schemaJsonEmptyDiagnostics:true,paidApiCalls:0}));
+ console.log(JSON.stringify({status:'passed',longDocument:true,providerAndValidatorConstraintsAligned:true,knownIdsOnly:true,schemaJsonEmptyRecovery:true,paidApiCalls:0}));
 }finally{await app.close();}

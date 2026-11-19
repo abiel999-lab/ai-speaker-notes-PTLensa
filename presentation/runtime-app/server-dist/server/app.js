@@ -1,3 +1,5 @@
+import {isFullCopy} from './document-plan.js';
+import {parseFullCopySource} from '../core/full-copy.js';
 import {registerDocumentRoutes} from './document-workflow.js';
 import { registerJournalRoutes } from './journal-routes.js';
 import{generationDocument}from'./generation-document.js';
@@ -303,7 +305,7 @@ export async function createApp(cfg) {
     });
     app.post("/api/projects", { preHandler: auth }, async (req) => {
         const body = sourceInput.parse(req.body);
-        const doc = parseSource(body.source, body.mode);
+        const doc = isFullCopy(body.workspace)?parseFullCopySource(body.source):parseSource(body.source, body.mode);
         const now = new Date().toISOString();
         const p = {
             id: randomUUID(),
@@ -340,7 +342,8 @@ export async function createApp(cfg) {
         if (body.expectedRevision !== undefined &&
             body.expectedRevision !== (p.revision || 0))
             return reply.code(409).send({ error: "PROJECT_CONFLICT" });
-        parseSource(body.source, body.mode);
+        if(isFullCopy(body.workspace))parseFullCopySource(body.source);
+        else parseSource(body.source, body.mode);
         const { expectedRevision, ...input } = body;
         const updated = {
             ...p,
@@ -498,7 +501,7 @@ export async function createApp(cfg) {
     // Owner-scoped, source-grounded speaker notes; no additional provider request.
     app.get("/api/generations/:id/notes", { preHandler: auth }, async (req, reply) => {
         const j = await repo.job(req.params.id, req.user.id);
-        if(j?.settings.documentMode)return reply.code(404).send({error:"NOTES_NOT_AVAILABLE"});
+        if(j?.settings.documentMode&&!j.settings.includeSpeakerNotes)return reply.code(404).send({error:"NOTES_NOT_AVAILABLE"});
         if (!j)
             return reply.code(404).send({ error: "GENERATION_NOT_FOUND" });
         if (j.status !== "ready" || !j.scene || !j.report?.passed || !j.report.exportVerified)

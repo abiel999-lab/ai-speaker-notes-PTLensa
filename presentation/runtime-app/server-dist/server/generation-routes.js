@@ -1,5 +1,5 @@
 import {snapshotDocumentAssets} from './document-workflow.js';
-import {loadDocumentPlan} from './document-plan.js';
+import {isFullCopy,loadDocumentPlan} from './document-plan.js';
 import { createQuote,acceptQuote,usesPlatform } from "./platform-generation.js";
 import { snapshotCoverBranding } from "./cover-logo-routes.js";
 import { validateCreativeRequest } from "../core/creative.js";
@@ -18,11 +18,14 @@ import { validateScene } from "../core/fidelity.js";
 import { suggestSlideLayout } from "../core/slide-assistant.js";
 export function registerGenerationRoutes(app, repo, runner, cfg) {
     registerTemplateText(app, repo, runner, cfg);
+    const deterministic = async (project,settings) => isFullCopy(project.workspace) ||
+        (project.workspace?.kind==='document' && (await loadDocumentPlan(project,cfg.root,settings))?.version===2);
     app.post('/api/projects/:id/quote',async(req,reply)=>{
         const p=await repo.getProject(req.params.id,req.user.id);if(!p)return reply.code(404).send({error:'PROJECT_NOT_FOUND'});
         const body=z.object({settings:settingsSchema}).strict().parse(req.body);
         body.settings.documentMode=p.workspace?.kind==='document';
-        if(body.settings.creationMode==='creative')body.settings.useAI=true;
+        if(await deterministic(p,body.settings)){body.settings.useAI=false;body.settings.model='gpt-6-luna';}
+        else if(body.settings.creationMode==='creative')body.settings.useAI=true;
         return createQuote(p,body.settings,req.user,cfg);
     });
     async function assetExists(projectId, settings, plan) {
@@ -52,7 +55,7 @@ export function registerGenerationRoutes(app, repo, runner, cfg) {
         const billing = user ? acceptQuote(acceptedQuote,p,settings,user,cfg) : undefined;
         const coverBranding = await snapshotCoverBranding(repo, cfg, p, settings);
         const documentAssets=await snapshotDocumentAssets(p,cfg.root);
-        const documentPlan=await loadDocumentPlan(p,cfg.root);
+        const documentPlan=await loadDocumentPlan(p,cfg.root,settings);
         if(documentPlan){
             const actual=new Map(documentAssets.map(a=>[a.assetId,a]));
             if(actual.size!==documentPlan.assets.length||documentPlan.assets.some(a=>actual.get(a.assetId)?.hash!==a.hash||actual.get(a.assetId)?.sourceId!==a.sourceId))throw Error('DOCUMENT_PLAN_REQUIRED');
@@ -107,7 +110,11 @@ export function registerGenerationRoutes(app, repo, runner, cfg) {
             .strict()
             .parse(req.body);
         body.settings.documentMode=p.workspace?.kind==='document';
-        if (body.settings.creationMode === "creative") {
+        if (await deterministic(p,body.settings)) {
+            if (body.plan) throw Error("CREATIVE_READ_ONLY");
+            body.settings.useAI=false;
+            body.settings.model="gpt-6-luna";
+        } else if (body.settings.creationMode === "creative") {
             if (body.plan)
                 throw new Error("CREATIVE_READ_ONLY");
             if (!cfg.key)

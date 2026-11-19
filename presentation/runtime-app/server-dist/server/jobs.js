@@ -1,5 +1,6 @@
 import{applyCoverRole}from'../core/cover-role.js';
 import{resolvePresentationSource}from'../core/source-language.js';
+import {buildFullCopyScene,parseFullCopySource} from '../core/full-copy.js';
 import {buildDocumentScene} from '../core/document-scene.js';
 import{composeTechnicalDocument}from'../core/document-composition.js';
 import{withVisualCover}from'../core/visual-cover.js';
@@ -85,6 +86,7 @@ export async function processJob(repo, cfg, id) {
             throw new Error("JOB_CANCELLED");
     };
     const dir = generationDirectory(cfg.root, job);
+    let generationStarted = false;
     try {
         if(job.billing?.phase==='settling'){
             await fs.access(path.join(generationDirectory(cfg.root,job),'presentation.pptx'));
@@ -92,19 +94,22 @@ export async function processJob(repo, cfg, id) {
         }
         job=await reserveJobBilling(repo,cfg,job);
         await persist("planning", 15, "Selecting a layout");
+        generationStarted = true;
         if(job.settings.presentationLanguage)await persist("planning", 12, "Applying presentation language");
         const languageSource=job.settings.documentMode?{source:job.source}:await resolvePresentationSource(job,{key:cfg.key,fetcher:trackedFetch(repo,job.ownerId,"presentation-language",id,job.billing?.model||job.settings.model||"gpt-6-luna")});
         if(languageSource.cache){job={...job,presentationLanguageSource:languageSource.cache};await persist("planning",15,"Selecting a layout");}
-        const doc = parseSource(languageSource.source, job.settings.mode);
-        doc.presentationLanguage=job.settings.presentationLanguage;
-        let plan = job.plan || rulesPlan(doc, job.settings.images);
+        const fullCopy=job.documentPlan?.version===2;
+        const doc = fullCopy?parseFullCopySource(languageSource.source):parseSource(languageSource.source, job.settings.mode);
+        if(!fullCopy)doc.presentationLanguage=job.settings.presentationLanguage;
+        let plan = job.plan || (fullCopy?{engine:"rules",slides:[]}:rulesPlan(doc, job.settings.images));
         const model = job.billing?.model || job.settings.model || "gpt-6-luna";
         const aiStarted = Date.now();
         let customScene;
         if(job.settings.documentMode){
             if(!job.documentPlan)throw Error('DOCUMENT_PLAN_REQUIRED');
-            customScene=buildDocumentScene(doc,job.documentPlan,job.settings);
-            plan.ai={requested:true,outcome:'used',model,durationMs:0};
+            customScene=fullCopy?buildFullCopyScene(doc,job.documentPlan.assets,job.settings):buildDocumentScene(doc,job.documentPlan,job.settings);
+            if(fullCopy)plan.slides=customScene.slides.map(({id,blockIds,layout})=>({id,blockIds,layout,imageId:null}));
+            plan.ai={requested:!fullCopy,outcome:fullCopy?'disabled':'used',model,durationMs:0};
         }
         else if (job.settings.creationMode === "creative") {
             if (job.plan && job.scene) {
@@ -228,6 +233,7 @@ export async function processJob(repo, cfg, id) {
         const branding = job.coverBranding ? { ...job.coverBranding,
             paths: Object.fromEntries((job.coverBranding.logos || []).map(logo => [logo.id, path.join(cfg.root, "assets", job.projectId, logo.id + ".png")])) } : undefined;
         const { bytes, report } = await exportPptx(doc, scene, imagePaths, job.settings.motion, branding);
+        if(job.documentPlan?.recoveryCode) report.recovery={code:job.documentPlan.recoveryCode,retainedSource:true};
         if (visualSummary) report.automaticVisuals = visualSummary;
         await fs.mkdir(dir, { recursive: true });
         const file = path.join(dir, "presentation.pptx");
@@ -264,6 +270,7 @@ export async function processJob(repo, cfg, id) {
                 "This preview shows the layout model. Final rendering is disabled on this server.";
         }
         await fs.writeFile(path.join(dir, "validation.json"), JSON.stringify(report, null, 2), { mode: 0o600 });
+        if(job.documentPlan?.recoveryCode)previewWarning='The AI draft could not be prepared. This deck contains the original source wording in a readable layout.'+(previewWarning?' '+previewWarning:'');
         job = {
             ...job,
             preview,
@@ -279,9 +286,58 @@ export async function processJob(repo, cfg, id) {
         })));
     }
     catch (e) {
-        console.error(JSON.stringify({event:'generation_failure',code:safeErrorCode(e),kind:e instanceof Error?e.name:'Unknown',internalCode:e instanceof Error&&/^[A-Z][A-Z0-9_]{2,80}$/.test(e.message)?e.message:'UNCLASSIFIED',frames:e instanceof Error?e.stack?.split('\n').slice(1,5).map(s=>s.replace(/\/app\//g,'').trim()):[]}));
+        console.error(JSON.stringify({event:'generation_failure',jobId:id,code:safeErrorCode(e),kind:e instanceof Error?e.name:'Unknown',internalCode:e instanceof Error&&/^[A-Z][A-Z0-9_]{2,80}$/.test(e.message)?e.message:'UNCLASSIFIED',frames:e instanceof Error?e.stack?.split('\n').slice(1,5).map(s=>s.replace(/\/app\//g,'').trim()):[]}));
         // A durable, already exported artifact must survive settlement transport failures.
         if(['settling','committed'].includes(job.billing?.phase))throw e;
+        if (generationStarted && !leaseLost && safeErrorCode(e) !== 'JOB_CANCELLED') {
+            try {
+                const original = job.presentationLanguageSource?.source ?? job.source;
+                const doc = parseFullCopySource(original);
+                const imagePaths = {}, assets = [];
+                for (const asset of job.documentAssets ?? []) {
+                    const candidate = path.join(cfg.root,'assets',job.projectId,asset.assetId+'.image.png');
+                    try { await fs.access(candidate); imagePaths[asset.assetId]=candidate; assets.push(asset); }
+                    catch (error) { if (error.code !== 'ENOENT') throw error; }
+                }
+                const recoverySettings={
+                    ...job.settings, fontScale:0.85, density:'compact',
+                    includeSpeakerNotes:!job.settings.documentMode || job.settings.includeSpeakerNotes,
+                };
+                await persist('verifying',76,'Checking recovered presentation');
+                let retained=assets;
+                async function attempt(visuals) {
+                    const scene=buildFullCopyScene(doc,visuals,recoverySettings);
+                    if(job.billing&&scene.slides.length>job.billing.maxSlides)throw Error('BILLING_SLIDE_COUNT_EXCEEDED');
+                    return {...await exportPptx(doc,scene,imagePaths),scene};
+                }
+                let artifact;
+                try {artifact=await attempt(retained);}
+                catch (error) {if(!retained.length)throw error;retained=[];artifact=await attempt(retained);}
+                const {bytes,report,scene}=artifact;
+                report.recovery={code:safeErrorCode(e),retainedSource:true,missingVisuals:(job.documentAssets?.length??0)-retained.length};
+                await fs.mkdir(dir,{recursive:true});
+                const temporary=path.join(dir,'recovered-'+randomUUID()+'.pptx');
+                await fs.writeFile(temporary,bytes,{mode:0o600});
+                await fs.rename(temporary,path.join(dir,'presentation.pptx'));
+                await fs.writeFile(path.join(dir,'validation.json'),JSON.stringify(report,null,2),{mode:0o600});
+                job={...job,scene,report,coverBranding:undefined,preview:'layout',
+                    previewWarning:'A simpler layout was used after an error. Source text was verified. Review language, visual assets and formatting before presenting.',
+                    plan:{engine:'rules',slides:scene.slides.map(({id,blockIds,layout})=>({id,blockIds,layout,imageId:null}))},
+                    durationMs:Date.now()-started};
+                if(job.billing){
+                    job={...job,billing:{...job.billing,phase:'settling'}};
+                    await persist('verifying',96,'Finalizing credits');
+                    job=await settleJobBilling(repo,cfg,job);
+                }
+                await persist('ready',100,'Recovered PowerPoint ready to export');
+                if(job.billing)await repo.completeBillingRefund(job.id);
+                await repo.recordJobEvent(job).catch(() => {});
+                return;
+            } catch (recoveryError) {
+                console.warn(JSON.stringify({event:'presentation_recovery_failed',jobId:id,code:safeErrorCode(recoveryError)}));
+                if(['settling','committed'].includes(job.billing?.phase))throw recoveryError;
+            }
+        }
         const current = await repo.job(id);
         if (current && !["cancelled", "ready", "failed"].includes(current.status))
             await repo.saveLeasedJob(current, {

@@ -1,0 +1,4 @@
+#workspace-main :is(.disclosure-action,.step-badge){font-size:15px!important;line-height:1.35}
+#workspace-main details > summary{min-height:44px}
+#job-status.job-error{border-color:#c43d4b;background:#fff4f3}
+#job-status.job-error #status{color:#7f2430}

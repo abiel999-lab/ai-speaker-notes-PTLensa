@@ -4,6 +4,12 @@ const statusBox=document.querySelector('#status');
 const statusTitle=document.querySelector('#status-title');
 const statusCount=document.querySelector('#status-count');
 const statusMessage=document.querySelector('#status-message');
+function showNotesStatus(message, failed=false) {
+  statusBox.classList.toggle('np-job-error',failed);
+  statusMessage.setAttribute('role',failed?'alert':'status');
+  statusMessage.textContent=message;
+  if(failed){statusBox.classList.remove('hidden');statusBox.scrollIntoView({block:'nearest'});}
+}
 const progressBar=document.querySelector('#progress-bar');
 const download=document.querySelector('#download');
 const chatResult=document.querySelector('#chat-result');
@@ -81,13 +87,13 @@ async function poll(jobId){
     if(response.status===401){window.location.href='/auth/login?return_to=/app';return;}
     if(response.status===404)sessionStorage.removeItem('np.activeNotesJob');
     if(!response.ok)throw new Error('Unable to read processing status.');
-    statusTitle.textContent=localizedStatus(job.status).toUpperCase();statusMessage.textContent=window.notePresoJobSummary(job);statusCount.textContent=window.notePresoSlideProgress(job)?.label||'';
+    statusTitle.textContent=localizedStatus(job.status).toUpperCase();showNotesStatus(window.notePresoJobSummary(job));statusCount.textContent=window.notePresoSlideProgress(job)?.label||'';
     const pct=job.status==='completed'?100:window.notePresoSlideProgress(job)?.percent??5;progressBar.style.width=`${Math.max(5,pct)}%`;
     if(job.status==='completed'){
       sessionStorage.removeItem('np.activeNotesJob');
       retry.classList.add('hidden');renderResult(job);window.NotePresoNotes?.show(job,document.querySelector('#status'));download.href=job.download_url;download.classList.remove('hidden');chatResult.href=`/chat?job=${job.id}`;chatResult.classList.remove('hidden');if(job.preview_limited&&Number(job.remaining_unprocessed_slides||0)>0){upgradeResult.href=`/pricing?job=${job.id}`;upgradeResult.textContent=`Unlock ${job.remaining_unprocessed_slides} remaining slide${Number(job.remaining_unprocessed_slides)===1?'':'s'}`;upgradeResult.classList.remove('hidden');sessionStorage.setItem('notepreso.pendingJob',job.id);}else{upgradeResult.classList.add('hidden');}submit.disabled=false;await loadHistory();return;
     }
-    if(job.status==='failed'){sessionStorage.removeItem('np.activeNotesJob');submit.disabled=false;retry.classList.remove('hidden');throw new Error(job.error||'Processing failed.');}
+    if(job.status==='failed'){sessionStorage.removeItem('np.activeNotesJob');submit.disabled=false;retry.classList.remove('hidden');throw new Error((job.error||'Processing failed.')+' Job '+job.id);}
     await sleep(750);
   }
 }
@@ -101,16 +107,16 @@ form.addEventListener('submit',async event=>{
   if(window.NotePresoPreflight&&!(await window.NotePresoPreflight.confirm(form,fileInput.files?.[0])))return;
   statusBox.querySelector(':scope > .notes-preview')?.remove();
   document.querySelector('#preview-email-verify')?.classList.add('hidden');
-  submit.disabled=true;download.classList.add('hidden');chatResult.classList.add('hidden');retry.classList.add('hidden');upgradeResult.classList.add('hidden');resultMetrics.classList.add('hidden');usageSummary.classList.add('hidden');warningList.classList.add('hidden');statusBox.classList.remove('hidden');statusTitle.textContent=t('uploadingLabel');statusMessage.textContent=t('uploading');progressBar.style.width='5%';
+  submit.disabled=true;download.classList.add('hidden');chatResult.classList.add('hidden');retry.classList.add('hidden');upgradeResult.classList.add('hidden');resultMetrics.classList.add('hidden');usageSummary.classList.add('hidden');warningList.classList.add('hidden');statusBox.classList.remove('hidden');statusTitle.textContent=t('uploadingLabel');showNotesStatus(t('uploading'));progressBar.style.width='5%';
   try{
     const response=await fetch('/api/v1/jobs',{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch'}),body:new FormData(form)});
     const payload=await response.json();if(response.status===401){window.location.href='/auth/login?return_to=/app';return;}if(response.status===402){const detail=(payload&&typeof payload.detail==='object')?payload.detail:{};if(window.NotePresoLimit.workspace(detail,fileInput.files?.[0]?.name,form)){submit.disabled=false;if(window.loadAccountPlan)void window.loadAccountPlan();return;}const pending=String(detail.job_id||'');if(pending){sessionStorage.setItem('notepreso.pendingJob',pending);window.location.href=`/pricing?job=${encodeURIComponent(pending)}&reason=credits`;return;}window.location.href='/pricing?reason=limit';return;}if(!response.ok)throw new Error(payload.detail||'Upload failed.');lastJobId=payload.id;if(window.loadAccountPlan)void window.loadAccountPlan();await poll(payload.id);
-  }catch(error){statusTitle.textContent=t('failed').toUpperCase();statusMessage.textContent=error.message;submit.disabled=false;if(window.loadAccountPlan)void window.loadAccountPlan();}
+  }catch(error){statusTitle.textContent=t('failed').toUpperCase();showNotesStatus(error.message,true);submit.disabled=false;if(window.loadAccountPlan)void window.loadAccountPlan();}
 });
 
 retry.addEventListener('click',async()=>{
-  if(!lastJobId||retry.disabled)return;submit.disabled=true;retry.disabled=true;statusBox.querySelector(':scope > .notes-preview')?.remove();statusTitle.textContent=t('retryingLabel');statusMessage.textContent=t('retrying');
-  try{const response=await fetch(`/api/v1/jobs/${lastJobId}/retry`,{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch',Accept:'application/json'})});const payload=await response.json();if(!response.ok)throw new Error(payload.detail||'Retry failed.');retry.classList.add('hidden');await poll(lastJobId);}catch(error){statusTitle.textContent=t('failed').toUpperCase();statusMessage.textContent=error.message;submit.disabled=false;retry.classList.remove('hidden');}finally{retry.disabled=false;}
+  if(!lastJobId||retry.disabled)return;submit.disabled=true;retry.disabled=true;statusBox.querySelector(':scope > .notes-preview')?.remove();statusTitle.textContent=t('retryingLabel');showNotesStatus(t('retrying'));
+  try{const response=await fetch(`/api/v1/jobs/${lastJobId}/retry`,{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch',Accept:'application/json'})});const payload=await response.json();if(!response.ok)throw new Error(payload.detail||'Retry failed.');retry.classList.add('hidden');await poll(lastJobId);}catch(error){statusTitle.textContent=t('failed').toUpperCase();showNotesStatus(error.message,true);submit.disabled=false;retry.classList.remove('hidden');}finally{retry.disabled=false;}
 });
 
 async function deleteJob(id){
@@ -146,4 +152,4 @@ referenceInput?.addEventListener('change',async()=>{
 });
 
 // Resume status polling after reauthentication or a browser reload. Never repeat POST /jobs here.
-{const resume=()=>{const active=sessionStorage.getItem('np.activeNotesJob');if(active&&/^[0-9a-f-]{36}$/i.test(active)){lastJobId=active;statusBox.classList.remove('hidden');submit.disabled=true;void poll(active).catch(error=>{submit.disabled=false;statusMessage.textContent=error.message;});}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',resume,{once:true});else resume();}
+{const resume=()=>{const active=sessionStorage.getItem('np.activeNotesJob');if(active&&/^[0-9a-f-]{36}$/i.test(active)){lastJobId=active;statusBox.classList.remove('hidden');submit.disabled=true;void poll(active).catch(error=>{submit.disabled=false;showNotesStatus(error.message,true);});}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',resume,{once:true});else resume();}

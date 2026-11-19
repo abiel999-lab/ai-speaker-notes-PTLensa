@@ -222,6 +222,13 @@ class JobProcessor:
                 "Automatic processing stopped after multiple recovery attempts; "
                 "AI checkpoints are preserved for retry."
             )
+            recovered = None
+            if not isinstance(exc, (AICostGuardrailError, AIInputGuardrailError)):
+                try:
+                    recovery_path = Path(job.input_path).parent / 'recovered-with-notes.pptx'
+                    recovered = self.pipeline.recover_notes(Path(job.input_path), recovery_path, job.options)
+                except Exception:
+                    logger.warning('notes_recovery_failed job_id=%s', job_id)
 
             # A permanent failed paid attempt must not consume customer credits.
             # Internal recovery attempts above do NOT pass through this block, so
@@ -266,6 +273,15 @@ class JobProcessor:
                         refund_exc,
                     )
 
+            if recovered is not None:
+                job.status = JobStatus.completed
+                job.error = None
+                job.output_path = str(recovery_path)
+                for field in ('provider', 'slide_count', 'target_slide_count', 'remaining_unprocessed_slides', 'preview_limited',
+                              'existing_notes_count', 'generated_notes_count', 'preserved_existing_notes_count',
+                              'resumed_slide_count', 'warnings'):
+                    setattr(job, field, getattr(recovered, field))
+                job.message = recovered.warnings[0] + (' Reserved AI Slide Credits were restored.' if job.credit_refunded else '')
             self.store.save(job)
         finally:
             job_lock.release()
