@@ -1,4 +1,4 @@
-/* NotePreso analytics. Basic consent mode: no vendor requests before opt-in.
+/* NotePreso analytics. Public-page analytics preferences, shared across NotePreso subdomains.
  * Load once, from a self-hosted external script. No noscript tracking beacon.
  */
 (() => {
@@ -106,8 +106,11 @@
     const a=document.createElement('a');a.href='https://notepreso.com/privacy';a.textContent='Privacy policy';banner.appendChild(a);
     const actions=document.createElement('div');banner.appendChild(actions);
     button('Reject optional',()=>choose(false,false),actions);button('Analytics only',()=>choose(true,false),actions);button('Accept both',()=>choose(true,true),actions);
-    document.body.appendChild(banner);settings=button('Cookie settings',()=>{banner.hidden=false;},document.body);settings.className='np-cookie-settings';
-    const c=read();if(c){consent=c;banner.hidden=true;start();}lastChoice=JSON.stringify(c);
+    document.body.appendChild(banner);
+    settings=button('Privacy choices',()=>{banner.hidden=false;},document.body);settings.className='np-cookie-settings';
+    function placeChoices(){const nav=document.querySelector('#np-global-footer nav');if(nav){nav.appendChild(settings);return true;}settings.hidden=true;return false;}
+    if(placeChoices())settings.hidden=false;else {const observer=new MutationObserver(()=>{if(placeChoices()){settings.hidden=false;observer.disconnect();}});observer.observe(document.body,{childList:true,subtree:true});}
+    const c=read();if(c){consent=c;banner.hidden=true;start();lastChoice=JSON.stringify(c);}else{choose(true,true);}
     // Consent is shared only among NotePreso subdomains. A changed choice in
     // another tab forces a fresh document, unloading all optional trackers.
     window.addEventListener('focus',()=>{if(JSON.stringify(read())!==lastChoice)location.reload();});

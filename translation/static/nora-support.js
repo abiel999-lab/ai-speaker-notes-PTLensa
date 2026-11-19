@@ -26,7 +26,7 @@
     if(window.mychat||document.getElementById('iframe1')){fail();return;}
     loading=true;start.disabled=true;status.textContent='Connecting to Nora…';
     // Official embed: positive offsetX places launcher on right; bottom-left opens toward left.
-    window.mychat={server:'https://live.cekat.ai/widget.js',iframeWidth:'400px',iframeHeight:'min(700px, calc(100dvh - 180px))',accessKey:'NotePreso-TawWFQU9',offsetX:16,offsetY:72,position:'bottom-left'};
+    window.mychat={server:'https://live.cekat.ai/widget.js',iframeWidth:'440px',iframeHeight:'calc(100dvh - 100px)',accessKey:'NotePreso-TawWFQU9',offsetX:16,offsetY:72,position:'bottom-left'};
     const q=[];window.Cekat=function(){q.push(arguments);};window.Cekat.q=q;
     const vendor=document.createElement('script'); vendor.async=true;vendor.src=window.mychat.server;vendor.referrerPolicy='no-referrer';
     vendor.onerror=fail;
