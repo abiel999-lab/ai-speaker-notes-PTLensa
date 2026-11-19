@@ -116,7 +116,7 @@ export async function saveDocumentPlan(root,owner,workspace,context,output){
 
 
 export const fullCopySettingsSchema = z.object({
- fontFamily:z.enum(['Arial','Calibri','Times New Roman','Georgia','Verdana']).optional(),
+ fontFamily:z.enum(["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"]).optional(),
  fontScale:z.number().min(0.85).max(1.15).optional(),
  density:z.enum(['comfortable','compact']).optional(),
  includeSpeakerNotes:z.boolean().optional(),

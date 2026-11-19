@@ -3,7 +3,7 @@ import { z } from "zod";
 export const settingsSchema = z
     .object({
     documentMode:z.boolean().optional(),
-    fontFamily:z.enum(['Arial','Calibri','Times New Roman','Georgia','Verdana']).optional(),
+    fontFamily:z.enum(["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"]).optional(),
     includeSpeakerNotes:z.boolean().optional(),
     creationMode: z.enum(["template", "creative"]).optional(),
     creativeAssets: z.array(z.object({ id: z.string().uuid(), description: z.string().trim().min(1).max(160) }).strict()).max(12).refine(v => new Set(v.map(a => a.id)).size === v.length).optional(),

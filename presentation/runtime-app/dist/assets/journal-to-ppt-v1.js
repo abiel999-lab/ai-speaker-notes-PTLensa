@@ -1,24 +1,31 @@
-// Independent workflow: never replaces or saves an existing presentation.
-if (location.pathname === '/app' && new URLSearchParams(location.search).get('tool') === 'journal') {
-const session = await fetch('/api/session',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).catch(()=>null);
-if(session?.user){
- const capability=await fetch('/api/journal/capabilities',{credentials:'same-origin'}).then(r=>r.ok?r.json():null).catch(()=>null);
- if(capability?.enabled)mount();
-}
-}
-function mount(){
- const style=document.createElement('link');style.rel='stylesheet';style.href='/assets/journal-to-ppt-v1.css';document.head.append(style);
- const dialog=document.createElement('dialog');dialog.className='np-journal-dialog';
+// Research journal format lives in the document workspace.
+const attach = () => {
+ const host=document.getElementById('np-journal-mode');
+ if(host && !host.firstChild)mount(host);
+};
+new MutationObserver(attach).observe(document.body,{subtree:true,childList:true});
+attach();
+
+function mount(host){
+ const details=document.createElement('details');
+ const title=document.createElement('summary');
+ title.textContent='Research journal (PDF)';
+ details.append(title);
+ const dialog=document.createElement('div');dialog.className='np-journal-form';
  // Static markup only. All strings from the PDF enter through textContent.
- dialog.innerHTML='<form method="dialog"><button class="np-journal-close" aria-label="Close">×</button></form><h2>Journal to PPT</h2><p>Upload one research journal PDF (up to 10 MB and 40 pages) to create one PowerPoint with Introduction or Background, Methodology, and Conclusion. The original pages are included.</p><label>Research journal PDF<input type="file" accept="application/pdf,.pdf"></label><label>PowerPoint font<select id="np-journal-font"><option>Arial</option><option>Calibri</option><option>Times New Roman</option></select></label><p class="np-journal-summary" role="status" aria-live="polite"></p><button class="np-journal-export" type="button" disabled>Create PPTX</button>';
- document.body.append(dialog);
+ dialog.innerHTML='<p>Upload one research journal PDF (up to 10 MB and 40 pages) to create one PowerPoint with Introduction or Background, Methodology, and Conclusion. The original pages are included.</p><label>Research journal PDF<input type="file" accept="application/pdf,.pdf"></label><label>PowerPoint font<select id="np-journal-font"><option>Arial</option><option>Aptos</option><option>Calibri</option><option>Cambria</option><option>Century Gothic</option><option>Comic Sans MS</option><option>Garamond</option><option>Georgia</option><option>Helvetica</option><option>Inter</option><option>Lato</option><option>Montserrat</option><option>Open Sans</option><option>Poppins</option><option>Roboto</option><option>Segoe UI</option><option>Tahoma</option><option>Times New Roman</option><option>Trebuchet MS</option><option>Verdana</option></select></label><p class="np-journal-summary" role="status" aria-live="polite"></p><button class="np-journal-export" type="button" disabled>Create PPTX</button>';
+ details.append(dialog);host.append(details);
  const input=dialog.querySelector('input'),status=dialog.querySelector('[role=status]'),button=dialog.querySelector('.np-journal-export');
  let payload=null,controller=null;
  const font=dialog.querySelector('#np-journal-font');
- dialog.showModal();
- dialog.addEventListener('close',()=>{controller?.abort();controller=null;input.value='';payload=null;button.disabled=true;input.disabled=false;status.textContent='';dialog.remove();const url=new URL(location.href);url.searchParams.delete('tool');history.replaceState(history.state,'',url);});
+ if (new URLSearchParams(location.search).get('tool') === 'journal') {
+  details.open=true;
+  const url=new URL(location.href);url.searchParams.delete('tool');history.replaceState(history.state,'',url);
+ }
  const errors={JOURNAL_OCR_REQUIRED:'This PDF needs OCR before it can be converted.',JOURNAL_PAGE_LIMIT:'Use a PDF with at most 40 pages.',JOURNAL_BUSY:'Another journal is being processed. Please try again shortly.',JOURNAL_STRUCTURE_REVIEW_REQUIRED:'The journal sections could not be identified. Please use a journal with readable text.',AUTH_REQUIRED:'Please sign in again.',CSRF_REJECTED:'Please refresh the page and try again.'};
  async function request(action,signal){
+  const session=await fetch('/api/session',{credentials:'same-origin',cache:'no-store',signal}).then(r=>r.ok?r.json():null);
+  if(!session?.user)throw Error(errors.AUTH_REQUIRED);
   const response=await fetch('/api/journal/'+action,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken||''},body:JSON.stringify({...payload,fontFamily:font.value}),signal});
   if(!response.ok){const e=await response.json().catch(()=>({}));throw Error(errors[e.error]||'The journal could not be processed. Please try again.');}
   return response;

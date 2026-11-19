@@ -21,6 +21,7 @@ import { rulesPlan } from "../core/planner.js";
 import { aiPlan } from "../core/ai.js";
 import { buildScene } from "../core/layout.js";
 import { recordPresentationFailure } from './job-failure-events.js';
+import { applyTypography } from '../core/typography.js';
 import { exportPptx } from "../core/export.js";
 import { renderPptx } from "./render.js";
 import { auditRenderedPresentation, unavailableRenderQuality } from "./render-quality.js";
@@ -225,6 +226,10 @@ export async function processJob(repo, cfg, id) {
             scene = enriched.scene; visualSummary = enriched.summary;
             Object.assign(imagePaths, photos.paths);
         }
+        if (!fullCopy && (job.settings.documentMode || job.settings.creationMode === "creative"))
+            scene = applyTypography(scene, job.settings);
+        if (job.settings.includeSpeakerNotes !== undefined)
+            scene = { ...scene, includeSpeakerNotes: job.settings.includeSpeakerNotes };
         job = { ...job, plan, scene, ...(job.settings.creationMode === "creative" ? {visualsProcessed: true} : {}) };
         for (const s of scene.slides) for (const o of s.objects)
             if(o.type === 'image' && /^[0-9a-f-]{36}$/i.test(o.asset || ''))

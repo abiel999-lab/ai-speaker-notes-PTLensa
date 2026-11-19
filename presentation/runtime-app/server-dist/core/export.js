@@ -26,7 +26,7 @@ import { auditDesignScene } from "./design-audit.js";
 import { searchSafeDesignCandidates } from "./design-candidate-search.js";
 function preferredFont(text,doc,family) { const font=automaticFont(text,doc.raw,doc.presentationLanguage); return font==='Arial'&&family ? family : font; }
 export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", branding, fontFamily) {
-    const selectedFont = ["Arial", "Calibri", "Times New Roman", "Georgia", "Verdana"].includes(fontFamily) ? fontFamily : null;
+    const selectedFont = ["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"].includes(fontFamily) ? fontFamily : null;
     const fontForText = (...args) => {
         const font = automaticFont(...args);
         return font === "Arial" && selectedFont ? selectedFont : font;
@@ -90,7 +90,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
         const s = prepared.slide;
         const slide = pptx.addSlide();
         slide.background = { color: s.background.slice(1) };
-        if(!scene.documentMode||scene.includeSpeakerNotes)slide.addNotes(speakerNotes[slideIndex]);
+        if(scene.includeSpeakerNotes??!scene.documentMode)slide.addNotes(speakerNotes[slideIndex]);
         if(s.sectionTitle&&s.objects[0]?.sourceId)slide.addText(technicalSectionTitle(doc,s.objects[0].sourceId),{x:.78,y:.13,w:11.78,h:.32,fontFace:fontForText(technicalSectionTitle(doc,s.objects[0].sourceId),doc.raw,doc.presentationLanguage),fontSize:14,color:t.muted.slice(1),margin:0,objectName:'np-section-title-'+s.objects[0].sourceId});
         if(s.id==='np-visual-cover'){
             slide.addText(visualCoverTitle(doc),{x:.86,y:1.65,w:7.25,h:2.4,fontFace:fontForText(visualCoverTitle(doc),doc.raw,doc.presentationLanguage),fontSize:46,bold:true,color:'FFFFFF',margin:0,objectName:'np-visual-cover-title'});
@@ -250,7 +250,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     if (motionResult)
         bytes = motionResult.bytes;
     bytes = await finalizePptxPackage(bytes);
-    if(scene.documentMode&&!scene.includeSpeakerNotes)bytes=await withoutSpeakerNotes(bytes);
+    if(!(scene.includeSpeakerNotes??!scene.documentMode))bytes=await withoutSpeakerNotes(bytes);
     await verifyInternalSlideLinks(bytes);
     const pdfPictures = new Map();
     for (const [index, slide] of exportScene.slides.entries()) {
