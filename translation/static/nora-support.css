@@ -1,8 +1,33 @@
-#np-nora{position:fixed;right:16px;bottom:72px;z-index:2147483010;font:15px/1.5 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}#np-nora [hidden]{display:none!important}#np-nora button{font:inherit;cursor:pointer;border-radius:12px;padding:12px 18px;border:1px solid #12b5c9}#np-nora-launch,#np-nora-start{background:#12b5c9;color:#fff;font-weight:600;box-shadow:0 6px 20px #172b4d26}#np-nora button:disabled{opacity:.55;cursor:default}#np-nora-panel{position:absolute;right:0;bottom:64px;background:#fff;border:1px solid #d9e3f2;border-radius:16px;padding:22px;width:min(380px,calc(100vw - 32px));box-sizing:border-box;max-height:calc(100dvh - 180px);overflow:auto;box-shadow:0 8px 32px #172b4d33}#np-nora h2{font-size:19px;margin:0 30px 12px 0}#np-nora p{margin:12px 0}#np-nora a{color:#234cb0;text-decoration:underline}#np-nora-close{position:absolute;top:8px;right:8px;padding:3px 10px!important;background:white;font-size:22px!important}#np-nora label{display:block;margin:16px 0}#np-nora :focus-visible{outline:3px solid #157da8;outline-offset:3px}.np-nora-obscured{visibility:hidden!important;pointer-events:none!important}@media(max-width:480px){#np-nora{right:12px;bottom:64px}#np-nora-panel{width:calc(100vw - 48px);bottom:58px;max-height:calc(100dvh - 160px)}}
+#np-nora {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  z-index: 2147483010;
+  font: 15px/1.5 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172b4d;
+}
 
-#np-nora-start:disabled{color:#fff;opacity:1;background:#12b5c9;cursor:default}
+#np-nora [hidden], #np-nora-status:empty { display: none !important; }
 
-#np-nora-start:disabled{color:#fff;opacity:1;background:#12b5c9;cursor:default}
+#np-nora-launch, #np-nora-fallback {
+  display: inline-block;
+  border: 1px solid #12b5c9;
+  border-radius: 12px;
+  padding: 12px 18px;
+  background: #12b5c9;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 6px 20px #172b4d26;
+  cursor: pointer;
+}
 
-/* Side panel modeled after the NotePreso support experience. */
-#np-nora-panel{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);max-height:100dvh;border-radius:0;padding:32px 24px;box-shadow:-12px 0 40px #172b4d26}
+#np-nora-launch[aria-disabled="true"] { cursor: wait; }
+#np-nora :focus-visible { outline: 3px solid #157da8; outline-offset: 3px; }
+#np-nora-status { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: #fff; }
+.np-nora-obscured { visibility: hidden !important; pointer-events: none !important; }
+
+@media (max-width: 480px) {
+  #np-nora { right: 12px; bottom: 64px; }
+}
