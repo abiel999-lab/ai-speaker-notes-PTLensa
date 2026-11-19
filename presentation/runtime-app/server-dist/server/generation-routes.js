@@ -101,7 +101,7 @@ export function registerGenerationRoutes(app, repo, runner, cfg) {
             .code(202)
             .send({ generation: { id: job.id, status: job.status } });
     }
-    app.post("/api/projects/:id/generate", { config: { rateLimit: { max: 12, timeWindow: "1 hour" } } }, async (req, reply) => {
+    app.post("/api/projects/:id/generate", { config: { rateLimit: false } }, async (req, reply) => {
         const p = await repo.getProject(req.params.id, req.user.id);
         if (!p)
             return reply.code(404).send({ error: "PROJECT_NOT_FOUND" });

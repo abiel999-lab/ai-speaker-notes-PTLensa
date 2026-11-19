@@ -47,7 +47,7 @@ export function appendDocumentVisuals(scene,assets){
 }
 export function registerDocumentRoutes(app,{auth,cfg}){
  let busy=false;
- app.post('/api/document/import',{preHandler:auth,bodyLimit:14*1024*1024,config:{rateLimit:{max:8,timeWindow:'1 hour'}}},async(req,reply)=>{
+ app.post('/api/document/import',{preHandler:auth,bodyLimit:14*1024*1024,config:{rateLimit:false}},async(req,reply)=>{
   if(busy)return reply.code(429).send({error:'JOURNAL_BUSY'});
   const body=req.body;
   if(!body||typeof body.name!=='string'||body.name.length>120||typeof body.base64!=='string'||body.base64.length>14*1024*1024||!/\.(pdf|docx|md|txt)$/i.test(body.name))return reply.code(400).send({error:'DOCUMENT_INVALID'});
