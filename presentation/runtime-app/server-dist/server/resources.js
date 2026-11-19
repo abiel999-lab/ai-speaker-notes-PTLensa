@@ -3,10 +3,8 @@ import{LANGUAGES}from'../core/source-language.js';import{z}from'zod';import{pars
 export const resourceSchema=z.object({id:z.string().uuid(),name:z.string().min(1).max(120),role:z.enum(['content','reference','full-copy']),documentId:z.string().uuid().optional(),visuals:z.number().int().min(0).max(200).optional(),pdfPages:z.number().int().min(1).max(40).optional(),orderedVisuals:z.boolean().optional(),inlineImageCount:z.number().int().min(0).max(200).optional(),text:z.string().max(240000)}).strict();
 export const workspaceSchema=z.object({kind:z.enum(["brief","document"]).optional(),brief:z.string().max(12000),policy:z.enum(['preserve','draft']),resources:z.array(resourceSchema).max(6)}).strict().refine(v=>v.resources.reduce((s,r)=>s+r.text.length,0)<=480000,'Resources exceed combined limit');
 export function contentFromResources(workspace){const contents=workspace.resources.filter(r=>r.role==='content');if(!contents.length)throw Error('CONTENT_SOURCE_REQUIRED');return contents.map(r=>r.text).join('\n\n---\n\n');}
-export function registerWorkspaceRoutes(app,repo,cfg,auth){app.post('/api/workspace/draft',{preHandler:auth,config:{rateLimit:{max:6,timeWindow:'1 hour'}}},async(req,reply)=>{
- const body=z.object({workspace:workspaceSchema,model:z.enum(['gpt-6-luna','gpt-6.1-terra']),language:z.enum(LANGUAGES),reasoningEffort:z.enum(['low','medium','high']).default('medium'),sections:z.number().int().min(3).max(30),typography:fullCopySettingsSchema.optional()}).strict().parse(req.body);
- if(body.workspace.policy!=='draft')return reply.code(400).send({error:'CONTENT_POLICY_INVALID'});if(!body.workspace.brief.trim()&&body.workspace.kind!=='document')return reply.code(400).send({error:'BRIEF_REQUIRED'});
- if (isFullCopy(body.workspace)) {
+export function registerWorkspaceRoutes(app,repo,cfg,auth){
+ async function fullCopy(req,reply,body){
   try {
    return reply.header('Cache-Control','private, no-store').send(await saveFullCopyPlan(cfg.root,req.user.id,body.workspace,body.typography));
   } catch (error) {
@@ -15,6 +13,12 @@ export function registerWorkspaceRoutes(app,repo,cfg,auth){app.post('/api/worksp
    return reply.code(422).send({error:code,requestId:req.id});
   }
  }
+ // Workspace preparation is user authenticated. Full Copy runs locally and
+ // AI preparation still uses the account's existing usage checks.
+ app.post('/api/workspace/draft',{preHandler:auth,config:{rateLimit:false}},async(req,reply)=>{
+ const body=z.object({workspace:workspaceSchema,model:z.enum(['gpt-6-luna','gpt-6.1-terra']),language:z.enum(LANGUAGES),reasoningEffort:z.enum(['low','medium','high']).default('medium'),sections:z.number().int().min(3).max(30),typography:fullCopySettingsSchema.optional()}).strict().parse(req.body);
+ if(body.workspace.policy!=='draft')return reply.code(400).send({error:'CONTENT_POLICY_INVALID'});if(!body.workspace.brief.trim()&&body.workspace.kind!=='document')return reply.code(400).send({error:'BRIEF_REQUIRED'});
+ if(isFullCopy(body.workspace))return fullCopy(req,reply,body);
  if(body.workspace.kind==='document'&&!body.workspace.resources.some(r=>r.role==='content'))return reply.code(400).send({error:'CONTENT_SOURCE_REQUIRED'});
  async function recoverDocument(code) {
   console.warn(JSON.stringify({event:'document_plan_rejected',code,requestId:req.id}));
