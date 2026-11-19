@@ -10,3 +10,10 @@
 #workspace-main#workspace-main .step-badge{padding:8px 14px!important}
 #workspace-main#workspace-main :is(.start-settings,.workspace-account-details)>summary:focus-visible,#root .np-workspace summary:focus-visible{outline:3px solid #087c8d;outline-offset:3px}
 @media(max-width:480px){#workspace-main#workspace-main .disclosure-action{white-space:normal!important;text-align:right}#workspace-main#workspace-main .settings-disclosure-head{gap:12px!important}}
+
+#home-preview-form#home-preview-form :is(.settings-disclosure-head strong,.disclosure-action,[data-disclosure-label],#home-file-title,.browse-chip,#home-generate,.start-settings-body label>span){font-size:18px!important;font-weight:700!important;line-height:1.35!important}
+#home-preview-form#home-preview-form :is(#home-file-meta,#home-settings-summary,.np-home-notes-help,.preflight-review p,.generation-summary,.try-actions p,.start-settings-body :is(select,input,textarea)){font-size:16px!important;line-height:1.5!important}
+#home-preview-form#home-preview-form :is(#home-settings>summary,#home-generate,.start-settings-body :is(select,input)){min-height:52px!important;box-sizing:border-box}
+#home-preview-form#home-preview-form #home-settings>summary{padding:13px!important}
+#home-preview-form#home-preview-form .disclosure-action{white-space:normal!important;text-align:right;gap:8px}
+#workspace-main#workspace-main :is(#workspace-settings-summary,.workspace-account-details>summary>strong){font-size:16px!important}

@@ -43,13 +43,17 @@
   const productLink = (entry) => {
     const [name, href, hint] = entry;
     const active = new URL(href).origin === location.origin;
-    return `<a class="workspace-option" href="${href}"${active?' aria-current="true"':''}><span><strong>${name}</strong><small>${hint}</small></span><span class="workspace-arrow" aria-hidden="true">→</span></a>`;
+    const icon = name === 'Speaker Notes' ? '<path d="M5 4h14v13H9l-4 3zM8 8h8M8 12h6"/>' :
+      name === 'Presentation' ? '<path d="M3 5h18v12H3zM12 17v4M8 21h8M8 13l3-3 2 2 3-4"/>' :
+      '<path d="M3 5h11M8 3v2m4 0c0 5-4 8-8 10m2-7c2 3 4 5 7 6m1 6 4-10 4 10m-6-3h4"/>';
+    const symbol = `<span class="workspace-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>`;
+    return `<a class="workspace-option" href="${href}"${active?' aria-current="true"':''}>${symbol}<span class="workspace-copy"><strong>${name}</strong><small>${hint}</small></span><span class="workspace-arrow" aria-hidden="true">→</span></a>`;
   };
   const controlsStyle = document.createElement('link');
   controlsStyle.rel = 'stylesheet';
-  controlsStyle.href = (isPresentation ? '/assets/' : '/static/') + 'workspace-accessible-controls.css?v=2';
+  controlsStyle.href = (isPresentation ? '/assets/' : '/static/') + 'workspace-accessible-controls.css?v=3';
   document.head.append(controlsStyle);
-  shadow.innerHTML = `<link rel="stylesheet" href="${isPresentation?'/assets':'/static'}/site-header-readable.css?v=1">
+  shadow.innerHTML = `<link rel="stylesheet" href="${isPresentation?'/assets':'/static'}/site-header-readable.css?v=3">
     <div class="bar"><a class="brand" href="${home[1]}" aria-label="NotePreso home"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+CjxyZWN0IHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgcng9IjciIGZpbGw9IiNGN0Y5RkMiLz4KPHBhdGggZD0iTTE2IDI1SDVhMiAyIDAgMCAxLTItMlY3YTIgMiAwIDAgMSAyLTJoMjNhMiAyIDAgMCAxIDIgMnY5IgogZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMTcyQjREIiBzdHJva2Utd2lkdGg9IjIuNSIvPgo8cGF0aCBkPSJNMTAgMTB2NWg1YTUgNSAwIDEgMS01LTVaIiBmaWxsPSIjMTcyQjREIi8+CjxwYXRoIGQ9Ik0xOCAxMGg4TTE4IDE0aDYiIHN0cm9rZT0iIzE3MkI0RCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPHJlY3QgeD0iMTYiIHk9IjE4IiB3aWR0aD0iMTgiIGhlaWdodD0iMTMiIHJ4PSIzIiBmaWxsPSIjMDg3RjhDIi8+CjxwYXRoIGQ9Ik0yMCAyM2gxME0yMCAyN2g3IiBzdHJva2U9IiNGN0Y5RkMiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPg==" alt="" width="36" height="36"><span><strong>NotePreso</strong><small>Your expertise. Clearly spoken.</small></span></a>
     <nav class="desktop-nav" aria-label="Main navigation">${link(home)}<details class="more workspace-menu"><summary>Workspace <span class="chevron" aria-hidden="true">⌄</span></summary><div class="more-panel">${products.map(productLink).join('')}<div class="local-desktop"></div></div></details>${primary.map(link).join('')}<details class="more documentation-menu"><summary>Documentation <svg class="chevron" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="m6 8 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="more-panel">${secondary.map(link).join('')}</div></details></nav>
     <div class="desktop-account session-slot"><a class="sign-in" href="${isPresentation?'/api/auth/login':'/auth/login?return_to='+encodeURIComponent(location.pathname)}">Account</a></div>

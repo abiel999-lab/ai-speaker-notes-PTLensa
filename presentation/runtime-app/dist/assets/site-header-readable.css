@@ -5,6 +5,14 @@
 
 @media(min-width:901px){.more summary{padding:10px 12px;min-height:42px;gap:9px;border:1px solid #dce6ee;border-radius:10px;background:#f7fafc;transition:background .15s,border-color .15s}.more[open] summary{background:#eaf4f5;border-color:#accfd3;color:#086d78}.more[open] .chevron{transform:rotate(180deg)}.more-panel{top:calc(100% + 12px);padding:8px;width:232px;border-radius:14px;box-shadow:0 16px 48px #17385824}.more-panel a{gap:12px;padding:11px 14px;border-radius:9px;min-height:44px;font-weight:500}.more-panel a+a{margin-top:2px}.more-panel a:hover{background:#eaf4f5;color:#086d78}.profile{border:1px solid #dce6ee;background:#f7fafc;padding:7px 10px;gap:10px}.profile[aria-expanded=true]{border-color:#accfd3;background:#eaf4f5}.profile[aria-expanded=true] .chevron{transform:rotate(180deg)}.account-panel{padding:8px;width:240px;top:calc(100% + 12px);box-shadow:0 16px 48px #17385824}.account-panel a{padding:11px 14px;min-height:44px;font-weight:500}.account-panel button[data-sign-out]{margin-top:7px;padding:12px 14px;border-top:1px solid #e5ebf1;border-radius:0 0 8px 8px;color:#a44343}.account-panel button[data-sign-out]:hover{background:#fff1f1}.chevron{flex-shrink:0;transition:transform .15s}.desktop-nav{gap:18px}}
 
+@media (max-width: 900px) {
+  .bar .brand, .drawer a, .drawer button, .drawer summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .bar .brand { max-width: calc(100% - 56px); }
+}
+
 .mobile-more { grid-column: 1 / -1; }
 .mobile-more > summary {
   display: list-item;
@@ -30,3 +38,15 @@
 .mobile-nav details>summary,.mobile-nav>.mobile-workspace,.mobile-nav>.mobile-documentation{min-height:48px}
 .mobile-nav .workspace-option{margin-inline:0}.brand small{font-size:12px}.profile .identity strong,.sign-in,.account-panel :is(a,button){font-size:16px}.profile .plan{font-size:14px}
 @media(min-width:901px) and (max-width:1100px){.desktop-nav{gap:12px}.bar{gap:12px}.desktop-nav>a,.desktop-nav summary{font-size:16px}.desktop-nav .more summary{padding-inline:9px}}
+
+.desktop-nav .more > summary{min-height:48px;gap:10px}
+.desktop-nav .more>.more-panel,.desktop-nav .workspace-menu>.more-panel{top:calc(100% + 9px);left:0;right:auto;width:330px;min-width:330px;padding:8px;background:#fff;border:1px solid #d1dce6;border-radius:14px;box-shadow:0 14px 32px #142e4c25}
+.desktop-nav .documentation-menu>.more-panel{left:auto;right:0}
+.desktop-nav .workspace-option,.mobile-nav .workspace-option{display:grid;grid-template-columns:40px minmax(0,1fr) 18px;align-items:center;gap:12px;min-height:72px;padding:10px 12px}
+.workspace-option .workspace-copy strong{font-size:18px;font-weight:700;line-height:1.25}
+.workspace-option .workspace-copy small{font-size:15px;line-height:1.3;margin-top:4px}
+.workspace-symbol{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:#eef4f8;color:#075b66}
+.workspace-symbol svg{width:22px;height:22px}
+.workspace-option[aria-current]{background:#edf7f6;border-color:#c7e0de!important}
+.desktop-nav .documentation-menu .more-panel>a,.mobile-nav .mobile-documentation>a{display:flex;align-items:center;min-height:48px;padding:10px 14px;border-radius:8px}
+.desktop-nav .documentation-menu .more-panel>a:hover,.mobile-nav .mobile-documentation>a:hover{background:#eef4f8}
