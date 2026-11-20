@@ -28,7 +28,7 @@ function bodyFontFor(pages, includeFirstPage = false) {
     return [...counts].sort((a,b)=>b[1]-a[1])[0]?.[0]||13;
 }
 
-export function parseJournalLayout(xml, { allowImageOnly = false } = {}) {
+export function parseJournalLayout(xml, { allowImageOnly = false, maxPages = 40, maxText = 240000 } = {}) {
     const pages=[];
     for (const p of xml.matchAll(/<page\s+([^>]+)>([\s\S]*?)<\/page>/g)) {
         const size=attrs(p[1]);
@@ -75,8 +75,8 @@ export function parseJournalLayout(xml, { allowImageOnly = false } = {}) {
         }).sort((a,b)=>a.yMin-b.yMin||a.xMin-b.xMin);
         pages.push(page);
     }
-    if(!pages.length || pages.length>40)throw Error('JOURNAL_PAGE_LIMIT');
-    if(pages.reduce((n,p)=>n+p.lines.reduce((s,l)=>s+l.text.length,0),0)>240000)throw Error('JOURNAL_TEXT_LIMIT');
+    if(!pages.length || pages.length>maxPages)throw Error('JOURNAL_PAGE_LIMIT');
+    if(pages.reduce((n,p)=>n+p.lines.reduce((s,l)=>s+l.text.length,0),0)>maxText)throw Error('JOURNAL_TEXT_LIMIT');
     if(!allowImageOnly&&pages.reduce((n,p)=>n+p.lines.length,0)<10)throw Error('JOURNAL_OCR_REQUIRED');
     return pages;
 }

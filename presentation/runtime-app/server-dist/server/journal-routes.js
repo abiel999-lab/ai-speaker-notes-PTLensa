@@ -6,7 +6,7 @@ import { createJournalDeck,decodeJournal } from './journal-service.js';
 // Existing app hooks enforce origin, session CSRF and the Presentation Pro gate.
 export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,generate=createJournalDeck}) {
     let busy=false;
-    app.get('/api/journal/capabilities',{preHandler:auth},async()=>({enabled,maxBytes:50*1024*1024,maxPages:40}));
+    app.get('/api/journal/capabilities',{preHandler:auth},async()=>({enabled,maxBytes:50*1024*1024,maxPages:40,maxSourceCopyPages:200}));
     for(const action of ['inspect','export'])app.post(`/api/journal/${action}`,{
         bodyLimit:68*1024*1024,preHandler:auth,
         config:{rateLimit:{max:4,timeWindow:'1 hour'}}
@@ -21,10 +21,10 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
         req.raw.once('aborted',abort);
         reply.raw.once('close',abort);
         try {
-            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput} = req.body;
+            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly} = req.body;
             const result=await generate(bytes,name,{
                 signal:controller.signal,inspectOnly:action==='inspect',standardHeadings:true,
-                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,
+                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,
             });
             if(action==='inspect')return reply.header('Cache-Control','private, no-store').send(result.manifest);
             if(reviewOutput){

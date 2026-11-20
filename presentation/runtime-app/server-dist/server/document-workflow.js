@@ -87,6 +87,9 @@ export function registerDocumentRoutes(app,{auth,cfg}){
    const orderedVisuals=fullCopyVisuals!==undefined;
    await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,fullCopyVisuals,orderedVisuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
    return {source,title,documentId,visuals:visuals.length,pdfPages,orderedVisuals,inlineImageCount:fullCopyVisuals?.length};
-  }catch(e){const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
+  }catch(e){
+    if (/\.pdf$/i.test(body.name) && ['JOURNAL_PAGE_LIMIT','JOURNAL_TEXT_LIMIT','JOURNAL_PDF_UNREADABLE','DOCUMENT_TEXT_LIMIT','DOCUMENT_IMAGE_LIMIT','DOCUMENT_IMAGE_EXTRACTION_FAILED'].includes(e.message))
+      return reply.code(422).send({error:'DOCUMENT_USE_PAGE_COPY',requestId:req.id});
+    const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
  });
 }

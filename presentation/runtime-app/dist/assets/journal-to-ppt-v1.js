@@ -18,7 +18,7 @@ export async function journalRequest(action, payload, signal) {
   });
   if (!response.ok) {
     const result=await response.json().catch(()=>({}));
-    throw Error(errors[result.error]||"The journal could not be processed. Try again.");
+    throw Error((result.error === "JOURNAL_PAGE_LIMIT" && payload.sourcePagesOnly ? "Source page copy supports up to 200 pages." : errors[result.error])||"The journal could not be processed. Try again.");
   }
   if (action !== "export") return response.json();
   const body = await response.blob();
