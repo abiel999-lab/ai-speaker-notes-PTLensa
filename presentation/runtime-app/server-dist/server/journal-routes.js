@@ -1,13 +1,95 @@
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { createReadStream, createWriteStream } from 'node:fs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { generationDirectory } from './artifacts.js';
 import { recordPresentationFailure } from './job-failure-events.js';
 import { createJournalDeck,decodeJournal } from './journal-service.js';
 import { renderExportedSlides } from './pptx-slide-viewer.js';
 
-// No repository, provider, billing or permanent project writes are performed.
 // Existing app hooks enforce origin, session CSRF and the Presentation Pro gate.
-export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,generate=createJournalDeck,render=renderExportedSlides}) {
+export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,repo,generate=createJournalDeck,render=renderExportedSlides}) {
     let busy=false;
+    function framed(result, previews) {
+        const sizes=previews.map(image=>image.length);
+        const meta=Buffer.from(JSON.stringify({slides:result.manifest.slides,pptxBytes:result.bytes.length,sizes}));
+        const length=Buffer.alloc(4);
+        length.writeUInt32BE(meta.length);
+        return [length,meta,result.bytes,...previews];
+    }
+    async function runJournal(job, bytes, payload, log) {
+        const signal=AbortSignal.timeout(420000);
+        try {
+            const result=await generate(bytes,payload.name,{...payload,signal,standardHeadings:true});
+            let previews=[];
+            try { previews=await render(result.bytes,result.manifest.slides,signal); }
+            catch(error) { log.warn({id:job.id,code:error.message},'Journal preview unavailable'); }
+            const dir=generationDirectory(failureRoot,job);
+            await fs.mkdir(dir,{recursive:true,mode:0o700});
+            const output=path.join(dir,'journal-result.bin');
+            await pipeline(Readable.from(framed(result,previews)),createWriteStream(output,{flags:'wx',mode:0o600}));
+            await repo.compareAndSaveJob(job,{...job,status:'ready',stage:'Ready',
+                journal:{...job.journal,slides:result.manifest.slides}});
+        } catch(error) {
+            const code=/^JOURNAL_[A-Z_]+$/.test(error.message)?error.message:'JOURNAL_GENERATION_FAILED';
+            await repo.compareAndSaveJob(job,{...job,status:'failed',stage:'Failed',error:code});
+            if(failureRoot)await recordPresentationFailure(failureRoot,{id:job.id,owner:job.ownerId,code,stage:'Journal export',status:'failed'},error);
+        } finally { busy=false; }
+    }
+    if (repo) {
+        const config={rateLimit:{max:4,timeWindow:'1 hour'}};
+        app.post('/api/journal/projects/:id/export',{preHandler:auth,bodyLimit:68*1024*1024,config},async(req,reply)=>{
+            if(!enabled)return reply.code(404).send({error:'JOURNAL_DISABLED'});
+            const project=await repo.getProject(req.params.id,req.user.id);
+            if(!project)return reply.code(404).send({error:'PROJECT_NOT_FOUND'});
+            const previous=project.latestId && await repo.job(project.latestId,req.user.id);
+            if(previous && !['ready','failed','cancelled'].includes(previous.status)){
+                if(previous.journal && Date.now()-Date.parse(previous.createdAt)>480000)
+                    await repo.compareAndSaveJob(previous,{...previous,status:'failed',stage:'Failed',error:'JOURNAL_ANALYSIS_TIMEOUT'});
+                else if(previous.journal)return reply.code(202).send({id:previous.id});
+                else return reply.code(409).send({error:'JOURNAL_BUSY'});
+            }
+            if(busy)return reply.code(429).send({error:'JOURNAL_BUSY'});
+            const {base64, ...payload}=req.body || {};
+            let bytes;
+            try { bytes=decodeJournal({...payload,base64}); }
+            catch { return reply.code(400).send({error:'JOURNAL_INVALID'}); }
+            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,motion,presenterContext,journalRole,sourcePagesOnly}=payload;
+            const job={id:randomUUID(),projectId:project.id,ownerId:project.ownerId,status:'building',
+                kind:'journal',stage:'Creating PowerPoint',createdAt:new Date().toISOString(),
+                settings:{theme:'ivory',fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,motion},
+                journal:{name,presenterContext,journalRole,sourcePagesOnly}};
+            busy=true;
+            try {
+                if(!await repo.startJournalJob(project,job)){
+                    busy=false;
+                    return reply.code(409).send({error:'JOURNAL_BUSY'});
+                }
+            } catch (error) { busy=false; throw error; }
+            void runJournal(job,bytes,payload,req.log).catch(error=>req.log.error({id:job.id,code:error.message},'Journal job persistence failed'));
+            return reply.code(202).send({id:job.id});
+        });
+        app.get('/api/journal/projects/:id/job',{preHandler:auth},async(req,reply)=>{
+            const project=await repo.getProject(req.params.id,req.user.id);
+            const job=project?.latestId && await repo.job(project.latestId,req.user.id);
+            if(!job?.journal)return reply.code(404).send({error:'JOURNAL_JOB_NOT_FOUND'});
+            const expired=job.status==='building'&&Date.now()-Date.parse(job.createdAt)>480000;
+            return reply.header('Cache-Control','private, no-store').send({id:job.id,status:expired?'failed':job.status,
+                settings:job.settings,journal:job.journal,error:expired?'JOURNAL_ANALYSIS_TIMEOUT':job.error});
+        });
+        app.get('/api/journal/projects/:id/result/:job',{preHandler:auth},async(req,reply)=>{
+            const job=await repo.job(req.params.job,req.user.id);
+            if(!job?.journal||job.projectId!==req.params.id||job.status!=='ready')
+                return reply.code(404).send({error:'JOURNAL_JOB_NOT_FOUND'});
+            const output=path.join(generationDirectory(failureRoot,job),'journal-result.bin');
+            const stats=await fs.stat(output).catch(error=>{if(error.code!=='ENOENT')throw error;return null;});
+            if(!stats)return reply.code(404).send({error:'JOURNAL_JOB_NOT_FOUND'});
+            return reply.header('Cache-Control','private, no-store').header('Content-Length',String(stats.size))
+                .type('application/octet-stream').send(createReadStream(output));
+        });
+    }
     app.get('/api/journal/capabilities',{preHandler:auth},async()=>({enabled,maxBytes:50*1024*1024,maxPages:40,maxSourceCopyPages:200}));
     for(const action of ['inspect','export'])app.post(`/api/journal/${action}`,{
         bodyLimit:68*1024*1024,preHandler:auth,
@@ -36,13 +118,10 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
                     if(controller.signal.aborted)throw error;
                     req.log.warn({requestId:req.id,code:error.message},'PowerPoint preview render unavailable');
                 }
-                const sizes=previews.map(image=>image.length);
-                const meta=Buffer.from(JSON.stringify({slides:result.manifest.slides,pptxBytes:result.bytes.length,sizes}));
-                const length=Buffer.alloc(4);
-                length.writeUInt32BE(meta.length);
+                const parts=framed(result,previews);
                 return reply.header('Cache-Control','private, no-store').type('application/octet-stream')
-                    .header('Content-Length',String(4+meta.length+result.bytes.length+sizes.reduce((a,b)=>a+b,0)))
-                    .send(Readable.from([length,meta,result.bytes,...previews]));
+                    .header('Content-Length',String(parts.reduce((size,part)=>size+part.length,0)))
+                    .send(Readable.from(parts));
             }
             if(reviewOutput){
                 const review = Buffer.from(JSON.stringify(result.manifest.generatedReview));

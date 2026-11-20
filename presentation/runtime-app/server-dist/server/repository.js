@@ -330,6 +330,18 @@ export class Repository {
     async saveJob(j) {
         await this.exec("INSERT INTO generations (id,project_id,owner_id,status,data) VALUES ($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET status=excluded.status,data=excluded.data", [j.id, j.projectId, j.ownerId, j.status, JSON.stringify(j)]);
     }
+    async startJournalJob(project, job) {
+        const next = { ...project, latestId: job.id, updatedAt: job.createdAt };
+        return this.atomic((function* () {
+            const rows = yield { sql: "UPDATE projects SET data=$1 WHERE id=$2 AND owner_id=$3 AND data=$4 RETURNING id",
+                params: [JSON.stringify(next), project.id, project.ownerId, JSON.stringify(project)] };
+            if (!rows.length) return false;
+            yield { sql: "INSERT INTO generations (id,project_id,owner_id,status,data) VALUES ($1,$2,$3,$4,$5)",
+                params: [job.id, job.projectId, job.ownerId, job.status, JSON.stringify(job)] };
+            yield Repository.listing(next);
+            return true;
+        })());
+    }
     async recordJobEvent(j) {
         const usage = j.plan?.usage;
         await this.exec("INSERT INTO job_events (generation_id,owner_id,project_id,status,kind,engine,model,input_tokens,output_tokens,duration_ms,error_code,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(generation_id) DO UPDATE SET status=excluded.status,engine=excluded.engine,model=excluded.model,input_tokens=excluded.input_tokens,output_tokens=excluded.output_tokens,duration_ms=excluded.duration_ms,error_code=excluded.error_code,updated_at=excluded.updated_at", [
@@ -395,6 +407,7 @@ export class Repository {
     async interruptJobs() {
         for (const row of await this.rows("SELECT data FROM generations WHERE status IN ('planning','building','verifying','rendering')")) {
             const j = JSON.parse(row.data);
+            if (j.journal) continue;
             await this.saveJob({
                 ...j,
                 status: "failed",

@@ -161,7 +161,7 @@ export async function createApp(cfg) {
             return reply.code(401).send({ error: "AUTH_REQUIRED" });
     };
     registerDocumentRoutes(app,{auth,cfg});
-    registerJournalRoutes(app,{auth,enabled:true,failureRoot:cfg.root});
+    registerJournalRoutes(app,{auth,enabled:true,failureRoot:cfg.root,repo});
     app.get("/api/health", { config: { rateLimit: false } }, async () => ({ ok: true, version: RELEASE.version }));
     app.get(ADMIN_METRICS_PATH, { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (_req, reply) => reply.header("Cache-Control", "no-store").send(await repo.adminMetrics()));
     app.get("/api/session", async (req) => ({
@@ -286,13 +286,18 @@ export async function createApp(cfg) {
                 const job = p.latestId
                     ? await repo.job(p.latestId, req.user.id)
                     : null;
+                if (job?.journal && job.status === 'building' && Date.now()-Date.parse(job.createdAt)>480000) {
+                    const failed={...job,status:'failed',stage:'Failed',error:'JOURNAL_ANALYSIS_TIMEOUT'};
+                    if(await repo.compareAndSaveJob(job,failed))job.status='failed';
+                }
                 return {
                     ...p,
                     latest: job
                         ? {
                             id: job.id,
                             status: job.status,
-                            slides: job.scene?.slides.length || 0,
+                            slides: job.journal?.slides || job.scene?.slides.length || 0,
+                            ...(job.journal ? { journal: true } : {}),
                             theme: job.settings.theme,
                             engine: job.plan?.engine,
                             preview: job.preview,

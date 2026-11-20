@@ -35,13 +35,17 @@ export async function journalRequest(action, payload, signal, onProgress) {
     throw error;
   }
   if (action !== "export") return response.json();
+  return readJournalResult(response,payload.renderPreview);
+}
+
+export async function readJournalResult(response, renderPreview = true) {
   const body = await response.blob();
   const length = new DataView(await body.slice(0, 4).arrayBuffer()).getUint32(0);
   if (!length || length + 4 >= body.size) throw Error("The generated PowerPoint could not be read.");
   const meta = JSON.parse(await body.slice(4, 4 + length).text());
   const start=4+length;
   const type="application/vnd.openxmlformats-officedocument.presentationml.presentation";
-  if (!payload.renderPreview) {
+  if (!renderPreview) {
     if (!Array.isArray(meta) || !meta.length) throw Error("The generated slide preview could not be read.");
     return {review:meta,blob:body.slice(start,body.size,type)};
   }
@@ -57,4 +61,21 @@ export async function journalRequest(action, payload, signal, onProgress) {
   });
   if(end!==body.size)throw Error("The generated PowerPoint download is incomplete.");
   return {blob,images,slides:meta.slides};
+}
+
+export async function journalJob(projectId, signal) {
+  const response=await fetch("/api/journal/projects/"+encodeURIComponent(projectId)+"/job",{signal,cache:"no-store"});
+  if(response.status===404)return null;
+  if(!response.ok)throw Error(response.status===401?errors.AUTH_REQUIRED:"Could not read the generation status.");
+  return response.json();
+}
+
+export async function journalJobResult(projectId, jobId, signal) {
+  const response=await fetch("/api/journal/projects/"+encodeURIComponent(projectId)+"/result/"+encodeURIComponent(jobId),{signal,cache:"no-store"});
+  if(!response.ok)throw Error("Could not load the generated PowerPoint.");
+  return readJournalResult(response);
+}
+
+export function journalJobMessage(code) {
+  return errors[code] || errors.JOURNAL_GENERATION_FAILED;
 }
