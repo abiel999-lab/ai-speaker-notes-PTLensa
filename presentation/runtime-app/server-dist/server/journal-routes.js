@@ -6,9 +6,9 @@ import { createJournalDeck,decodeJournal } from './journal-service.js';
 // Existing app hooks enforce origin, session CSRF and the Presentation Pro gate.
 export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,generate=createJournalDeck}) {
     let busy=false;
-    app.get('/api/journal/capabilities',{preHandler:auth},async()=>({enabled,maxBytes:10*1024*1024,maxPages:40}));
+    app.get('/api/journal/capabilities',{preHandler:auth},async()=>({enabled,maxBytes:50*1024*1024,maxPages:40}));
     for(const action of ['inspect','export'])app.post(`/api/journal/${action}`,{
-        bodyLimit:14*1024*1024,preHandler:auth,
+        bodyLimit:68*1024*1024,preHandler:auth,
         config:{rateLimit:{max:4,timeWindow:'1 hour'}}
     },async(req,reply)=>{
         if(!enabled)return reply.code(404).send({error:'JOURNAL_DISABLED'});
@@ -21,12 +21,19 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
         req.raw.once('aborted',abort);
         reply.raw.once('close',abort);
         try {
-            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext} = req.body;
+            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput} = req.body;
             const result=await generate(bytes,name,{
                 signal:controller.signal,inspectOnly:action==='inspect',standardHeadings:true,
-                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,
+                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,
             });
             if(action==='inspect')return reply.header('Cache-Control','private, no-store').send(result.manifest);
+            if(reviewOutput){
+                const review = Buffer.from(JSON.stringify(result.manifest.generatedReview));
+                const length = Buffer.alloc(4);
+                length.writeUInt32BE(review.length);
+                return reply.header('Cache-Control','private, no-store').type('application/octet-stream')
+                    .send(Buffer.concat([length,review,result.bytes]));
+            }
             return reply.header('Cache-Control','private, no-store')
                 .header('Content-Type','application/vnd.openxmlformats-officedocument.presentationml.presentation')
                 .header('Content-Disposition','attachment; filename="journal-presentation.pptx"')
