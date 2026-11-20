@@ -11,12 +11,13 @@ const W=13.333333,H=7.5;
 export const MAX_JOURNAL_BYTES=50*1024*1024;
 
 export function decodeJournal(body) {
-    const keys = ['name', 'base64', 'fontFamily', 'fontScale', 'density', 'includeSpeakerNotes', 'interactiveLinks', 'presenterContext', 'motion', 'reviewOutput', 'sourcePagesOnly', 'editableSource'];
+    const keys = ['name', 'base64', 'fontFamily', 'fontScale', 'density', 'includeSpeakerNotes', 'interactiveLinks', 'presenterContext', 'motion', 'reviewOutput', 'sourcePagesOnly', 'editableSource', 'renderPreview', 'journalRole'];
     const invalidOptions = body && (
+        (body.journalRole !== undefined && !['full-copy','content'].includes(body.journalRole)) ||
         (body.motion !== undefined && !['none', 'keynote'].includes(body.motion)) ||
         (body.fontScale !== undefined && (!Number.isFinite(body.fontScale) || body.fontScale < .85 || body.fontScale > 1.15)) ||
         (body.density !== undefined && !['comfortable', 'compact'].includes(body.density)) ||
-        ['includeSpeakerNotes', 'interactiveLinks', 'reviewOutput', 'sourcePagesOnly', 'editableSource'].some(key => body[key] !== undefined && typeof body[key] !== 'boolean') ||
+        ['includeSpeakerNotes', 'interactiveLinks', 'reviewOutput', 'sourcePagesOnly', 'editableSource', 'renderPreview'].some(key => body[key] !== undefined && typeof body[key] !== 'boolean') ||
         (body.presenterContext !== undefined && (typeof body.presenterContext !== 'string' || body.presenterContext.length > 3000))
     );
     if(!body||Object.keys(body).some(key=>!keys.includes(key))||invalidOptions||(body.fontFamily!==undefined&&!["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"].includes(body.fontFamily))||typeof body.name!=='string'||body.name.length>120||!/\.pdf$/i.test(body.name)||typeof body.base64!=='string'||body.base64.length>Math.ceil(MAX_JOURNAL_BYTES/3)*4||/[^A-Za-z0-9+/=]/.test(body.base64))throw Error('JOURNAL_INVALID');
@@ -290,7 +291,7 @@ async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion,ed
     return {bytes,manifest:{pages:pages.length,visuals:[],slides:pptx._slides.length,generatedReview:review}};
 }
 
-export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false,editableSource=false}={}) {
+export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false,editableSource=false,journalRole="full-copy"}={}) {
     const temporaryRoot=path.resolve(os.tmpdir());
     const dir=await fs.mkdtemp(path.join(temporaryRoot,'notepreso-journal-'));
     if(path.dirname(path.resolve(dir))!==temporaryRoot)throw Error('JOURNAL_INVALID');
@@ -424,7 +425,7 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             note(slide,`${page.blocks.map(b=>b.text).join('\n\n')}\n\n${sourceNote(meta,page.number)}`);
             appendix.push({page:page.number,slide:pptx._slides.length,imageHash:digest(im.data),imageWidth:im.width,imageHeight:im.height,box});
         }
-        if (standardHeadings) {
+        if (standardHeadings && journalRole === "full-copy") {
             for (const page of pages) {
                 const text = page.lines.map(line => line.text).join('\n');
                 // Partition by Unicode characters without losing any extracted text.

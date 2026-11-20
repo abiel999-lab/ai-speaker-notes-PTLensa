@@ -22,7 +22,7 @@ export async function journalRequest(action, payload, signal, onProgress) {
   const response = await window.NotePresoUpload.request("/api/journal/"+action,{
     method:"POST",credentials:"same-origin",signal,
     headers:{"Content-Type":"application/json","X-CSRF-Token":session.csrfToken},
-    body:JSON.stringify(payload),timeout:360000,
+    body:JSON.stringify(payload),timeout:480000,
   },onProgress);
   if (!response.ok) {
     const result=await response.json().catch(()=>({}));
@@ -38,7 +38,23 @@ export async function journalRequest(action, payload, signal, onProgress) {
   const body = await response.blob();
   const length = new DataView(await body.slice(0, 4).arrayBuffer()).getUint32(0);
   if (!length || length + 4 >= body.size) throw Error("The generated PowerPoint could not be read.");
-  const review = JSON.parse(await body.slice(4, 4 + length).text());
-  if (!Array.isArray(review) || !review.length) throw Error("The generated slide preview could not be read.");
-  return {review, blob: body.slice(length + 4, body.size, "application/vnd.openxmlformats-officedocument.presentationml.presentation")};
+  const meta = JSON.parse(await body.slice(4, 4 + length).text());
+  const start=4+length;
+  const type="application/vnd.openxmlformats-officedocument.presentationml.presentation";
+  if (!payload.renderPreview) {
+    if (!Array.isArray(meta) || !meta.length) throw Error("The generated slide preview could not be read.");
+    return {review:meta,blob:body.slice(start,body.size,type)};
+  }
+  if (!Number.isSafeInteger(meta.pptxBytes)||meta.pptxBytes<4||!Number.isSafeInteger(meta.slides)||meta.slides<1
+      ||!Array.isArray(meta.sizes)||(meta.sizes.length&&meta.sizes.length!==meta.slides)) throw Error("The generated PowerPoint could not be read.");
+  let end=start+meta.pptxBytes;
+  const blob=body.slice(start,end,type);
+  const images=meta.sizes.map(size=>{
+    if(!Number.isSafeInteger(size)||size<4||end+size>body.size)throw Error("The generated slide preview could not be read.");
+    const image=body.slice(end,end+size,"image/jpeg");
+    end+=size;
+    return image;
+  });
+  if(end!==body.size)throw Error("The generated PowerPoint download is incomplete.");
+  return {blob,images,slides:meta.slides};
 }

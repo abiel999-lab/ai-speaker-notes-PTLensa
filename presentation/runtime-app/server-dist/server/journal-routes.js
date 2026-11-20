@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { recordPresentationFailure } from './job-failure-events.js';
 import { createJournalDeck,decodeJournal } from './journal-service.js';
+import { renderExportedSlides } from './pptx-slide-viewer.js';
 
 // No repository, provider, billing or permanent project writes are performed.
 // Existing app hooks enforce origin, session CSRF and the Presentation Pro gate.
-export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,generate=createJournalDeck}) {
+export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,generate=createJournalDeck,render=renderExportedSlides}) {
     let busy=false;
     app.get('/api/journal/capabilities',{preHandler:auth},async()=>({enabled,maxBytes:50*1024*1024,maxPages:40,maxSourceCopyPages:200}));
     for(const action of ['inspect','export'])app.post(`/api/journal/${action}`,{
@@ -18,16 +19,31 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
         busy=true;
         const controller=new AbortController();
         const abort=()=>controller.abort();
-        const timer=setTimeout(abort,240000);
+        const timer=setTimeout(abort,action==='export'&&req.body.renderPreview?420000:240000);
         req.raw.once('aborted',abort);
         reply.raw.once('close',abort);
         try {
-            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,editableSource} = req.body;
+            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,editableSource,renderPreview,journalRole} = req.body;
             const result=await generate(bytes,name,{
                 signal:controller.signal,inspectOnly:action==='inspect',standardHeadings:true,
-                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,editableSource,
+                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput:reviewOutput&&!renderPreview,sourcePagesOnly,editableSource,journalRole,
             });
             if(action==='inspect')return reply.header('Cache-Control','private, no-store').send(result.manifest);
+            if(renderPreview){
+                let previews=[];
+                try { previews=await render(result.bytes,result.manifest.slides,controller.signal); }
+                catch(error) {
+                    if(controller.signal.aborted)throw error;
+                    req.log.warn({requestId:req.id,code:error.message},'PowerPoint preview render unavailable');
+                }
+                const sizes=previews.map(image=>image.length);
+                const meta=Buffer.from(JSON.stringify({slides:result.manifest.slides,pptxBytes:result.bytes.length,sizes}));
+                const length=Buffer.alloc(4);
+                length.writeUInt32BE(meta.length);
+                return reply.header('Cache-Control','private, no-store').type('application/octet-stream')
+                    .header('Content-Length',String(4+meta.length+result.bytes.length+sizes.reduce((a,b)=>a+b,0)))
+                    .send(Readable.from([length,meta,result.bytes,...previews]));
+            }
             if(reviewOutput){
                 const review = Buffer.from(JSON.stringify(result.manifest.generatedReview));
                 const length = Buffer.alloc(4);

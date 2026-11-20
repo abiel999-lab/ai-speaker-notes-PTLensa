@@ -8,3 +8,45 @@
 .np-journal-review-slide ul { margin: 0 0 12px; padding-inline-start: 20px; }
 .np-journal-review-slide li + li { margin-top: 6px; }
 .np-journal-review > .button { justify-self: start; }
+.np-document-workspace .np-resource {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.np-document-workspace .np-resource > strong {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.45;
+}
+.np-document-workspace .np-resource > button {
+  grid-area: 1 / 2;
+  justify-self: end;
+}
+.np-document-workspace .np-resource > :is(select, p, details) {
+  grid-column: 1 / -1;
+}
+.np-document-workspace .np-resource > select { min-width: 0; width: 100%; }
+.np-pptx-viewport {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  background: #172b42;
+  border: 1px solid #d5e0ec;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.np-pptx-viewport img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  object-fit: contain;
+}
+.np-pptx-viewport p { color: white; }
+.np-slide-picker { display: flex; align-items: center; gap: .35rem; }
+.np-slide-picker input { width: 4.5rem; padding: .35rem; }
+.np-draft-state { margin: .35rem 0 0; color: #46627e; }
