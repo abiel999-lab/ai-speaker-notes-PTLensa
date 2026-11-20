@@ -2,6 +2,7 @@ import {isFullCopy} from './document-plan.js';
 import {parseFullCopySource} from '../core/full-copy.js';
 import {registerDocumentRoutes} from './document-workflow.js';
 import { registerJournalRoutes } from './journal-routes.js';
+import { journalIsBuilding } from './journal-state.js';
 import{generationDocument}from'./generation-document.js';
 import{registerWorkspaceRoutes}from'./resources.js';
 import{readDocx,recoverTabTables}from'../core/structured-import.js';
@@ -286,7 +287,7 @@ export async function createApp(cfg) {
                 const job = p.latestId
                     ? await repo.job(p.latestId, req.user.id)
                     : null;
-                if (job?.journal && job.status === 'building' && Date.now()-Date.parse(job.createdAt)>480000) {
+                if (journalIsBuilding(job) && Date.now()-Date.parse(job.createdAt)>480000) {
                     const failed={...job,status:'failed',stage:'Failed',error:'JOURNAL_ANALYSIS_TIMEOUT'};
                     if(await repo.compareAndSaveJob(job,failed))job.status='failed';
                 }
@@ -295,7 +296,7 @@ export async function createApp(cfg) {
                     latest: job
                         ? {
                             id: job.id,
-                            status: job.status,
+                            status: journalIsBuilding(job) ? 'building' : job.status,
                             slides: job.journal?.slides || job.scene?.slides.length || 0,
                             ...(job.journal ? { journal: true } : {}),
                             theme: job.settings.theme,

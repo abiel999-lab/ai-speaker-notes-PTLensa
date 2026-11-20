@@ -8,6 +8,7 @@ import { generationDirectory } from './artifacts.js';
 import { recordPresentationFailure } from './job-failure-events.js';
 import { createJournalDeck,decodeJournal } from './journal-service.js';
 import { renderExportedSlides } from './pptx-slide-viewer.js';
+import { JOURNAL_BUILDING, journalIsBuilding } from './journal-state.js';
 
 // Existing app hooks enforce origin, session CSRF and the Presentation Pro gate.
 export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,repo,generate=createJournalDeck,render=renderExportedSlides}) {
@@ -22,7 +23,16 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,repo,g
     async function runJournal(job, bytes, payload, log) {
         const signal=AbortSignal.timeout(420000);
         try {
-            const result=await generate(bytes,payload.name,{...payload,signal,standardHeadings:true});
+            let result, recovery;
+            const options={...payload,signal,standardHeadings:true};
+            try { result=await generate(bytes,payload.name,options); }
+            catch(error) {
+                if(payload.sourcePagesOnly || signal.aborted ||
+                    !['DOCUMENT_SLIDE_LIMIT','DOCUMENT_CONTENT_TOO_DENSE','SOURCE_FIDELITY_FAILED','EXPORTED_TEXT_MISMATCH','DOCUMENT_VISUAL_EXPORT_MISMATCH'].includes(error.message))throw error;
+                recovery='source-pages';
+                log.warn({id:job.id,code:error.message},'Journal editable layout fell back to original pages');
+                result=await generate(bytes,payload.name,{...options,sourcePagesOnly:true,editableSource:false});
+            }
             let previews=[];
             try { previews=await render(result.bytes,result.manifest.slides,signal); }
             catch(error) { log.warn({id:job.id,code:error.message},'Journal preview unavailable'); }
@@ -31,7 +41,7 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,repo,g
             const output=path.join(dir,'journal-result.bin');
             await pipeline(Readable.from(framed(result,previews)),createWriteStream(output,{flags:'wx',mode:0o600}));
             await repo.compareAndSaveJob(job,{...job,status:'ready',stage:'Ready',
-                journal:{...job.journal,slides:result.manifest.slides}});
+                journal:{...job.journal,slides:result.manifest.slides,recovery}});
         } catch(error) {
             const code=/^JOURNAL_[A-Z_]+$/.test(error.message)?error.message:'JOURNAL_GENERATION_FAILED';
             await repo.compareAndSaveJob(job,{...job,status:'failed',stage:'Failed',error:code});
@@ -57,7 +67,7 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,repo,g
             try { bytes=decodeJournal({...payload,base64}); }
             catch { return reply.code(400).send({error:'JOURNAL_INVALID'}); }
             const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,motion,presenterContext,journalRole,sourcePagesOnly}=payload;
-            const job={id:randomUUID(),projectId:project.id,ownerId:project.ownerId,status:'building',
+            const job={id:randomUUID(),projectId:project.id,ownerId:project.ownerId,status:JOURNAL_BUILDING,
                 kind:'journal',stage:'Creating PowerPoint',createdAt:new Date().toISOString(),
                 settings:{theme:'ivory',fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,motion},
                 journal:{name,presenterContext,journalRole,sourcePagesOnly}};
@@ -75,8 +85,9 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,repo,g
             const project=await repo.getProject(req.params.id,req.user.id);
             const job=project?.latestId && await repo.job(project.latestId,req.user.id);
             if(!job?.journal)return reply.code(404).send({error:'JOURNAL_JOB_NOT_FOUND'});
-            const expired=job.status==='building'&&Date.now()-Date.parse(job.createdAt)>480000;
-            return reply.header('Cache-Control','private, no-store').send({id:job.id,status:expired?'failed':job.status,
+            const running=journalIsBuilding(job);
+            const expired=running&&Date.now()-Date.parse(job.createdAt)>480000;
+            return reply.header('Cache-Control','private, no-store').send({id:job.id,status:expired?'failed':running?'building':job.status,
                 settings:job.settings,journal:job.journal,error:expired?'JOURNAL_ANALYSIS_TIMEOUT':job.error});
         });
         app.get('/api/journal/projects/:id/result/:job',{preHandler:auth},async(req,reply)=>{

@@ -257,7 +257,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
           interactiveLinks:job.settings.interactiveLinks===true,motion:job.settings.motion || "none",
           presenterContext:job.journal.presenterContext || ""};
         setReviewIndex(0);
-        setJournalOutput({...output,name:job.journal.name,
+        setJournalOutput({...output,name:job.journal.name,recovery:job.journal.recovery,
           settingsKey:JSON.stringify([opts,job.journal.sourcePagesOnly?"source-pages":job.journal.journalRole || "full-copy"])});
         setPrep(false);
       } catch(error) {
@@ -569,6 +569,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
     const hasSlides=images.length>0;
     return H("div", {className: "np-journal-review", "aria-label": "Review journal slides"},
       H("p", {className: "help-text"}, "Generated PowerPoint · slide-by-slide preview"),
+      journalOutput.recovery==="source-pages" && H("p",{role:"status"},"This PDF could not be laid out as editable slides. The PowerPoint preserves the original PDF pages."),
       hasSlides && H("div", {className:"np-pptx-viewport",role:"region","aria-label":"PowerPoint slide"},
         slideImage?.uri && slideImage.index===reviewIndex
           ? H("img",{src:slideImage.uri,alt:"Rendered slide "+(reviewIndex+1)+" of "+slides})

@@ -54,6 +54,7 @@ export class Repository {
         await this.exec("CREATE INDEX IF NOT EXISTS projects_owner ON projects(owner_id)");
         await this.exec("CREATE INDEX IF NOT EXISTS generations_owner_status ON generations(owner_id,status)");
         await this.exec("CREATE UNIQUE INDEX IF NOT EXISTS one_active_job_per_project ON generations(project_id) WHERE status IN ('queued','planning','building','verifying','rendering')");
+        await this.exec("CREATE UNIQUE INDEX IF NOT EXISTS one_active_export_per_project ON generations(project_id) WHERE status IN ('queued','planning','building','verifying','rendering','journal-building')");
         // Additive, restart-safe migrations: existing projects and JSON snapshots remain intact.
         await this.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY,applied_at TEXT NOT NULL)");
         await this.exec("CREATE TABLE IF NOT EXISTS job_events (generation_id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,project_id TEXT NOT NULL,status TEXT NOT NULL,kind TEXT NOT NULL,engine TEXT,model TEXT,input_tokens INTEGER NOT NULL,output_tokens INTEGER NOT NULL,duration_ms INTEGER NOT NULL,error_code TEXT,updated_at TEXT NOT NULL)");
