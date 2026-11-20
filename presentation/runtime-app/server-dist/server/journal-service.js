@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { digest,decodeJournalXml,parseJournalLayout,journalMetadata,inventoryJournal,journalSections,sentenceEvidence } from '../core/journal.js';
 import { addNativeMotion } from '../core/motion.js';
+import { buildJournalFullCopy } from './journal-full-copy.js';
 const require=createRequire(import.meta.url);
 const pptxgen=require('pptxgenjs'), sharp=require('sharp'), JSZip=require('jszip');
 const W=13.333333,H=7.5;
@@ -344,14 +345,34 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             const result=await collectPdfVisuals(pdf,dir,pages,images,visuals,signal,imageLayoutXml);
             return {title:meta.title,extractedSource:result.source||`# ${name.replace(/\.pdf$/i,'')}`,pageCount:pages.length,...result};
         }
+        const thumbnail = async data => reviewOutput
+            ? 'data:image/jpeg;base64,' + (await sharp(data).resize({width:420,height:420,fit:'inside',withoutEnlargement:true}).flatten({background:'#fff'}).jpeg({quality:70}).toBuffer()).toString('base64')
+            : undefined;
+        if (standardHeadings && journalRole === 'full-copy') {
+            return await buildJournalFullCopy(pages, images, manifest, {
+                dir, signal, fontFamily, fontScale, density, includeSpeakerNotes, interactiveLinks, presenterContext, motion, reviewOutput, thumbnail,
+                readRegion: async (page, box, raw) => (await native('pdftotext', [
+                    raw ? '-raw' : '-layout', '-enc', 'UTF-8', '-r', '72', '-f', String(page.number), '-l', String(page.number),
+                    '-x', String(Math.floor(box.x)), '-y', String(Math.floor(box.y)),
+                    '-W', String(Math.ceil(box.w)), '-H', String(Math.ceil(box.h)), pdf, '-',
+                ], { signal })).toString('utf8'),
+                rasterize: async image => {
+                    const { data, info } = await sharp(image.data).removeAlpha().greyscale().raw().toBuffer({ resolveWithObject: true });
+                    return { data, width: info.width, height: info.height };
+                },
+                cropImage: async (image, page, box) => {
+                    const data = await cropRegion(image, page, box);
+                    if (!data) return null;
+                    const { width, height } = await sharp(data).metadata();
+                    return { data, width, height };
+                },
+            });
+        }
         const pptx=new pptxgen();pptx.journalTypography={journalFont:fontFamily,journalFontScale:fontScale,journalDensity:density};pptx.theme={headFontFace:fontFamily,bodyFontFace:fontFamily};pptx.layout='LAYOUT_WIDE';pptx.author=meta.authors;pptx.title=meta.title;pptx.subject='Research journal presentation';pptx.lang='en-US';
         const notes=[],mapping=[],generatedReview=[];
         const record = (slide, title, items=[], pages=[], image) => {
             if (reviewOutput) generatedReview[pptx._slides.indexOf(slide)] = {title, items, pages, image};
         };
-        const thumbnail = async data => reviewOutput
-            ? 'data:image/jpeg;base64,' + (await sharp(data).resize({width:420,height:420,fit:'inside',withoutEnlargement:true}).flatten({background:'#fff'}).jpeg({quality:70}).toBuffer()).toString('base64')
-            : undefined;
         const note=(slide,text)=>{if(includeSpeakerNotes)slide.addNotes(text);notes.push(text);};
         const cover=pptx.addSlide();Object.assign(cover,pptx.journalTypography);cover.background={color:'102D49'};
         addText(cover,meta.kind==='review'?'RESEARCH REVIEW':'RESEARCH PRESENTATION',{x:.7,y:.7,w:11.8,h:.4},{fontSize:14,color:'A7CBE8'});
@@ -424,27 +445,6 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             slide.addImage({data:'image/png;base64,'+im.data.toString('base64'),...box,objectName:`journal-source-page-${page.number}`,altText:`Complete original PDF page ${page.number}`});
             note(slide,`${page.blocks.map(b=>b.text).join('\n\n')}\n\n${sourceNote(meta,page.number)}`);
             appendix.push({page:page.number,slide:pptx._slides.length,imageHash:digest(im.data),imageWidth:im.width,imageHeight:im.height,box});
-        }
-        if (standardHeadings && journalRole === "full-copy") {
-            for (const page of pages) {
-                const text = page.lines.map(line => line.text).join('\n');
-                // Partition by Unicode characters without losing any extracted text.
-                const characters = Array.from(text);
-                let part = 0;
-                for (let start = 0; start < characters.length;) {
-                    const window = characters.slice(start,start+520);
-                    const fragment = window.join('');
-                    const boundary = window.length === 520 ? fragment.search(/\s+\S*$/u) : -1;
-                    const length = boundary > 380 ? Array.from(fragment.slice(0,boundary)).length : window.length;
-                    const copy = window.slice(0,length).join('');
-                    start += length;
-                    const title = `Editable source text — page ${page.number} · ${++part}`;
-                    const slide = newSlide(pptx,title,pptx._slides.length+1);
-                    addText(slide,copy,{x:.7,y:1.12,w:11.9,h:5.65},{fontSize:19,fit:'shrink',objectName:'vb-b0-0'});
-                    note(slide,sourceNote(meta,page.number));
-                    record(slide,title,[copy],[page.number]);
-                }
-            }
         }
         let deck=Buffer.from(await pptx.write({outputType:'nodebuffer',compression:true}));
         if (motion === 'keynote') deck = (await addNativeMotion(deck)).bytes;

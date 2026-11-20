@@ -81,7 +81,7 @@ export async function addNativeMotion(bytes, storyboard) {
         // scrims, logos, decorative margin ornaments or navigation buttons.
         for (const pic of array(tree["p:pic"])) {
             const nv = pic["p:nvPicPr"]?.["p:cNvPr"];
-            if (!/^motion-inline-image-\d+$/.test(nv?.["@_name"] || ""))
+            if (!/^(?:motion-inline-image-\d+|ordered-source-image-journal-\d+)$/.test(nv?.["@_name"] || ""))
                 continue;
             const id = Number(nv["@_id"]);
             if (!Number.isSafeInteger(id) || id < 1)

@@ -84,7 +84,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     pptx.company = "";
     pptx.theme = { headFontFace: fontForText(doc.raw,doc.raw,doc.presentationLanguage), bodyFontFace: fontForText(doc.raw,doc.raw,doc.presentationLanguage) };
     let object = 0;
-    const speakerNotes = notesForScene(doc, scene);
+    const speakerNotes = scene.speakerNotes ?? notesForScene(doc, scene);
     let navigationSlides = 0;
     for (const [slideIndex, prepared] of preparedSlides.entries()) {
         const s = prepared.slide;
@@ -245,8 +245,9 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     bytes = await normalizeSlideObjectIds(bytes);
     if (exportScene.slides.some(s => s.objects.some(o => o.backgroundImage && ["left", "right"].includes(o.imageTextSide || ""))))
         bytes = await softenImageScrims(bytes);
-    const motionStoryboard = motion === "keynote" ? planDeckMotion(exportScene, preparedSlides.map(p => p.chart ? 1 : 0)) : null;
-    const motionResult = motionStoryboard ? await addNativeMotion(bytes, motionStoryboard) : null;
+    const motionStoryboard = motion === "keynote" && !scene.uniformMotion
+        ? planDeckMotion(exportScene, preparedSlides.map(p => p.chart ? 1 : 0)) : undefined;
+    const motionResult = motion === "keynote" ? await addNativeMotion(bytes, motionStoryboard) : null;
     if (motionResult)
         bytes = motionResult.bytes;
     bytes = await finalizePptxPackage(bytes);
