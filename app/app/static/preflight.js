@@ -4,6 +4,7 @@
  function setup(form){
   const file=form.querySelector('input[type=file][name=file]'),box=form.querySelector('.preflight-review');if(!file||!box)return;
   const summary=box.querySelector('.preflight-summary'),ack=box.querySelector('input[type=checkbox]'),warning=box.querySelector('.preflight-replace');
+  const upload = window.NotePresoUpload.indicator(summary);
   const state={file:null,data:null,promise:null,csrf:null,controller:null,revision:0};states.set(form,state);
   const languageSelect=form.querySelector('[name=language]'),languageStatus=box.querySelector('.preflight-language');
   let manualLanguage=false,applyingLanguage=false;
@@ -43,20 +44,24 @@
    if(!selected)return false;
    if(state.file===selected&&state.data)return true;
    if(state.file===selected&&state.promise)return state.promise;
-   state.controller?.abort();state.controller=new AbortController();const revision=++state.revision;state.file=selected;state.data=null;ack.checked=false;warning.hidden=true;summary.textContent='Checking slide count and credit estimate...';
+   state.controller?.abort();state.controller=new AbortController();const revision=++state.revision;state.file=selected;state.data=null;ack.checked=false;warning.hidden=true;summary.setAttribute('role','status');summary.classList.remove('np-preflight-error');upload.hide();summary.textContent='Checking your account before uploading…';
    state.promise=(async()=>{
     try{
      const authRes=await fetch('/api/v1/auth/me',{headers:{Accept:'application/json'},cache:'no-store'});if(!authRes.ok)throw Error('Account could not be checked. Please try again.');
      const auth=await authRes.json();
      if(!auth.authenticated){if(state.revision===revision)summary.textContent='Sign in to check your deck. Your file has not been uploaded for this check.';return false;}
      const payload=new FormData();payload.append('file',selected);
-     const res=await fetch('/api/v1/presentations/preflight',{method:'POST',headers:{Accept:'application/json','X-Requested-With':'fetch','X-CSRF-Token':auth.csrf_token||''},body:payload,credentials:'same-origin',cache:'no-store',signal:state.controller.signal});
-     if(!res.ok)throw Error(res.status===413?'This file exceeds the upload size limit.':res.status===429?'File checks are busy. Press process to try again shortly.':'This file could not be checked. Try a valid PowerPoint file.');
+     const res=await window.NotePresoUpload.request('/api/v1/presentations/preflight',{method:'POST',headers:{Accept:'application/json','X-Requested-With':'fetch','X-CSRF-Token':auth.csrf_token||''},body:payload,credentials:'same-origin',cache:'no-store',signal:state.controller.signal,timeout:300000}, progress=>{
+       if(state.revision!==revision)return;
+       upload.update(progress);
+       summary.textContent=window.NotePresoUpload.describe(progress,'Upload complete. Checking slide count, language, and credits…');
+     });
+     if(!res.ok){const detail=await res.json().catch(()=>null);throw Error(typeof detail?.detail==='string' ? detail.detail : res.status===413?'This file exceeds the upload size limit.':res.status===429?'File checks are busy. Press process to try again shortly.':'This file could not be checked. Try a valid PowerPoint file.');}
      const data=await res.json();
      if(!Number.isInteger(data.slide_count)||!Number.isInteger(data.empty_notes_count)||!Number.isInteger(data.existing_notes_count)||!['free','pro'].includes(data.plan)||!data.credits_per_slide)throw Error('The file check returned an invalid result.');
      if(state.revision!==revision)return false;state.data=data;chooseLanguage(data);render();return true;
-    }catch(error){if(error.name!=='AbortError'&&state.revision===revision)summary.textContent=error.message;return false;}
-    finally{if(state.revision===revision)state.promise=null;}
+    }catch(error){if(error.name!=='AbortError'&&state.revision===revision){summary.setAttribute('role','alert');summary.classList.add('np-preflight-error');summary.textContent=error.message;}return false;}
+    finally{if(state.revision===revision){state.promise=null;upload.hide();}}
    })();return state.promise;
   }
   state.confirm=async selected=>{

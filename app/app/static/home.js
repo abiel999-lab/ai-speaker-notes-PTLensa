@@ -258,8 +258,18 @@
     setJobProgress('Uploading',currentFile.name,'Uploading and validating your PowerPoint…');
     const data=new FormData(form);
     data.set('file',currentFile,currentFile.name);
+    const upload=window.NotePresoUpload.indicator(document.querySelector('#home-job-message'));
+    let uploadPhase='upload';
     try{
-      const res=await fetch('/api/v1/jobs',{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch'}),body:data});
+      const res=await window.NotePresoUpload.request('/api/v1/jobs',{headers:apiHeaders({'X-Requested-With':'fetch'}),body:data,timeout:300000},progress=>{
+        uploadPhase=progress.phase;
+        upload.update(progress);
+        setJobProgress(progress.phase==='upload'?'Uploading':'Validating',currentFile.name,
+          window.NotePresoUpload.describe(progress,'Upload complete. Validating the PowerPoint before processing…'));
+      });
+      upload.hide();
+      if(res.status===413)throw Error('This file exceeds the upload size limit.');
+      if(res.status>=500)throw Error('The server could not confirm this submission. Check your workspace before retrying.');
       let payload={}; try{payload=await res.json();}catch(_){payload={};}
       if(res.status===401){ autoContinueAfterAuth=true; openModal(authModal); return; }
       if(res.status===402){
@@ -282,13 +292,15 @@
         return;
       }
       if(!res.ok) throw new Error(payload.detail||'Upload failed.');
+      uploadPhase='processing';
       currentJobId=payload.id;
       sessionStorage.setItem('notepreso.pendingJob',payload.id);
       await pollJob(payload.id);
     }catch(error){
       generate.disabled=false;
-      setJobProgress('Could not process',currentFile.name,error.message||'Something went wrong.');
-    }
+      setJobProgress((error.phase||uploadPhase)==='upload'?'Upload failed':(error.phase||uploadPhase)==='analysis'?'Validation failed':'Processing failed',
+        currentFile.name,error.message||'Something went wrong.');
+    }finally{upload.remove();}
   }
 
   document.querySelector('#limit-retry')?.addEventListener('click',()=>{closeModal(limitModal);void startGeneration();});

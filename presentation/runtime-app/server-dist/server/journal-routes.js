@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { recordPresentationFailure } from './job-failure-events.js';
 import { createJournalDeck,decodeJournal } from './journal-service.js';
 
@@ -12,8 +13,8 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
         config:{rateLimit:{max:4,timeWindow:'1 hour'}}
     },async(req,reply)=>{
         if(!enabled)return reply.code(404).send({error:'JOURNAL_DISABLED'});
-        if(busy)return reply.code(429).header('Retry-After','30').send({error:'JOURNAL_BUSY'});
-        let bytes;try{bytes=decodeJournal(req.body);}catch{return reply.code(400).send({error:'JOURNAL_INVALID'});}
+        if(busy)return reply.code(429).header('Retry-After','30').send({error:'JOURNAL_BUSY',requestId:req.id});
+        let bytes;try{bytes=decodeJournal(req.body);}catch{return reply.code(400).send({error:'JOURNAL_INVALID',requestId:req.id});}
         busy=true;
         const controller=new AbortController();
         const abort=()=>controller.abort();
@@ -32,7 +33,8 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
                 const length = Buffer.alloc(4);
                 length.writeUInt32BE(review.length);
                 return reply.header('Cache-Control','private, no-store').type('application/octet-stream')
-                    .send(Buffer.concat([length,review,result.bytes]));
+                    .header('Content-Length',String(length.length+review.length+result.bytes.length))
+                    .send(Readable.from([length,review,result.bytes]));
             }
             return reply.header('Cache-Control','private, no-store')
                 .header('Content-Type','application/vnd.openxmlformats-officedocument.presentationml.presentation')
@@ -41,10 +43,11 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
                 .header('X-Journal-Visuals',String(result.manifest.visuals.length))
                 .send(result.bytes);
         }catch(error){
-            const code=/^JOURNAL_(INVALID|PAGE_SIZE|PAGE_LIMIT|TEXT_LIMIT|OCR_REQUIRED|STRUCTURE_REVIEW_REQUIRED|TOOLS_UNAVAILABLE|PDF_UNREADABLE|COVERAGE_FAILED|NOTES_FAILED)$/.test(error.message)?error.message:'JOURNAL_GENERATION_FAILED';
+            const code=/^JOURNAL_(INVALID|PAGE_SIZE|PAGE_LIMIT|TEXT_LIMIT|OCR_REQUIRED|STRUCTURE_REVIEW_REQUIRED|TOOLS_UNAVAILABLE|PDF_UNREADABLE|PDF_PASSWORD_REQUIRED|LAYOUT_LIMIT|ANALYSIS_TIMEOUT|COVERAGE_FAILED|NOTES_FAILED)$/.test(error.message)?error.message:'JOURNAL_GENERATION_FAILED';
             if (failureRoot && !req.raw.aborted && !reply.raw.destroyed)
                 await recordPresentationFailure(failureRoot, {id:randomUUID(),owner:req.user?.id,code,stage:`Journal ${action}`,status:'failed'},error);
-            return reply.code(code==='JOURNAL_TOOLS_UNAVAILABLE'?503:422).send({error:code});
+            req.log.warn({code,action,requestId:req.id},'PDF processing failed');
+            return reply.code(code==='JOURNAL_TOOLS_UNAVAILABLE'?503:422).send({error:code,requestId:req.id});
         }finally{
             clearTimeout(timer);req.raw.removeListener('aborted',abort);reply.raw.removeListener('close',abort);busy=false;
         }

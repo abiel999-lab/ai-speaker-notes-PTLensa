@@ -27,15 +27,22 @@ export function decodeJournal(body) {
 
 async function native(command,args,{signal,outputLimit=16*1024*1024,timeout=45000}={}) {
     return new Promise((resolve,reject)=>{
-        const child=spawn(command,args,{stdio:['ignore','pipe','ignore'],windowsHide:true});
-        let size=0; const chunks=[];
+        const child=spawn(command,args,{stdio:['ignore','pipe','pipe'],windowsHide:true});
+        let size=0, timedOut=false, diagnostics=''; const chunks=[];
+        child.stderr.on('data',data=>{diagnostics=(diagnostics+data.toString()).slice(-4096);});
         const stop=()=>child.kill('SIGKILL');
-        const timer=setTimeout(stop,timeout);
+        const timer=setTimeout(()=>{timedOut=true;stop();},timeout);
         signal?.addEventListener('abort',stop,{once:true});
         child.stdout.on('data',d=>{size+=d.length;if(size>outputLimit)stop();else chunks.push(d);});
         const done=()=>{clearTimeout(timer);signal?.removeEventListener('abort',stop);};
         child.once('error',()=>{done();reject(Error('JOURNAL_TOOLS_UNAVAILABLE'));});
-        child.once('close',code=>{done();code===0&&!signal?.aborted&&size<=outputLimit?resolve(Buffer.concat(chunks)):reject(Error('JOURNAL_PDF_UNREADABLE'));});
+        child.once('close',code=>{
+            done();
+            if(signal?.aborted||timedOut) reject(Error('JOURNAL_ANALYSIS_TIMEOUT'));
+            else if(size>outputLimit) reject(Error('JOURNAL_LAYOUT_LIMIT'));
+            else if(code===0) resolve(Buffer.concat(chunks));
+            else reject(Error(/password|encrypted file/i.test(diagnostics)?'JOURNAL_PDF_PASSWORD_REQUIRED':'JOURNAL_PDF_UNREADABLE'));
+        });
         if(signal?.aborted)stop();
     });
 }
@@ -198,6 +205,16 @@ async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion}) 
     pptx.defineLayout({name:'source-pages',width:W,height:H});
     pptx.layout = 'source-pages';
     const review = [];
+    // Use Poppler's reading order for multi-column reports. Keep the
+    // positioned words when the independent extraction doesn't cover a page.
+    let orderedPages=[];
+    try {
+        orderedPages=(await native('pdftotext',['-enc','UTF-8',pdf,'-'],{signal,outputLimit:4*1024*1024}))
+            .toString('utf8').split('\f');
+        if (orderedPages.at(-1)==='') orderedPages.pop();
+    } catch {
+        signal?.throwIfAborted();
+    }
     const basename = path.join(dir,'original');
     await native('pdftoppm',['-jpeg','-jpegopt','quality=90','-scale-to','1800',pdf,basename],
         {signal,timeout:180000});
@@ -209,7 +226,10 @@ async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion}) 
         const {width,height} = await sharp(file).metadata();
         const slide = newSlide(pptx,title,page.number);
         slide.addImage({path:file,...contain(width,height,{x:.45,y:1,w:12.43,h:6}),objectName:'journal-source-page-'+page.number,altText:title});
-        const text = page.lines.map(line => line.text).join('\n');
+        const positioned = page.lines.map(line => line.text).join('\n');
+        const ordered = orderedPages.length===pages.length ? orderedPages[page.number-1].trim() : '';
+        const text = ordered && ordered.replace(/\s/g,'').length >= .95 * positioned.replace(/\s/g,'').length
+            && (ordered.match(/\uFFFD/g)||[]).length <= (positioned.match(/\uFFFD/g)||[]).length ? ordered : positioned;
         slide.addNotes(`PDF page ${page.number}\n\n${text || 'No selectable text on this page.'}`);
         if (reviewOutput) {
             const preview = await sharp(file).resize({width:420,height:420,fit:'inside'}).jpeg({quality:70}).toBuffer();
@@ -221,20 +241,27 @@ async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion}) 
     return {bytes,manifest:{pages:pages.length,visuals:[],slides:pptx._slides.length,generatedReview:review}};
 }
 
-export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false}={}) {
+export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false}={}) {
     const temporaryRoot=path.resolve(os.tmpdir());
     const dir=await fs.mkdtemp(path.join(temporaryRoot,'notepreso-journal-'));
     if(path.dirname(path.resolve(dir))!==temporaryRoot)throw Error('JOURNAL_INVALID');
     try {
         if(!bytes.length||bytes.length>MAX_JOURNAL_BYTES||!bytes.subarray(0,5).equals(Buffer.from('%PDF-')))throw Error('JOURNAL_INVALID');
         const pdf=path.join(dir,'source.pdf');await fs.writeFile(pdf,bytes,{mode:0o600});
-        const xml=layoutXml??(await native('pdftotext',['-bbox-layout','-enc','UTF-8',pdf,'-'],{signal,outputLimit:sourcePagesOnly?32*1024*1024:16*1024*1024})).toString('utf8');
+        const xml=layoutXml??(await native('pdftotext',['-bbox-layout','-enc','UTF-8',pdf,'-'],{signal,outputLimit:sourcePagesOnly||allowSourcePageCopy?32*1024*1024:16*1024*1024})).toString('utf8');
+        const pages = sourcePagesOnly||allowSourcePageCopy
+            ? parseJournalLayout(xml,{allowImageOnly:true,maxPages:200,maxText:1000000})
+            : parseJournalLayout(xml,{allowImageOnly:capturePdfVisuals});
+        const sourceManifest = () => ({
+            pages:pages.length,pagesWithText:pages.filter(page=>page.lines.some(line=>line.text.trim())).length,visuals:[],review:[],
+        });
         if (sourcePagesOnly) {
-            const pages = parseJournalLayout(xml,{allowImageOnly:true,maxPages:200,maxText:1000000});
-            if (inspectOnly) return {manifest:{pages:pages.length,visuals:[],review:[]}};
+            if (inspectOnly) return {manifest:sourceManifest()};
             return await createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion});
         }
-        const pages=parseJournalLayout(xml,{allowImageOnly:capturePdfVisuals}),meta=journalMetadata(pages,name,{includeUpperTitle:standardHeadings}),visuals=inventoryJournal(pages),sections=journalSections(pages,{includeFirstPage:standardHeadings});
+        if (allowSourcePageCopy && (pages.length>40 || pages.reduce((size,page)=>size+page.lines.reduce((total,line)=>total+line.text.length,0),0)>240000
+            || pages.every(page=>!page.lines.length))) return {sourcePageCopy:sourceManifest()};
+        const meta=journalMetadata(pages,name,{includeUpperTitle:standardHeadings}),visuals=inventoryJournal(pages),sections=journalSections(pages,{includeFirstPage:standardHeadings});
         if(standardHeadings)standardizeJournalSections(sections);
         const manifest={version:'journal-v1',sourceHash:digest(bytes),metadata:meta,pages:pages.length,visuals,sections:sections.map(s=>({title:s.title,pages:s.pages})),coverage:{strategy:'all-original-pages',sourcePages:pages.map(p=>p.number)},warnings:[]};
         if(!sections.length)sections.push({title:'Document content',pages:pages.map(p=>p.number),paragraphs:pages.flatMap(p=>p.blocks.filter(b=>b.text.length>100).map(b=>({text:b.text,page:p.number})))});

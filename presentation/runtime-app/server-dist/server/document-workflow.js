@@ -62,7 +62,8 @@ export function registerDocumentRoutes(app,{auth,cfg}){
    };
    if(/\.pdf$/i.test(body.name)){
     decodeJournal({name:body.name,base64:body.base64});
-    const result=await createJournalDeck(bytes,body.name,{signal:AbortSignal.timeout(240000),capturePdfVisuals:true});
+    const result=await createJournalDeck(bytes,body.name,{signal:AbortSignal.timeout(240000),capturePdfVisuals:true,allowSourcePageCopy:true});
+    if(result.sourcePageCopy)return {sourcePageCopy:result.sourcePageCopy};
     source=result.extractedSource;title=result.title;
     pdfPages=result.pageCount;
     visuals=result.figures.map(storeVisual);
@@ -88,8 +89,16 @@ export function registerDocumentRoutes(app,{auth,cfg}){
    await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,fullCopyVisuals,orderedVisuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
    return {source,title,documentId,visuals:visuals.length,pdfPages,orderedVisuals,inlineImageCount:fullCopyVisuals?.length};
   }catch(e){
-    if (/\.pdf$/i.test(body.name) && ['JOURNAL_PAGE_LIMIT','JOURNAL_TEXT_LIMIT','JOURNAL_PDF_UNREADABLE','DOCUMENT_TEXT_LIMIT','DOCUMENT_IMAGE_LIMIT','DOCUMENT_IMAGE_EXTRACTION_FAILED'].includes(e.message))
-      return reply.code(422).send({error:'DOCUMENT_USE_PAGE_COPY',requestId:req.id});
+    if (/\.pdf$/i.test(body.name) && ['JOURNAL_PAGE_LIMIT','JOURNAL_TEXT_LIMIT','JOURNAL_LAYOUT_LIMIT','JOURNAL_PDF_UNREADABLE','DOCUMENT_TEXT_LIMIT','DOCUMENT_IMAGE_LIMIT','DOCUMENT_IMAGE_EXTRACTION_FAILED'].includes(e.message)) {
+      try {
+        const {manifest}=await createJournalDeck(bytes,body.name,{
+          sourcePagesOnly:true,inspectOnly:true,signal:AbortSignal.timeout(90000),
+        });
+        return {sourcePageCopy:manifest};
+      } catch (fallbackError) {
+        e=fallbackError;
+      }
+    }
     const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
  });
 }
