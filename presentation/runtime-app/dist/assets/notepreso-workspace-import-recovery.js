@@ -411,15 +411,15 @@ function NotePresoWorkspace({ studio: e, lang }) {
       H("p",null,reportRole==="full-copy"
         ? `Selectable text from ${journalFile.manifest.pagesWithText} pages will also be added as editable slides.`
         : "Selectable text is included in the speaker notes."));
-    if (!journalFile) return H("div", {className: "np-empty-preview"},
-      H("h3", null, uploading ? "Reading your journal…" : "Your slides will appear here"),
-      H("p", null, "Upload a research journal PDF to review the extracted slides and their source pages."));
+    if (!journalOutput) return H("div", {className: "np-empty-preview"},
+      H("h3", null, prep ? "Creating PowerPoint…" : uploading ? "Reading your journal…" : "Your slides will appear here"),
+      H("p", null, journalFile ? "Generate PowerPoint to preview the slides." : "Upload a research journal PDF to get started."));
     const {manifest} = journalFile;
     const totalPages = manifest.pages;
-    const review = journalOutput?.review || manifest.review;
+    const review = journalOutput.review;
     const entry = review[reviewIndex];
     return H("div", {className: "np-journal-review", "aria-label": "Review journal slides"},
-      H("p", {className: "help-text"}, journalOutput ? "Generated PowerPoint · slide-by-slide preview" : "Review the journal outline. Generate PowerPoint to preview all slides, including the full copy."),
+      H("p", {className: "help-text"}, "Generated PowerPoint · slide-by-slide preview"),
       H("div", {className: "np-journal-thumbnails"},
         H("button", {className: "button", type: "button", disabled: !reviewIndex, onClick: () => setReviewIndex(reviewIndex - 1)}, "Previous"),
         H("span", {className: "help-text"}, (reviewIndex + 1) + " of " + review.length),
