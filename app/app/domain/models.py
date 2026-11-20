@@ -6,6 +6,9 @@ from enum import StrEnum
 from pydantic import BaseModel, Field, field_validator
 
 
+MAX_REFERENCE_TEXT = 120_000
+
+
 class JobStatus(StrEnum):
     queued = "queued"
     processing = "processing"
@@ -172,7 +175,7 @@ class GenerationOptions(BaseModel):
         if len(value.split()) > 5000:
             raise ValueError("Additional instructions must be 5000 words or fewer")
         return value
-    reference_context: str = Field(default="", max_length=60000)
+    reference_context: str = Field(default="", max_length=MAX_REFERENCE_TEXT)
     reference_name: str = Field(default="", max_length=120)
     notes_mode: NotesMode = NotesMode.missing_only
     engine: GenerationEngine = GenerationEngine.dummy

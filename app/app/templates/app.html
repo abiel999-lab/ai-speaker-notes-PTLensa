@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="/static/site-chrome.css?v=audit-closeout-1">
 <link rel="stylesheet" href="/static/preview-limit.css?v=phase03-1">
 <link rel="stylesheet" href="/static/credit-wallet.css?v=ai-credits-1">
-<link rel="stylesheet" href="/static/start-workflow.css?v=settings-2"><link rel="stylesheet" href="/static/notes-preview.css?v=1"><link rel="stylesheet" href="/static/preflight.css?v=1"><link rel="stylesheet" href="/static/readability-audit.css?v=1"><link rel="stylesheet" href="/static/audit-type.css?v=1"><link rel="stylesheet" href="/static/mobile-targets.css?v=1"><link rel="stylesheet" href="/static/nora-support.css?v=2">
+<link rel="stylesheet" href="/static/start-workflow.css?v=readability-20261119"><link rel="stylesheet" href="/static/notes-preview.css?v=1"><link rel="stylesheet" href="/static/preflight.css?v=1"><link rel="stylesheet" href="/static/readability-audit.css?v=1"><link rel="stylesheet" href="/static/audit-type.css?v=1"><link rel="stylesheet" href="/static/mobile-targets.css?v=1"><link rel="stylesheet" href="/static/nora-support.css?v=2">
 </head>
 <body data-page="dashboard">
 <header class="topbar">
@@ -135,7 +135,7 @@
           <label id="custom-word-field" class="hidden"><span data-i18n="customLimitLabel">Custom maximum words</span><input id="custom-word-limit" name="custom_word_limit" type="number" min="30" max="500" value="150" disabled><span class="help" data-i18n="customLimitHelp">Choose between 30 and 500 words.</span></label>
         </div>
 
-        <label class="mode-field"><span>Reference document (optional)</span><input type="file" id="reference-document" name="reference_document" accept=".pdf,.docx,.txt,.md"><span class="help">Add context for your speaker notes using PDF, Word, TXT or Markdown, up to 10 MB</span></label>
+        <label class="mode-field"><span>Reference document (optional)</span><input type="file" id="reference-document" name="reference_document" accept=".pdf,.docx,.txt,.md"><span class="help">Add context for your speaker notes using PDF, Word, TXT or Markdown, up to 10 MB and 120,000 characters</span></label>
         <details id="reference-review" hidden><summary>Review extracted reference text</summary><textarea id="reference-preview" rows="7" readonly aria-label="Extracted reference text"></textarea><p class="help">Review the extraction before generating. Image-only PDFs require OCR</p></details><p id="reference-error" role="alert"></p>
         <label class="mode-field"><span data-i18n="instructionsLabel">Additional instructions</span><textarea id="custom-instructions" name="custom_instructions" rows="4" data-i18n-placeholder="instructionsPlaceholder" placeholder="Example: explain for first-year students; preserve technical terms; do not add facts that are not supported by the slide."></textarea><span class="help"><span id="custom-instructions-count">0</span>/5000 words</span></label>
 
@@ -153,6 +153,7 @@
           <p class="terms-hint"><span data-i18n="reviewNeeded">Review AI-generated results before using them.</span> <span data-i18n="termsPrefix">By processing this file, you agree to the</span> <a href="/legal">Terms & Privacy</a> ({{ terms_version }}).</p>
           <button id="submit" class="primary" type="submit"><span data-i18n="startProcess">Process PowerPoint</span> &rarr;</button>
         </div>
+        <p id="notes-draft-status" class="help" role="status"></p>
       </form>
     </div>
 
@@ -172,14 +173,16 @@
 </main>
 
 <footer class="footer"><div class="footer-inner"><span>NotePreso &middot; <span data-i18n="humanReviewRequired">Human review required</span></span><span><a href="/how-to" data-i18n="howTo">Guide</a> &middot; <a href="/legal">Terms & Privacy</a> &middot; <a href="/support#refund">Refund</a></span></div></footer>
+<script src="/static/upload-progress.js?v=1" defer></script>
 <script src="/static/preflight.js?v=language-1" defer></script>
 <script src="/static/notes-preview.js?v=1" defer></script>
 <script src="/static/customer-dialog.js?v=1" defer></script><script src="/static/preview-reset.js?v=1" defer></script><script src="/static/common.js?v=copy-review-1" defer></script><script src="/static/preview-limit.js?v=local-reset-1" defer></script>
 <script src="/static/customer-status.js?v=audit-closeout-1" defer></script>
-<script src="/static/app.js?v=preview-email-1" defer></script>
+<script src="/static/app.js?v=notes-upload-draft-1" defer></script>
+<script src="/static/notes-draft.js?v=1" defer></script>
 <script src="/static/languages.js?v=1901" defer></script>
 <script src="/static/generation-summary.js?v=phase01a-1" defer></script>
-<script src="/static/site-chrome.js?v=touch-1" defer></script>
+<script src="/static/site-chrome.js?v=workspace-docs-20261119" defer></script>
 <script src="/static/start-workflow.js?v=settings-2" defer></script><script src="/static/nora-support.js?v=2" defer></script>
 </body></html>
 

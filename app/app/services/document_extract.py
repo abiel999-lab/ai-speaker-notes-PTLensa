@@ -2,7 +2,8 @@
 import io,zipfile,xml.etree.ElementTree as ET,hashlib,re
 from pathlib import PurePath
 MAX_BYTES=10*1024*1024
-MAX_TEXT=60000
+from app.domain.models import MAX_REFERENCE_TEXT
+MAX_TEXT=MAX_REFERENCE_TEXT
 class DocumentError(ValueError):pass
 def extract_document(filename:str,data:bytes,*,compact_pdf_spacing:bool=False):
  suffix=PurePath(filename).suffix.lower()

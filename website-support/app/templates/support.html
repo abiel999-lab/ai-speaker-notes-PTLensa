@@ -26,6 +26,14 @@
   margin: 10px 0;
 }
 .np-contact-heading p { color: #64748b; }
+.support-channels { display:grid; grid-template-columns:minmax(0,2fr) minmax(240px,1fr); gap:24px; align-items:start; }
+.support-channels .np-contact { margin:0; }
+.support-whatsapp { display:grid; gap:14px; margin:0; padding:clamp(20px,3vw,30px); border:1px solid #c7e3e6; border-radius:20px; background:#edf8f8; }
+.support-whatsapp h2,.support-whatsapp p { margin:0; }
+.support-whatsapp h2 { font-size:1.2rem; }
+.support-whatsapp p { max-width:40ch; font-size:.94rem; line-height:1.5; color:#465c75; }
+.support-whatsapp .support-action-primary { justify-self:start; }
+@media (max-width:820px) { .support-channels { grid-template-columns:1fr; } }
 .np-contact-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0,1fr));
@@ -157,28 +165,19 @@
   <section class="support-clean-hero">
     <p class="eyebrow"><span class="dot"></span>NOTEPRESO SUPPORT</p>
 
-    <h1>Help with your account and presentations</h1>
+    <h1>How can we help?</h1>
 
     <p>
-      Send us a message for product or account help. For a payment or refund, use the link in your Paddle receipt or <a href="https://paddle.net">Paddle support</a>.
+      Get help with Speaker Notes, Presentation, Translator, or your account. For payments and refunds, use the link in your Paddle receipt or <a href="https://paddle.net">Paddle support</a>.
     </p>
   </section>
 
   
+<div class="support-channels">
 <section class="np-contact" aria-labelledby="np-contact-title">
   <div class="np-contact-heading">
-    <span class="support-label">CONTACT SUPPORT</span>
     <h2 id="np-contact-title">Send us a message</h2>
-    <p>Tell us how we can help. Our team will reply by email.</p>
-    <div class="support-contact-actions">
-      <a class="support-action-secondary"
-         href="https://wa.me/6285643461960?text=NotePreso%20Support"
-         target="_blank" rel="noopener noreferrer">
-        Chat on WhatsApp <span aria-hidden="true">↗</span>
-      </a>
-    </div>
-    <p>Send the prefilled message “NotePreso Support” to reach our support team on WhatsApp.</p>
-    <p>NotePreso is operated by PT ACTIA BERSAMA SEJAHTERA (Actia Carbon).</p>
+    <p>Tell us what happened. We’ll reply by email.</p>
   </div>
 
   {% if status == "sent" %}
@@ -256,6 +255,15 @@
     </div>
   </form>
 </section>
+<aside class="support-whatsapp" aria-labelledby="support-whatsapp-title">
+  <h2 id="support-whatsapp-title">Chat on WhatsApp</h2>
+  <p>Fill in your name, email address, and what happened before sending the message to NotePreso Support.</p>
+  <p>The chat opens under Actia Carbon, the company that operates NotePreso.</p>
+  <a class="support-action-primary" href="https://wa.me/6285643461960?text=NotePreso%20Support%0A%0AHello%2C%20I%20need%20help%20with%20NotePreso.%0A%0AName%3A%0AEmail%20address%3A%0ATool%20%28Speaker%20Notes%2C%20Presentation%2C%20or%20Translator%29%3A%0AWhat%20happened%3A%0A" target="_blank" rel="noopener noreferrer">
+    Open WhatsApp <span aria-hidden="true">↗</span>
+  </a>
+</aside>
+</div>
 
 <section class="support-contact-panel">
 

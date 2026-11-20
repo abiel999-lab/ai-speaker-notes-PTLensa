@@ -15,6 +15,8 @@ from normalize_legacy import normalize_legacy
 ROOT=Path(os.getenv('TRANSLATION_STORAGE','/data'));ROOT.mkdir(parents=True,exist_ok=True)
 CONFIG=json.loads(Path(os.getenv('TRANSLATION_CONFIG','/run/secrets/translation.json')).read_text())
 ORIGIN='https://translation.notepreso.com';COOKIE='__Host-np_translation';LOGIN_COOKIE='__Host-np_translation_login'
+SIGNED_OUT_COOKIE='__Host-np_translation_signed_out'
+AUTH_COOKIE_OPTIONS={'path':'/','secure':True,'httponly':True,'samesite':'lax'}
 SESSIONS=SessionManager(CONFIG['session_secret'],max_age_seconds=30*86400)
 LOGIN=SessionManager(hashlib.sha256((CONFIG['session_secret']+':login-state-v1').encode()).hexdigest(),max_age_seconds=600)
 LANGUAGES=['auto', 'Indonesian', 'English', 'Arabic', 'Bengali', 'Bulgarian', 'Burmese', 'Catalan', 'Chinese', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Croatian', 'Czech', 'Danish', 'Dutch', 'Estonian', 'Filipino', 'Finnish', 'French', 'German', 'Greek', 'Gujarati', 'Hebrew', 'Hindi', 'Hungarian', 'Icelandic', 'Italian', 'Japanese', 'Javanese', 'Kannada', 'Khmer', 'Korean', 'Lao', 'Latvian', 'Lithuanian', 'Malay', 'Malayalam', 'Marathi', 'Nepali', 'Norwegian', 'Persian', 'Polish', 'Portuguese', 'Portuguese (Brazil)', 'Portuguese (Portugal)', 'Punjabi', 'Romanian', 'Russian', 'Serbian', 'Sinhala', 'Slovak', 'Slovenian', 'Spanish', 'Sundanese', 'Swahili', 'Swedish', 'Tamil', 'Telugu', 'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Uzbek', 'Vietnamese', 'Welsh']
@@ -26,6 +28,7 @@ def save(p,data):
  with LOCK:
   temp=p/'job.tmp';temp.write_text(json.dumps(data,ensure_ascii=False));os.replace(temp,p/'job.json')
 def identity(request):
+ if request.cookies.get(SIGNED_OUT_COOKIE):return None
  try:
   who=SESSIONS.parse(request.cookies.get(COOKIE))
   if who and who.terms_version=='translation-v1' and str(UUID(who.subject))==who.subject:return who
@@ -182,6 +185,8 @@ def health():return {'status':'ok','service':'translation','billing':'shared-cre
 def home(request:Request):
  who=request.state.identity
  if not who:
+  if request.cookies.get(SIGNED_OUT_COOKIE):
+   return HTMLResponse((Path(__file__).parent/'access.html').read_text(encoding='utf-8'))
   # SSO returns a ticket in the fragment. Complete it before checking access.
   state=LOGIN.parse(request.cookies.get(LOGIN_COOKIE))
   if state:
@@ -204,9 +209,13 @@ def javascript():return FileResponse(Path(__file__).parent/'workspace.js',media_
 def login():
  state=secrets.token_urlsafe(32);cookie,_=LOGIN.issue(state,subject=state,terms_version='translation-login-v1')
  res=RedirectResponse('https://notepreso.com/auth/translation/connect?state='+state,status_code=303)
- res.set_cookie(LOGIN_COOKIE,cookie,max_age=600,secure=True,httponly=True,samesite='lax',path='/');return res
+ res.set_cookie(LOGIN_COOKIE,cookie,max_age=600,**AUTH_COOKIE_OPTIONS)
+ res.delete_cookie(SIGNED_OUT_COOKIE,**AUTH_COOKIE_OPTIONS)
+ return res
 @app.post('/api/auth/complete')
 async def complete(request:Request):
+ if request.cookies.get(SIGNED_OUT_COOKIE):
+  return JSONResponse({'detail':'Sign in again to use Translator.'},status_code=400)
  try:
   raw=await request.body();assert len(raw)<4096
   token=json.loads(raw)['ticket'];encoded,signature=token.split('.',1)
@@ -230,7 +239,11 @@ def account(request:Request):
  except Exception:raise HTTPException(503,'Account information is temporarily unavailable') from None
 @app.post('/api/auth/logout')
 def logout():
- res=JSONResponse({'ok':True});res.delete_cookie(COOKIE,path='/',secure=True,httponly=True,samesite='lax');return res
+ res=JSONResponse({'ok':True})
+ res.delete_cookie(COOKIE,**AUTH_COOKIE_OPTIONS)
+ res.delete_cookie(LOGIN_COOKIE,**AUTH_COOKIE_OPTIONS)
+ res.set_cookie(SIGNED_OUT_COOKIE,'1',max_age=30*86400,**AUTH_COOKIE_OPTIONS)
+ return res
 @app.post('/api/jobs')
 async def create(request:Request,filename:str,job_id:str,source:str='auto',target:str='Indonesian',fit:str='review',allow_legacy:bool=False):
  owner=request.state.identity.subject;p=job_path(job_id)

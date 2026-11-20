@@ -41,7 +41,11 @@ function instructionWordCount(value){return value.trim()?value.trim().split(/\s+
 function updateCustomInstructionsCount(){const count=instructionWordCount(customInstructions.value);customInstructionsCount.textContent=String(count);customInstructions.setCustomValidity(count>5000?'Use 5000 words or fewer':'');}
 notesMode.addEventListener('change',updateModeWarning);noteLength.addEventListener('change',updateWordLimitField);customInstructions.addEventListener('input',updateCustomInstructionsCount);updateModeWarning();updateWordLimitField();updateCustomInstructionsCount();
 
-fileInput.addEventListener('change',()=>{if(fileInput.files?.[0]){fileSelected.textContent=`${t('selected')}: ${fileInput.files[0].name}`;fileSelected.classList.remove('hidden');}});
+fileInput.addEventListener('change', () => {
+  const selected = fileInput.files?.[0];
+  fileSelected.classList.toggle('hidden', !selected);
+  fileSelected.textContent = selected ? `${t('selected')}: ${selected.name}` : '';
+});
 ['dragenter','dragover'].forEach(type=>dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.add('dragging');}));
 ['dragleave','drop'].forEach(type=>dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.remove('dragging');}));
 dropZone.addEventListener('drop',e=>{const files=e.dataTransfer.files;if(files?.length){const dt=new DataTransfer();dt.items.add(files[0]);fileInput.files=dt.files;fileInput.dispatchEvent(new Event('change'));}});
@@ -100,17 +104,20 @@ async function poll(jobId){
 
 form.addEventListener('submit',async event=>{
   event.preventDefault();
-  if(submit.disabled)return;
+  if(submit.disabled || referenceLoading)return;
   updateCustomInstructionsCount();if(!customInstructions.reportValidity())return;
   window.NotePresoLimit.clearWorkspace();
   if(!csrfToken) await authState();
   if(window.NotePresoPreflight&&!(await window.NotePresoPreflight.confirm(form,fileInput.files?.[0])))return;
+  if (submit.disabled || referenceLoading) return;
   statusBox.querySelector(':scope > .notes-preview')?.remove();
   document.querySelector('#preview-email-verify')?.classList.add('hidden');
   submit.disabled=true;download.classList.add('hidden');chatResult.classList.add('hidden');retry.classList.add('hidden');upgradeResult.classList.add('hidden');resultMetrics.classList.add('hidden');usageSummary.classList.add('hidden');warningList.classList.add('hidden');statusBox.classList.remove('hidden');statusTitle.textContent=t('uploadingLabel');showNotesStatus(t('uploading'));progressBar.style.width='5%';
-  const upload=window.NotePresoUpload.indicator(statusMessage);
+  let upload;
   let uploadPhase='upload';
   try{
+    if (!window.NotePresoUpload) throw Error('Upload tools did not load. Refresh this page and try again.');
+    upload = window.NotePresoUpload.indicator(statusMessage);
     const response=await window.NotePresoUpload.request('/api/v1/jobs',{headers:apiHeaders({'X-Requested-With':'fetch'}),body:new FormData(form),timeout:300000},progress=>{
       uploadPhase=progress.phase;
       upload.update(progress);
@@ -124,7 +131,7 @@ form.addEventListener('submit',async event=>{
 
     const payload=await response.json();if(response.status===401){window.location.href='/auth/login?return_to=/app';return;}if(response.status===402){const detail=(payload&&typeof payload.detail==='object')?payload.detail:{};if(window.NotePresoLimit.workspace(detail,fileInput.files?.[0]?.name,form)){submit.disabled=false;if(window.loadAccountPlan)void window.loadAccountPlan();return;}const pending=String(detail.job_id||'');if(pending){sessionStorage.setItem('notepreso.pendingJob',pending);window.location.href=`/pricing?job=${encodeURIComponent(pending)}&reason=credits`;return;}window.location.href='/pricing?reason=limit';return;}if(!response.ok)throw new Error(payload.detail||'Upload failed.');lastJobId=payload.id;if(window.loadAccountPlan)void window.loadAccountPlan();uploadPhase='processing';await poll(payload.id);
   }catch(error){statusTitle.textContent=(error.phase||uploadPhase)==='upload'?'UPLOAD FAILED':(error.phase||uploadPhase)==='analysis'?'VALIDATION FAILED':t('failed').toUpperCase();showNotesStatus(error.message,true);submit.disabled=false;if(window.loadAccountPlan)void window.loadAccountPlan();}
-  finally{upload.remove();}
+  finally{upload?.remove();}
 });
 
 retry.addEventListener('click',async()=>{
@@ -145,23 +152,67 @@ document.addEventListener('DOMContentLoaded',async()=>{if(await ensureAuth())loa
 document.addEventListener('asn:languagechange',()=>{ if(lastRenderedJob) renderResult(lastRenderedJob); loadHistory(); });
 
 
-// Preview the same extraction the backend will use; upload never triggers a paid call.
-const referenceInput=document.querySelector('#reference-document');let referenceEpoch=0,referenceLoading=false;
-referenceInput?.addEventListener('change',async()=>{
- if(referenceLoading)return;
- const review=document.querySelector('#reference-review'),preview=document.querySelector('#reference-preview'),error=document.querySelector('#reference-error');
- if(submit.disabled){referenceInput.value='';error.textContent='Wait for the current operation';return;}
- const epoch=++referenceEpoch,file=referenceInput.files[0];review.hidden=true;preview.value='';error.textContent='';
- if(!file)return;
- if(file.size>10*1024*1024){referenceInput.value='';error.textContent='Use a document up to 10 MB';return;}
- referenceLoading=true;referenceInput.disabled=true;submit.disabled=true;
- try{
-  const body=new FormData();body.append('file',file);
-  const response=await fetch('/api/v1/documents/extract',{method:'POST',headers:apiHeaders({'X-Requested-With':'fetch'}),body});
-  if(epoch!==referenceEpoch)return;const data=await response.json();if(!response.ok)throw Error(data.detail||'Document extraction failed');
-  preview.value=data.text;review.hidden=false;review.open=true;
- }catch(e){if(epoch===referenceEpoch){referenceInput.value='';error.textContent=e.message;}}
- finally{referenceLoading=false;referenceInput.disabled=false;if(epoch===referenceEpoch)submit.disabled=false;}
+// Check reference text before processing the presentation.
+const referenceInput = document.querySelector('#reference-document');
+const referenceStatus = document.querySelector('#reference-error');
+const referenceMessages = {
+  DOCUMENT_TEXT_LIMIT: 'This document contains more than 120,000 characters. Split it or upload the sections you need.',
+  DOCUMENT_SIZE_LIMIT: 'Choose a non-empty reference document up to 10 MB.',
+  DOCUMENT_ENCODING: 'Save the text or Markdown file as UTF-8 and try again.',
+  DOCUMENT_PAGE_LIMIT: 'Choose a reference PDF with up to 80 pages.',
+  DOCUMENT_HAS_NO_SELECTABLE_TEXT: 'No selectable text was found. Run OCR on a scanned PDF first.',
+  PDF_PASSWORD_REQUIRED: 'Unlock the PDF before uploading it.',
+};
+let referenceLoading = false;
+referenceInput?.addEventListener('change', async () => {
+  if (referenceLoading) return;
+  const review = document.querySelector('#reference-review');
+  const preview = document.querySelector('#reference-preview');
+  const selected = referenceInput.files[0];
+  review.hidden = true;
+  preview.value = '';
+  referenceStatus.textContent = '';
+  if (!selected) return;
+  referenceLoading = true;
+  referenceInput.disabled = true;
+  let indicator;
+  let invalid = false;
+  try {
+    if (selected.size === 0 || selected.size > 10 * 1024 * 1024) {
+      invalid = true;
+      throw Error(referenceMessages.DOCUMENT_SIZE_LIMIT);
+    }
+    referenceStatus.setAttribute('role', 'status');
+    referenceStatus.textContent = 'Checking your account before uploading the reference…';
+    if (!csrfToken) await authState();
+    const body = new FormData();
+    body.append('file', selected);
+    indicator = window.NotePresoUpload.indicator(referenceStatus);
+    const response = await window.NotePresoUpload.request('/api/v1/documents/extract', {
+      headers: apiHeaders({'X-Requested-With': 'fetch'}), body, timeout: 180000,
+    }, progress => {
+      indicator.update(progress);
+      referenceStatus.textContent = window.NotePresoUpload.describe(progress, 'Upload complete. Extracting reference text…');
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      invalid = [400, 413, 415, 422].includes(response.status);
+      throw Error(referenceMessages[data?.detail] ?? 'The reference could not be read. Check the file or try again.');
+    }
+    if (typeof data?.text !== 'string') throw Error('The server did not return reference text. Try again.');
+    preview.value = data.text;
+    review.hidden = false;
+    referenceStatus.textContent = 'Reference text is ready to review.';
+  } catch (error) {
+    if (invalid) referenceInput.value = '';
+    referenceStatus.setAttribute('role', 'alert');
+    referenceStatus.textContent = error.message;
+  } finally {
+    indicator?.remove();
+    referenceInput.disabled = false;
+    referenceLoading = false;
+    if (invalid) referenceInput.dispatchEvent(new Event('notepreso:reference-invalid'));
+  }
 });
 
 // Resume status polling after reauthentication or a browser reload. Never repeat POST /jobs here.
