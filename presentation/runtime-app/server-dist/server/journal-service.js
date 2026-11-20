@@ -11,12 +11,12 @@ const W=13.333333,H=7.5;
 export const MAX_JOURNAL_BYTES=50*1024*1024;
 
 export function decodeJournal(body) {
-    const keys = ['name', 'base64', 'fontFamily', 'fontScale', 'density', 'includeSpeakerNotes', 'interactiveLinks', 'presenterContext', 'motion', 'reviewOutput', 'sourcePagesOnly'];
+    const keys = ['name', 'base64', 'fontFamily', 'fontScale', 'density', 'includeSpeakerNotes', 'interactiveLinks', 'presenterContext', 'motion', 'reviewOutput', 'sourcePagesOnly', 'editableSource'];
     const invalidOptions = body && (
         (body.motion !== undefined && !['none', 'keynote'].includes(body.motion)) ||
         (body.fontScale !== undefined && (!Number.isFinite(body.fontScale) || body.fontScale < .85 || body.fontScale > 1.15)) ||
         (body.density !== undefined && !['comfortable', 'compact'].includes(body.density)) ||
-        ['includeSpeakerNotes', 'interactiveLinks', 'reviewOutput', 'sourcePagesOnly'].some(key => body[key] !== undefined && typeof body[key] !== 'boolean') ||
+        ['includeSpeakerNotes', 'interactiveLinks', 'reviewOutput', 'sourcePagesOnly', 'editableSource'].some(key => body[key] !== undefined && typeof body[key] !== 'boolean') ||
         (body.presenterContext !== undefined && (typeof body.presenterContext !== 'string' || body.presenterContext.length > 3000))
     );
     if(!body||Object.keys(body).some(key=>!keys.includes(key))||invalidOptions||(body.fontFamily!==undefined&&!["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"].includes(body.fontFamily))||typeof body.name!=='string'||body.name.length>120||!/\.pdf$/i.test(body.name)||typeof body.base64!=='string'||body.base64.length>Math.ceil(MAX_JOURNAL_BYTES/3)*4||/[^A-Za-z0-9+/=]/.test(body.base64))throw Error('JOURNAL_INVALID');
@@ -200,11 +200,41 @@ function reviewJournal(meta, evidenceBySection) {
     })];
 }
 
-async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion}) {
+// PptxGenJS writes an explicit Notes Master reference that desktop
+// PowerPoint rejects for these exports. The notes slides already link to
+// the master. Also declare the standard MIME type for .jpg image parts.
+async function officeCompatiblePdfDeck(bytes) {
+    const zip = await JSZip.loadAsync(bytes);
+    const presentation = zip.file('ppt/presentation.xml');
+    const types = zip.file('[Content_Types].xml');
+    zip.file(presentation.name,(await presentation.async('string')).replace(/<p:notesMasterIdLst>[\s\S]*?<\/p:notesMasterIdLst>/g,''));
+    zip.file(types.name,(await types.async('string')).replace(/ContentType="image\/jpg"/g,'ContentType="image/jpeg"'));
+    return zip.generateAsync({type:'nodebuffer',compression:'DEFLATE'});
+}
+
+function sourceTextParts(text) {
+    const characters = Array.from(text);
+    const parts = [];
+    for (let start=0;start<characters.length;) {
+        const window=characters.slice(start,start+850);
+        const fragment=window.join('');
+        const boundary=window.length===850 ? fragment.search(/\s+\S*$/u) : -1;
+        const length=boundary>660 ? Array.from(fragment.slice(0,boundary)).length : window.length;
+        parts.push(window.slice(0,length).join(''));
+        start+=length;
+    }
+    return parts;
+}
+
+async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion,editableSource,fontFamily,fontScale,density,interactiveLinks}) {
     const pptx = new pptxgen();
     pptx.defineLayout({name:'source-pages',width:W,height:H});
     pptx.layout = 'source-pages';
+    pptx.journalTypography={journalFont:fontFamily,journalFontScale:fontScale,journalDensity:density};
+    pptx.theme={headFontFace:fontFamily,bodyFontFace:fontFamily};
     const review = [];
+    const contents=interactiveLinks&&editableSource ? newSlide(pptx,'Contents',1) : null;
+    const editablePages=[];
     // Use Poppler's reading order for multi-column reports. Keep the
     // positioned words when the independent extraction doesn't cover a page.
     let orderedPages=[];
@@ -224,24 +254,43 @@ async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion}) 
         const title = 'Source PDF — page ' + page.number;
         const file = basename + '-' + String(page.number).padStart(digits,'0') + '.jpg';
         const {width,height} = await sharp(file).metadata();
-        const slide = newSlide(pptx,title,page.number);
+        const slide = newSlide(pptx,title,pptx._slides.length+1);
         slide.addImage({path:file,...contain(width,height,{x:.45,y:1,w:12.43,h:6}),objectName:'journal-source-page-'+page.number,altText:title});
         const positioned = page.lines.map(line => line.text).join('\n');
         const ordered = orderedPages.length===pages.length ? orderedPages[page.number-1].trim() : '';
         const text = ordered && ordered.replace(/\s/g,'').length >= .95 * positioned.replace(/\s/g,'').length
             && (ordered.match(/\uFFFD/g)||[]).length <= (positioned.match(/\uFFFD/g)||[]).length ? ordered : positioned;
         slide.addNotes(`PDF page ${page.number}\n\n${text || 'No selectable text on this page.'}`);
+        if (editableSource&&text.trim()) editablePages.push({page:page.number,text});
         if (reviewOutput) {
             const preview = await sharp(file).resize({width:420,height:420,fit:'inside'}).jpeg({quality:70}).toBuffer();
             review.push({title,items:[text ? 'Selectable source text is included in the speaker notes.' : 'Image-only page.' ],pages:[page.number],image:'data:image/jpeg;base64,'+preview.toString('base64')});
         }
     }
+    if (contents) {
+        const entries=[{title:'Original PDF pages',slide:2},...(editablePages.length
+            ? [{title:'Editable source text',slide:pptx._slides.length+1}] : [])];
+        entries.forEach(({title,slide},index)=>addText(contents,title,{x:.8,y:1.45+index*.9,w:11.7,h:.6},
+            {fontSize:22,color:'076E7B',hyperlink:{slide,tooltip:'Go to '+title}}));
+        if (reviewOutput) review.unshift({title:'Contents',items:entries.map(entry=>entry.title),pages:[]});
+    }
+    for (const {page,text} of editablePages) {
+        signal?.throwIfAborted();
+        for (const [index,part] of sourceTextParts(text).entries()) {
+            const title='Editable source text — page '+page+' · '+(index+1);
+            const slide=newSlide(pptx,title,pptx._slides.length+1);
+            addText(slide,part,{x:.72,y:1.18,w:11.9,h:5.65},
+                {fontSize:density==='compact'?17:19,fit:'shrink',objectName:'vb-b0-0'});
+            if(reviewOutput)review.push({title,items:[part],pages:[page]});
+        }
+    }
     let bytes=Buffer.from(await pptx.write({outputType:'nodebuffer',compression:true}));
     if(motion==='keynote') bytes=(await addNativeMotion(bytes)).bytes;
+    bytes=await officeCompatiblePdfDeck(bytes);
     return {bytes,manifest:{pages:pages.length,visuals:[],slides:pptx._slides.length,generatedReview:review}};
 }
 
-export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false}={}) {
+export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false,editableSource=false}={}) {
     const temporaryRoot=path.resolve(os.tmpdir());
     const dir=await fs.mkdtemp(path.join(temporaryRoot,'notepreso-journal-'));
     if(path.dirname(path.resolve(dir))!==temporaryRoot)throw Error('JOURNAL_INVALID');
@@ -252,12 +301,18 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
         const pages = sourcePagesOnly||allowSourcePageCopy
             ? parseJournalLayout(xml,{allowImageOnly:true,maxPages:200,maxText:1000000})
             : parseJournalLayout(xml,{allowImageOnly:capturePdfVisuals});
-        const sourceManifest = () => ({
-            pages:pages.length,pagesWithText:pages.filter(page=>page.lines.some(line=>line.text.trim())).length,visuals:[],review:[],
-        });
+        const sourceManifest = () => {
+            const textPages=pages.filter(page=>page.lines.some(line=>line.text.trim()));
+            const pageBudget=Math.floor(110000/pages.length);
+            const planningSource=textPages.map(page=>{
+                const text=page.lines.map(line=>line.text).join(' ');
+                return '## PDF page '+page.number+'\n'+text.slice(0,pageBudget)+(text.length>pageBudget?'…':'');
+            }).join('\n\n');
+            return {pages:pages.length,pagesWithText:textPages.length,planningSource,visuals:[],review:[]};
+        };
         if (sourcePagesOnly) {
             if (inspectOnly) return {manifest:sourceManifest()};
-            return await createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion});
+            return await createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion,editableSource,fontFamily,fontScale,density,interactiveLinks});
         }
         if (allowSourcePageCopy && (pages.length>40 || pages.reduce((size,page)=>size+page.lines.reduce((total,line)=>total+line.text.length,0),0)>240000
             || pages.every(page=>!page.lines.length))) return {sourcePageCopy:sourceManifest()};
@@ -394,6 +449,7 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
         if (motion === 'keynote') deck = (await addNativeMotion(deck)).bytes;
         if (reviewOutput) manifest.generatedReview = generatedReview;
 
+        deck=await officeCompatiblePdfDeck(deck);
         const verification=await verifyJournalDeck(deck,{pages:pages.length,visuals:mapping,appendix,notes,includeSpeakerNotes});
         manifest.slides=pptx._slides.length;manifest.mapping=mapping;manifest.appendix=appendix;manifest.verification=verification;
         if(visuals.some(v=>v.kind==='graphical-abstract'))manifest.warnings.push('Unnumbered graphical abstract included.');

@@ -172,6 +172,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
   const documentMode=ws.kind==="document";
   const [documentFormat,setDocumentFormat]=T.useState(()=>new URLSearchParams(location.search).get("tool")==="journal"?"journal":"general");
   const [journalFile,setJournalFile]=T.useState(null);
+  const [reportRole,setReportRole]=T.useState("full-copy");
   const [journalName,setJournalName]=T.useState("");
   const [journalContext,setJournalContext]=T.useState("");
   const [journalOutput,setJournalOutput]=T.useState(null);
@@ -180,7 +181,8 @@ function NotePresoWorkspace({ studio: e, lang }) {
   T.useEffect(()=>()=>journalController.current?.abort(),[]);
   const journalMode=documentMode&&documentFormat==="journal";
   const disabled = e.busy || e.active || prep, resources = ws.resources || [];
-  const sourceCopyMode = !journalMode && journalFile?.payload.sourcePagesOnly === true;
+  const reportMode = documentMode && !journalMode && journalFile?.payload.sourcePagesOnly === true;
+  const sourceCopyMode = reportMode && ["full-copy","source-pages"].includes(reportRole);
   const journalExportMode = journalMode || sourceCopyMode;
   const documentSettingsDisabled = disabled || journalExportMode;
   const journalOptions = {
@@ -192,7 +194,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
     motion: e.settings.motion || "none",
     presenterContext: e.settings.includeSpeakerNotes ? journalContext.trim() : "",
   };
-  const journalSettingsKey = JSON.stringify(journalOptions);
+  const journalSettingsKey = JSON.stringify([journalOptions,sourceCopyMode ? reportRole : null]);
   const journalReady = journalOutput?.settingsKey === journalSettingsKey;
   const fullCopy = documentMode && resources.some(resource => resource.role === "full-copy");
   const generationError = e.error?.code ? `${"The request failed. Your source is still available."} (${e.error.code})${e.error.requestId ? " · Request " + e.error.requestId : ""}` : e.error?.message;
@@ -235,17 +237,13 @@ function NotePresoWorkspace({ studio: e, lang }) {
     setFileProgress({...progress,label:window.NotePresoUpload.describe(progress,analysis)});
   }
   async function attach(files) {
-    if (resources.length + files.length > 6) {
+    if (resources.length + files.length + Number(reportMode) > 6) {
       setUploadError("Attach up to 6 documents.");
       return;
     }
     setPrep(true);
     setUploading(true);
     setUploadError("");
-    if (sourceCopyMode) {
-      setJournalFile(null);
-      setJournalOutput(null);
-    }
     const owner = e.draft.id, original = e.draft.source;
     const next = [...resources];
     const failures = [];
@@ -265,8 +263,12 @@ function NotePresoWorkspace({ studio: e, lang }) {
           throw error;
         });
         if (result.sourcePageCopy) {
-          if (files.length !== 1 || resources.length) throw Error("Upload this PDF by itself to use source page copy.");
-          setJournalFile({payload:{...payload,sourcePagesOnly:true},filename:file.name,manifest:result.sourcePageCopy});
+          if (files.length !== 1) throw Error("Select this long PDF in its own upload.");
+          if (reportMode) throw Error("Remove the current long PDF before adding another.");
+          setJournalFile({id:crypto.randomUUID(),payload:{...payload,sourcePagesOnly:true},filename:file.name,manifest:result.sourcePageCopy});
+          setReportRole("full-copy");
+          if (/^(Untitled(?: presentation)?|New presentation|)$/i.test(e.draft.name))
+            e.edit({name:payload.name.replace(/\.pdf$/i,"")});
           setJournalOutput(null);
           setReviewIndex(0);
           return;
@@ -318,7 +320,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
   function attachPaste() {
     if (!pasteText.trim()) return;
     if (pasteText.length > 240000) return setUploadError("Paste up to 240,000 characters at a time. Split longer text into separate attachments.");
-    if (resources.length >= 6) return setUploadError("Attach up to 6 documents.");
+    if (resources.length + Number(reportMode) >= 6) return setUploadError("Attach up to 6 documents.");
     if (resources.reduce((count, resource) => count + resource.text.length, pasteText.length) > 480000) return setUploadError("Use up to 480,000 characters across your documents.");
     const next = [...resources];
     next.push({id:crypto.randomUUID(), name:"Pasted content", role:"full-copy", text:pasteText});
@@ -375,7 +377,8 @@ function NotePresoWorkspace({ studio: e, lang }) {
     let phase="analysis";
     const failureStage="PowerPoint export failed";
     try {
-      const output = await journalRequest("export", {...journalFile.payload, ...journalOptions, reviewOutput: true}, operation.signal,progress=>{
+      const output = await journalRequest("export", {...journalFile.payload, ...journalOptions,
+        ...(sourceCopyMode ? {editableSource:reportRole==="full-copy"} : {}), reviewOutput: true}, operation.signal,progress=>{
         phase=progress.phase;
         reportProgress("export",progress);
       });
@@ -392,7 +395,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
   }
   function downloadJournal() {
     if (!journalReady) return;
-    const filename = (journalName.trim() || journalFile.payload.name.replace(/\.pdf$/i, ""))
+    const filename = ((sourceCopyMode ? e.draft.name : journalName).trim() || journalFile.payload.name.replace(/\.pdf$/i, ""))
       .replace(/[<>:"/\\|?*]/g, "-").replace(/\.pptx$/i, "");
     const url = URL.createObjectURL(journalOutput.blob);
     const link = document.createElement("a");
@@ -403,9 +406,11 @@ function NotePresoWorkspace({ studio: e, lang }) {
   }
   function journalReview() {
     if (sourceCopyMode && !journalOutput) return H("div",{className:"np-empty-preview"},
-      H("h3",null,"Source page copy"),
-      H("p",null,`Analysis complete: ${journalFile.manifest.pages} pages. This PDF exceeds the standard analysis limits, so PowerPoint will preserve every page as a slide.`),
-      Number.isInteger(journalFile.manifest.pagesWithText) && H("p",null,`Selectable text found on ${journalFile.manifest.pagesWithText} of ${journalFile.manifest.pages} pages. Text is included in the slide notes when available.`));
+      H("h3",null,reportRole==="full-copy"?"Full copy":"Source page copy"),
+      H("p",null,`${journalFile.manifest.pages} original pages will be preserved in PowerPoint.`),
+      H("p",null,reportRole==="full-copy"
+        ? `Selectable text from ${journalFile.manifest.pagesWithText} pages will also be added as editable slides.`
+        : "Selectable text is included in the speaker notes."));
     if (!journalFile) return H("div", {className: "np-empty-preview"},
       H("h3", null, uploading ? "Reading your journal…" : "Your slides will appear here"),
       H("p", null, "Upload a research journal PDF to review the extracted slides and their source pages."));
@@ -434,12 +439,15 @@ function NotePresoWorkspace({ studio: e, lang }) {
     setPrep(true);
     const snapshot = JSON.stringify(e.draft), settingsSnapshot = JSON.stringify(e.settings);
     try {
-      if(documentMode&&!resources.some(r=>["content","full-copy"].includes(r.role)))throw Error("Upload a document or paste content before generating.");
-      if(fullCopy&&resources.some(r=>r.role==="content"))throw Error("Use Full copy for every document you want copied into these slides, or set it to Reference only.");
+      const inputResources = reportMode && journalFile.manifest.planningSource ? [...resources,{
+        id:journalFile.id,name:journalFile.payload.name,role:reportRole,text:journalFile.manifest.planningSource,
+      }] : resources;
+      if(documentMode&&!inputResources.some(r=>["content","full-copy"].includes(r.role)))throw Error("Upload a document or paste content before generating.");
+      if(fullCopy&&inputResources.some(r=>r.role==="content"))throw Error("Use Full copy for every document you want copied into these slides, or set it to Reference only.");
       let source = e.draft.source, plannedSlides;
       if (ws.policy === "draft" || documentMode) {
         if (!ws.brief.trim()&&!documentMode) throw Error("Explain the presentation you want to create");
-        const result = await P("/workspace/draft", "POST", { workspace: {...ws,kind:documentMode?"document":"brief"}, model: e.settings.model || "gpt-6-luna", language: e.settings.presentationLanguage || "English", reasoningEffort: e.settings.reasoningEffort || "medium", ...(fullCopy?{typography:{fontFamily:e.settings.fontFamily,fontScale:e.settings.fontScale,density:e.settings.density,includeSpeakerNotes:e.settings.includeSpeakerNotes}}:{}), sections: Math.max(3, Math.min(30, (e.settings.creativeSlideCount || 12) - 1)) });
+        const result = await P("/workspace/draft", "POST", { workspace: {...ws,resources:inputResources,kind:documentMode?"document":"brief"}, model: e.settings.model || "gpt-6-luna", language: e.settings.presentationLanguage || "English", reasoningEffort: e.settings.reasoningEffort || "medium", ...(fullCopy?{typography:{fontFamily:e.settings.fontFamily,fontScale:e.settings.fontScale,density:e.settings.density,includeSpeakerNotes:e.settings.includeSpeakerNotes}}:{}), sections: Math.max(3, Math.min(30, (e.settings.creativeSlideCount || 12) - 1)) });
         source = result.source;
         if(documentMode&&!fullCopy)plannedSlides=result.slideCount;
       }
@@ -480,7 +488,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
     H("select",{"aria-label":"Document format",value:documentFormat,disabled:disabled||uploading,
       onChange:event=>{
         const value=event.target.value;
-        if (sourceCopyMode) {
+        if (reportMode) {
           setJournalFile(null);
           setJournalOutput(null);
           setReviewIndex(0);
@@ -505,8 +513,22 @@ function NotePresoWorkspace({ studio: e, lang }) {
   } })), fileProgress && H("div",{className:"np-upload-status"},
       H("p",{role:"status"},fileProgress.label),
       H("progress",{max:100,value:fileProgress.percent??undefined,"aria-label":"File upload and server processing",style:{width:"100%",accentColor:"#087e8e"}})),
-    journalExportMode && journalFile && H("div", {className: "np-resource", role: "status"},
+    (journalMode||reportMode) && journalFile && H("div", {className: "np-resource"},
       H("strong", null, journalFile.filename),
+      reportMode && H("select",{"aria-label":"Role for "+journalFile.filename,value:reportRole,disabled,
+        onChange:event=>{
+          setReportRole(event.target.value);
+          setJournalOutput(null);
+          setReviewIndex(0);
+          setLocalError("");
+        }},
+        H("option",{value:"content",disabled:!journalFile.manifest.planningSource},"Slide content"),
+        H("option",{value:"reference",disabled:!journalFile.manifest.planningSource},"Reference only"),
+        H("option",{value:"full-copy"},"Full copy — no summarizing"),
+        H("option",{value:"source-pages"},"Source page copy")),
+      reportMode && H("p",{className:"help-text"},sourceCopyMode
+        ? "The export uses this PDF. Your other attachments stay in the workspace."
+        : "AI uses text excerpts from across this long PDF."),
       H("button", {className: "text-button", type: "button", disabled, onClick: () => {
         setJournalFile(null);
         setJournalOutput(null);

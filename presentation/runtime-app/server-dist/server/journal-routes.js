@@ -22,10 +22,10 @@ export function registerJournalRoutes(app,{auth,enabled=false,failureRoot,genera
         req.raw.once('aborted',abort);
         reply.raw.once('close',abort);
         try {
-            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly} = req.body;
+            const {name,fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,editableSource} = req.body;
             const result=await generate(bytes,name,{
                 signal:controller.signal,inspectOnly:action==='inspect',standardHeadings:true,
-                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,
+                fontFamily,fontScale,density,includeSpeakerNotes,interactiveLinks,presenterContext,motion,reviewOutput,sourcePagesOnly,editableSource,
             });
             if(action==='inspect')return reply.header('Cache-Control','private, no-store').send(result.manifest);
             if(reviewOutput){
