@@ -1,6 +1,9 @@
 import sharp from 'sharp';
 
 const equationDelimiters = new Map([['\\[', '\\]'], ['$$', '$$'], ['[', ']']]);
+function formatPdfMath(formula) {
+    return formula.replace(/\\mathrm\{([\p{L}/]+)\^(-?\d+)\}/gu,'\\mathrm{$1}^{$2}');
+}
 
 export function pdfEquationAt(lines, index) {
     const delimiter = lines[index]?.trim();
@@ -9,7 +12,7 @@ export function pdfEquationAt(lines, index) {
     if (!formula) return;
     if (delimiter === '\\[' && closing === '\\]' || delimiter === '$$' && closing === '$$' ||
         delimiter === '[' && closing === ']' && /\\[a-zA-Z]+/.test(formula)) {
-        return `\\[\n${formula}\n\\]`;
+        return `\\[\n${formatPdfMath(formula)}\n\\]`;
     }
 }
 
@@ -25,7 +28,7 @@ export function pdfMultilineEquationAt(lines, start) {
             if (rows.some(row => /\\(?:begin|end)\s*\{|\\\\/.test(row))) return;
             return {
                 end: index,
-                text: ['\\[', '\\begin{gathered}', rows.join(' \\\\\n'), '\\end{gathered}', '\\]'].join('\n'),
+                text: ['\\[', '\\begin{gathered}', rows.map(formatPdfMath).join(' \\\\\n'), '\\end{gathered}', '\\]'].join('\n'),
             };
         }
         if (!text || /^\s*(?:\\\[|\$\$|\[|\\\]|\])\s*$/.test(text)) return;
@@ -34,6 +37,58 @@ export function pdfMultilineEquationAt(lines, start) {
 }
 
 const numericCell = /^[−+-]?\d+(?:[.,]\d+)*(?:\s*[–−-]\s*\d+(?:[.,]\d+)*)?$/u;
+
+export function normalizePdfTextEvents(textEvents, visuals, lines) {
+    const byPosition = new Map(lines.map(line=>[line.yMin+':'+line.xMin,line]));
+    const rows = [];
+    for (const event of textEvents) {
+        const line = byPosition.get(event.y+':'+event.x);
+        if (!line || line.text!==event.text) continue;
+        const row=rows.at(-1);
+        if (row && Math.abs(line.yMin-row.y)<=2) row.items.push({line,event});
+        else rows.push({y:line.yMin,items:[{line,event}]});
+    }
+    for (const row of rows) {
+        if(row.items.length<2 || row.items.length>5 || !row.items.some(({line})=>line.text.length>=14)) continue;
+        const text=[...row.items].sort((a,b)=>a.line.xMin-b.line.xMin);
+        const left=text[0].line.xMin,right=text.at(-1).line.xMax;
+        const bottom=Math.max(...text.map(({line})=>line.yMax));
+        const graphics=visuals.filter(({vector,region})=>vector && !region.sourceTable &&
+            region.x>left && region.x+region.w<=right+1 && region.w<=85 && region.h<=30 &&
+            region.y>=row.y-4 && region.y+region.h<=bottom+4);
+        if(!graphics.length || graphics.some(event=>event.inlineRun)) continue;
+        const items=[
+            ...text.map(({event,line})=>({event,left:line.xMin,right:line.xMax})),
+            ...graphics.map(event=>({event,left:event.region.x,right:event.region.x+event.region.w}))
+        ].sort((a,b)=>a.left-b.left);
+        if (items.some((item,index)=>index && (item.left-items[index-1].right < -2 || item.left-items[index-1].right > 15))) continue;
+        const run={assets:[]};
+        for (const {event} of items) {
+            event.inlineRun=run;
+            event.y=row.y;
+        }
+    }
+    const plain=(line)=>line.text.length>=15 && !/^(?:[#\[\]$*]|\d+\s*[.)]|(?:Langkah|Step)\s+\d+)/i.test(line.text) &&
+        !/[\\|]/.test(line.text);
+    const removed=new Set();
+    let previous;
+    for (const row of rows) {
+        const item=row.items.length===1?row.items[0]:undefined;
+        if(!item || item.event.inlineRun || !plain(item.line)){previous=undefined;continue;}
+        const {line,event}=item;
+        const before=previous?.last;
+        if(before && Math.abs(before.xMin-line.xMin)<4 && Math.abs(before.font-line.font)<1.2 &&
+            line.yMin-before.yMin>=before.font*.7 && line.yMin-before.yMin<=before.font*1.25 &&
+            before.xMax-before.xMin>=line.font*20 && /^\p{Ll}/u.test(line.text) &&
+            !/[.!?:;]$/.test(before.text) &&
+            !visuals.some(visual=>visual.y>=before.yMin && visual.y<=line.yMin)){
+            previous.event.text+=' '+event.text;
+            previous.last=line;
+            removed.add(event);
+        }else previous={event,last:line};
+    }
+    return textEvents.filter(event=>!removed.has(event));
+}
 
 export function pdfShortNumericGridAt(lines, start, visuals) {
     const cells = lines.slice(start, start + 4);

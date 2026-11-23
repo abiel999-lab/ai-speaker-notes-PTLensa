@@ -178,8 +178,12 @@ export async function saveFullCopyPlan(root, owner, workspace, settings, recover
   starts.set(document.sourceId,offset);
   offset+=document.text.length+'\n\n---\n\n'.length;
  }
- const assets = context.visuals.map(asset=>asset.visualKind==='inline'&&Number.isFinite(asset.sourceOffset)
-  ?{...asset,sourceOffset:starts.get(asset.sourceId)+asset.sourceOffset}:asset);
+ const assets = context.visuals.map(asset=>{
+  if(asset.visualKind!=='inline'||!Number.isFinite(asset.sourceOffset))return asset;
+  const start=starts.get(asset.sourceId);
+  return {...asset,sourceOffset:start+asset.sourceOffset,...(Number.isFinite(asset.inlineRunStart)&&Number.isFinite(asset.inlineRunEnd)
+     ? {inlineRunStart:start+asset.inlineRunStart,inlineRunEnd:start+asset.inlineRunEnd} : {})};
+ });
  const scene = buildFullCopyScene(doc, assets, settings);
  const plan = {version:2, sourceHash:doc.sha256, resourcesKey:resourcesKey(workspace), assets, recoveryCode};
  const file = fileFor(root, owner, source, workspace);

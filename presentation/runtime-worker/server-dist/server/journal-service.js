@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { digest,decodeJournalXml,parseJournalLayout,journalMetadata,inventoryJournal,journalSections,sentenceEvidence } from '../core/journal.js';
-import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables, pdfShortNumericGridAt } from './pdf-vector-regions.js';
+import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables, pdfShortNumericGridAt, normalizePdfTextEvents } from './pdf-vector-regions.js';
 import { equationParts } from '../core/native-equations.js';
 const require=createRequire(import.meta.url);
 const pptxgen=require('pptxgenjs'), sharp=require('sharp'), JSZip=require('jszip');
@@ -101,9 +101,10 @@ function pdfTextEvents(lines, visuals, tableBudget) {
                 }
             }
         }
-        if(pdfEquationAt(text,index)){
+        const equation=pdfEquationAt(text,index);
+        if(equation){
             events.push({y:line.yMin,x:line.xMin,text:'\\['},
-                {y:lines[index+1].yMin,x:lines[index+1].xMin,text:text[index+1]},
+                {y:lines[index+1].yMin,x:lines[index+1].xMin,text:equation.split("\n")[1]},
                 {y:lines[index+2].yMin,x:lines[index+2].xMin,text:'\\]'});
             index+=2;
             continue;
@@ -176,10 +177,10 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
                 remainingVectors--;
             }
         }
-        const textEvents=pdfTextEvents(original.lines,events,remainingVectors);
+        const textEvents=normalizePdfTextEvents(pdfTextEvents(original.lines,events,remainingVectors),events,original.lines);
         remainingVectors-=textEvents.filter(event=>event.sourceTable).length;
         events.push(...textEvents);
-        for(const event of textEvents.filter(item=>/^[.!?]$/.test(item.text))){
+        for(const event of textEvents.filter(item=>!item.inlineRun&&/^[.!?]$/.test(item.text))){
             const matches=events.filter(({vector,region})=>vector &&
                 Math.abs(event.y-region.y)<=6 &&
                 event.x-region.x-region.w>=-1 &&
@@ -192,7 +193,10 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
         }
         for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
             if(event.text!==undefined){
+                const run=event.inlineRun;
+                if(run && run.start===undefined)run.start=source.length+(source?1:0);
                 addText(event.text);
+                if(run)run.end=source.length;
                 continue;
             }
             const {region}=event;
@@ -211,6 +215,14 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
                  ...(event.vector?{pdfRegionHeight:region.h}:{}),data};
               fullCopyVisuals.push(asset);
               if(event.trailingPunctuation)asset.trailingPunctuation=event.trailingPunctuation;
+              if(event.inlineRun)event.inlineRun.assets.push(asset);
+            }
+        }
+        for(const run of new Set(textEvents.map(event=>event.inlineRun).filter(Boolean))){
+            if(run.start===undefined || run.end===undefined)continue;
+            for(const asset of run.assets){
+                asset.inlineRunStart=run.start;
+                asset.inlineRunEnd=run.end;
             }
         }
     }
