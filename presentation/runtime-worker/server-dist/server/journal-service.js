@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { digest,decodeJournalXml,parseJournalLayout,journalMetadata,inventoryJournal,journalSections,sentenceEvidence } from '../core/journal.js';
-import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt } from './pdf-vector-regions.js';
+import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables } from './pdf-vector-regions.js';
 import { equationParts } from '../core/native-equations.js';
 const require=createRequire(import.meta.url);
 const pptxgen=require('pptxgenjs'), sharp=require('sharp'), JSZip=require('jszip');
@@ -65,8 +65,15 @@ function numericAttributes(tag) {
 function pdfTextEvents(lines, visuals) {
     const text=lines.map(line=>line.text);
     const events=[];
+    const tables=pdfNumericTables(lines,visuals);
     for(let index=0;index<lines.length;index++){
         const line=lines[index];
+        const table=tables.get(index);
+        if(table){
+            events.push({y:line.yMin,x:line.xMin,text:table.text});
+            index=table.end;
+            continue;
+        }
         const multiline=pdfMultilineEquationAt(text,index);
         if(multiline){
             const last=lines[multiline.end];

@@ -33,6 +33,59 @@ export function pdfMultilineEquationAt(lines, start) {
     }
 }
 
+const numericCell = /^[−+-]?\d+(?:[.,]\d+)*(?:\s*[–−-]\s*\d+(?:[.,]\d+)*)?$/u;
+
+export function pdfNumericTables(lines, visuals = []) {
+    const bands = [];
+    for (const [index, line] of lines.entries()) {
+        const band = bands.at(-1);
+        if (band && line.yMin - band.top <= 1.4) band.items.push({ line, index });
+        else bands.push({ top: line.yMin, items: [{ line, index }] });
+    }
+    const grids = new Map();
+    for (let i = 1; i < bands.length - 2; i++) {
+        const first = bands[i];
+        const cells = [...first.items].sort((a, b) => a.line.xMin - b.line.xMin);
+        if (cells.length < 2 || cells.length > 8 || cells.some(({ line }) => !numericCell.test(line.text))) continue;
+        const anchors = cells.map(({ line }) => line.xMax);
+        if (anchors.some((edge, column) => column && edge - anchors[column - 1] < 24)) continue;
+        const spacing = bands[i + 1].top - first.top;
+        if (spacing < 12 || spacing > 45) continue;
+        const rows = [];
+        let next = i;
+        for (; next < bands.length; next++) {
+            const band = bands[next];
+            if (Math.abs(band.top - first.top - (next - i) * spacing) > 4) break;
+            const entries = [...band.items].sort((a, b) => a.line.xMin - b.line.xMin);
+            if (entries.length !== anchors.length || entries.some(({ line }, column) =>
+                !numericCell.test(line.text) || Math.abs(line.xMax - anchors[column]) > 4)) break;
+            rows.push(entries.map(({ line }) => line.text));
+        }
+        if (rows.length < 3) continue;
+        const header = bands[i - 1];
+        if (Math.abs(first.top - header.top - spacing) > 5) continue;
+        const headerCells = anchors.map(() => []);
+        const words = header.items.flatMap(({ line }) => line.words).sort((a, b) => a.xMin - b.xMin);
+        for (const word of words) {
+            const column = anchors.findIndex(edge => word.xMax <= edge + 4);
+            if (column >= 0) headerCells[column].push(word);
+        }
+        const headings = headerCells.map(group => group.map(word => word.text).join(' '));
+        if (headerCells.flat().length !== words.length || headings.some(cell => !/\p{L}{2}/u.test(cell) || /[|\\]/.test(cell))) continue;
+        const left = Math.min(...words.map(word => word.xMin));
+        const right = anchors.at(-1) + 4;
+        const bottom = Math.max(...bands[next - 1].items.map(({ line }) => line.yMax));
+        if (visuals.some(({ region }) => region.x < right && region.x + region.w > left &&
+            region.y < bottom && region.y + region.h > first.top)) continue;
+        const wrap = row => '| ' + row.join(' | ') + ' |';
+        const start = header.items[0].index;
+        const end = bands[next - 1].items.at(-1).index;
+        grids.set(start, { end, text: ['', wrap(headings), wrap(anchors.map(() => '---')), ...rows.map(wrap), ''].join('\n') });
+        i = next - 1;
+    }
+    return grids;
+}
+
 // Poppler's text and image inventories do not include text drawn as paths.
 // Find compact ink regions still present on the rendered page after masking
 // known words and embedded images. Work at a fixed pixels-per-point scale.

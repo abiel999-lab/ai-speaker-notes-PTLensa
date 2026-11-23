@@ -1,4 +1,4 @@
-import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt } from './pdf-vector-regions.js';
+import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables } from './pdf-vector-regions.js';
 import { equationParts } from '../core/native-equations.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -88,8 +88,15 @@ function numericAttributes(tag) {
 function pdfTextEvents(lines, visuals) {
     const text=lines.map(line=>line.text);
     const events=[];
+    const tables=pdfNumericTables(lines,visuals);
     for(let index=0;index<lines.length;index++){
         const line=lines[index];
+        const table=tables.get(index);
+        if(table){
+            events.push({y:line.yMin,x:line.xMin,text:table.text});
+            index=table.end;
+            continue;
+        }
         const multiline=pdfMultilineEquationAt(text,index);
         if(multiline){
             const last=lines[multiline.end];
