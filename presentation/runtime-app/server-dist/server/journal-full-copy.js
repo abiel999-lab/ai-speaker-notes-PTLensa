@@ -288,7 +288,7 @@ async function pageEntries(page, image, { readRegion, rasterize, vectorRegions, 
 }
 
 export async function buildJournalFullCopy(pages, images, manifest, options) {
-    const { dir, cropImage, thumbnail, signal, fontFamily, fontScale, density, includeSpeakerNotes, interactiveLinks, presenterContext, motion, reviewOutput } = options;
+    const { dir, cropImage, thumbnail, signal, artDirection, fontFamily, fontScale, density, includeSpeakerNotes, interactiveLinks, presenterContext, motion, reviewOutput } = options;
     const dictionary = new Set(pages.flatMap(page => page.lines).flatMap(line => line.words)
         .flatMap(word => word.text.toLowerCase().match(/[\p{L}]+/gu) ?? []));
     const entries = [];
@@ -347,7 +347,7 @@ export async function buildJournalFullCopy(pages, images, manifest, options) {
         });
     }
     const doc = { raw, sha256: hash(raw), mode: 'text', blocks, ledger, words: raw.trim().split(/\s+/u).length, version: 'source-v1' };
-    const scene = buildFullCopyScene(doc, assets, {
+    let scene = buildFullCopyScene(doc, assets, {
         fontFamily, fontScale, density, includeSpeakerNotes, maxSlides: 320,
         pdfPagesAtEnd: true, keepTableCaption: true,
     });
@@ -388,6 +388,17 @@ export async function buildJournalFullCopy(pages, images, manifest, options) {
     // Use the journal's existing fade transition for long document decks.
     scene.uniformMotion = true;
     if (manifest.appendix.length !== pages.length) throw Error('JOURNAL_COVERAGE_FAILED');
+    if(artDirection){
+        try {
+            const design=await artDirection(doc,scene,dir);
+            scene=design.scene;
+            if(design.artwork) imagePaths[design.artwork.id]=design.artwork.imagePath;
+            manifest.deckArt=design.summary;
+        } catch {
+            signal?.throwIfAborted();
+        }
+    }
+    signal?.throwIfAborted();
     const deck = await exportPptx(doc, scene, imagePaths, motion, undefined, fontFamily);
     manifest.slides = scene.slides.length;
     manifest.tables = blocks.filter(block => block.kind === 'table').map(block =>

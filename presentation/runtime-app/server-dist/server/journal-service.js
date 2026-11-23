@@ -1,3 +1,4 @@
+import {journalNativeTheme,styleJournalCover} from './journal-art.js';
 import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables, pdfShortNumericGridAt, normalizePdfTextEvents } from './pdf-vector-regions.js';
 import { equationParts } from '../core/native-equations.js';
 import fs from 'node:fs/promises';
@@ -14,13 +15,14 @@ const W=13.333333,H=7.5;
 export const MAX_JOURNAL_BYTES=50*1024*1024;
 
 export function decodeJournal(body) {
-    const keys = ['name', 'base64', 'fontFamily', 'fontScale', 'density', 'includeSpeakerNotes', 'interactiveLinks', 'presenterContext', 'motion', 'reviewOutput', 'sourcePagesOnly', 'editableSource', 'renderPreview', 'journalRole'];
+    const keys = ['name', 'base64', 'fontFamily', 'fontScale', 'density', 'includeSpeakerNotes', 'interactiveLinks', 'presenterContext', 'motion', 'reviewOutput', 'sourcePagesOnly', 'editableSource', 'renderPreview', 'journalRole', 'generateCoverArtwork', 'artModel'];
     const invalidOptions = body && (
         (body.journalRole !== undefined && !['full-copy','content'].includes(body.journalRole)) ||
         (body.motion !== undefined && !['none', 'keynote'].includes(body.motion)) ||
         (body.fontScale !== undefined && (!Number.isFinite(body.fontScale) || body.fontScale < .85 || body.fontScale > 1.15)) ||
         (body.density !== undefined && !['comfortable', 'compact'].includes(body.density)) ||
-        ['includeSpeakerNotes', 'interactiveLinks', 'reviewOutput', 'sourcePagesOnly', 'editableSource', 'renderPreview'].some(key => body[key] !== undefined && typeof body[key] !== 'boolean') ||
+        (body.artModel!==undefined && !['gpt-6-luna','gpt-6.1-terra'].includes(body.artModel)) ||
+        ['includeSpeakerNotes', 'interactiveLinks', 'reviewOutput', 'sourcePagesOnly', 'editableSource', 'renderPreview', 'generateCoverArtwork'].some(key => body[key] !== undefined && typeof body[key] !== 'boolean') ||
         (body.presenterContext !== undefined && (typeof body.presenterContext !== 'string' || body.presenterContext.length > 3000))
     );
     if(!body||Object.keys(body).some(key=>!keys.includes(key))||invalidOptions||(body.fontFamily!==undefined&&!["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"].includes(body.fontFamily))||typeof body.name!=='string'||body.name.length>120||!/\.pdf$/i.test(body.name)||typeof body.base64!=='string'||body.base64.length>Math.ceil(MAX_JOURNAL_BYTES/3)*4||/[^A-Za-z0-9+/=]/.test(body.base64))throw Error('JOURNAL_INVALID');
@@ -392,7 +394,7 @@ async function createSourcePageDeck(pdf,dir,pages,{signal,reviewOutput,motion,ed
     return {bytes,manifest:{pages:pages.length,visuals:[],slides:pptx._slides.length,generatedReview:review}};
 }
 
-export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false,editableSource=false,journalRole="full-copy"}={}) {
+export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,artDirection,inspectOnly=false,captureSource=false,capturePdfVisuals=false,imageLayoutXml,standardHeadings=false,fontFamily='Arial',fontScale=1,density='comfortable',includeSpeakerNotes=true,interactiveLinks=false,presenterContext='',motion='none',reviewOutput=false,sourcePagesOnly=false,allowSourcePageCopy=false,editableSource=false,journalRole="full-copy"}={}) {
     const temporaryRoot=path.resolve(os.tmpdir());
     const dir=await fs.mkdtemp(path.join(temporaryRoot,'notepreso-journal-'));
     if(path.dirname(path.resolve(dir))!==temporaryRoot)throw Error('JOURNAL_INVALID');
@@ -457,7 +459,7 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
                 manifest.warnings.push('Could not inventory inline PDF visuals. Original pages are included.');
             }
             return await buildJournalFullCopy(pages, images, manifest, {
-                dir, signal, fontFamily, fontScale, density, includeSpeakerNotes, interactiveLinks, presenterContext, motion, reviewOutput, thumbnail,
+                dir, signal, artDirection, fontFamily, fontScale, density, includeSpeakerNotes, interactiveLinks, presenterContext, motion, reviewOutput, thumbnail,
                 vectorRegions: (page, image) => findPdfVectorRegions(image,page,embedded.get(page.number)||[]),
                 readRegion: async (page, box, raw) => (await native('pdftotext', [
                     raw ? '-raw' : '-layout', '-enc', 'UTF-8', '-r', '72', '-f', String(page.number), '-l', String(page.number),
@@ -482,7 +484,11 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             if (reviewOutput) generatedReview[pptx._slides.indexOf(slide)] = {title, items, pages, image};
         };
         const note=(slide,text)=>{if(includeSpeakerNotes)slide.addNotes(text);notes.push(text);};
+        const design=artDirection?await journalNativeTheme(artDirection,meta,sections,dir):undefined;
+        signal?.throwIfAborted();
+        if(design)manifest.deckArt=design.summary;
         const cover=pptx.addSlide();Object.assign(cover,pptx.journalTypography);cover.background={color:'102D49'};
+        styleJournalCover(pptx,cover,design);
         addText(cover,meta.kind==='review'?'RESEARCH REVIEW':'RESEARCH PRESENTATION',{x:.7,y:.7,w:11.8,h:.4},{fontSize:14,color:'A7CBE8'});
         addText(cover,meta.title,{x:.7,y:1.65,w:11.8,h:2.6},{fontSize:33,color:'FFFFFF',bold:true,objectName:'np-visual-cover-title'});
         addText(cover,meta.authors,{x:.72,y:4.8,w:11.7,h:1.1},{fontSize:17,color:'DDEAF6'});
@@ -553,6 +559,13 @@ export async function createJournalDeck(bytes,name,{signal,layoutXml,pageImage,i
             slide.addImage({data:'image/png;base64,'+im.data.toString('base64'),...box,objectName:`journal-source-page-${page.number}`,altText:`Complete original PDF page ${page.number}`});
             note(slide,`${page.blocks.map(b=>b.text).join('\n\n')}\n\n${sourceNote(meta,page.number)}`);
             appendix.push({page:page.number,slide:pptx._slides.length,imageHash:digest(im.data),imageWidth:im.width,imageHeight:im.height,box});
+        }
+        if(design?.palette){
+            const protectedSlides=new Set(appendix.map(item=>item.slide-1));
+            pptx._slides.forEach((slide,index)=>{
+                if(index>0&&!protectedSlides.has(index))
+                    slide.background={color:(index%2?design.palette.light:design.palette.secondary).slice(1)};
+            });
         }
         let deck=Buffer.from(await pptx.write({outputType:'nodebuffer',compression:true}));
         if (motion === 'keynote') deck = (await addNativeMotion(deck)).bytes;

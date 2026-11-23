@@ -138,5 +138,6 @@ export async function designDeckArt(doc, scene, {
   const decorated=applyDeckArt(doc,scene,direction,artwork);
   const used=artwork?.generated&&decorated.slides.some(slide=>slide.objects.some(object=>object.asset===artwork.id));
   const summary={direction:mode,palette:direction.palette,generatedCover:Boolean(used)};
-  return {scene:{...decorated,deckArt:summary},summary};
+  return {scene:{...decorated,deckArt:summary},summary,palette:palettes[direction.palette],
+    ...(used?{artwork:{id,imagePath}}:{})};
 }
