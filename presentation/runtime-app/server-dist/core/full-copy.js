@@ -1,6 +1,7 @@
 import { parseSource } from './source.js';
 import { textHeight, wrapText } from './layout.js';
 import { validateScene } from './fidelity.js';
+import { equationParts } from './native-equations.js';
 
 export function parseFullCopySource(source) {
     const doc = parseSource(source, 'markdown', { tolerateMalformedMarkup: true });
@@ -16,6 +17,7 @@ export function parseFullCopySource(source) {
 
 export function buildFullCopyScene(doc, assets, settings = {}) {
     const slides = [];
+    const maxSlides = settings.maxSlides ?? 80;
     const fontScale = settings.fontScale ?? 1;
     const gap = settings.density === 'compact' ? 0.12 : 0.22;
     const maxY = 6.9;
@@ -24,7 +26,7 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
     let slide;
     let y;
     const startSlide = (cover = false) => {
-        if (slides.length >= 80) throw Error('DOCUMENT_SLIDE_LIMIT');
+        if (slides.length >= maxSlides) throw Error('DOCUMENT_SLIDE_LIMIT');
         slide = {
             id: `full-copy-${slides.length}`, layout: cover ? 'cover' : 'editorial',
             background: cover ? '#153D34' : '#F8F5EF', blockIds: [], objects: [],
@@ -46,20 +48,40 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
             const asset=inlineAssets[nextImage++];
             const ratio=asset.width/asset.height;
             if(!Number.isFinite(ratio)||ratio<=0)throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
-            const desiredHeight=Math.min(5.4,w/ratio);
-            if(!slide||maxY-y-.6<Math.min(desiredHeight,Math.max(2.5,desiredHeight*.7))) startSlide();
+            const desiredHeight=asset.pdfRegionHeight
+                ?Math.min(1.7,w/ratio,Math.max(.34,asset.pdfRegionHeight/33))
+                :Math.min(5.4,w/ratio);
+            const minimumHeight = asset.standalone && slide?.blockIds.length === 1
+                ? Math.min(desiredHeight, 1.6) : Math.min(desiredHeight, Math.max(2.5, desiredHeight * .7));
+            if (!slide || maxY - y - .6 < minimumHeight) startSlide();
             const h=Math.min(desiredHeight,maxY-y-.6);
             const width=h*ratio;
             slide.objects.push({type:'image',asset:asset.assetId,x:x+(w-width)/2,y,w:width,h,fit:'contain',
                 imageTreatment:'none',altText:asset.caption,originalPdfHash:asset.hash,inlineSourceImage:true});
             slide.documentCaption ||= asset.caption;
-            y+=h+gap;
+            y = asset.standalone ? maxY : y + h + gap;
         }
     }
     for (const block of doc.blocks) {
         addImagesThrough(block.start);
         const heading = block.kind === 'heading';
         if (!slide || (heading && (block.level <= 2 || y > 5.55) && slide.blockIds.length)) startSlide(!slides.length && heading && block.level === 1);
+        if (block.equation) {
+            let parts;
+            try {
+                parts = equationParts(block.text, { x: 0, y: 0, w, h: 5 });
+            } catch (error) {
+                // Invalid or unsupported source markup remains visible as supplied.
+                if (!['MATH_SYNTAX','MATH_UNSUPPORTED','MATH_LAYOUT_SPACE'].includes(error.message)) throw error;
+            }
+            if (parts?.length) {
+                const h = Math.max(...parts.map(part => part.y + part.h)) + .15;
+                if (y + h > maxY) startSlide();
+                add(block, { type:'text', text:block.text, equation:true, h,
+                    color:slide.layout === 'cover' ? '#F8F5EF' : '#24332D' });
+                continue;
+            }
+        }
         if (block.kind === 'table') {
             const columns = block.cells[0].length;
             const weights = block.cells[0].map((_, column) => Math.sqrt(Math.max(3, ...block.cells.map(row => Math.min(80, row[column].length)))));
@@ -70,7 +92,8 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
                 textHeight(wrapText(text, (columnWidths[i] - 0.24) * 0.88, fontSize, rowIndex === 0).length, fontSize) + 0.22
             )));
             const fullHeight = rowHeights.reduce((sum, height) => sum + height, 0);
-            if (y + fullHeight > maxY && fullHeight <= maxY - 0.71 && slide.blockIds.length) startSlide();
+            if (y + fullHeight > maxY && fullHeight <= maxY - 0.71 && slide.blockIds.length &&
+                (!settings.keepTableCaption || doc.blocks.find(item => item.id === slide.blockIds.at(-1))?.kind !== 'heading')) startSlide();
             let rowIndex = 0;
             while (rowIndex < block.cells.length) {
                 const rows = [];
@@ -112,7 +135,7 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
     addImagesThrough(Infinity);
     const separatedAssets=assets.filter(asset=>asset.visualKind!=='inline');
     const requiredImages = separatedAssets.filter(asset => asset.visualKind !== 'pdf-detail').length;
-    let remainingDetails = 80 - slides.length - requiredImages;
+    let remainingDetails = maxSlides - slides.length - requiredImages;
     if (remainingDetails < 0) throw Error('DOCUMENT_SLIDE_LIMIT');
     let included = inlineAssets.length;
     const pdfSlides = [];
@@ -139,7 +162,7 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
     }
     // Keep the first text slide for titles and optional branding, then show the
     // source pages and their close-ups before the rest of the extracted text.
-    slides.splice(slides.length ? 1 : 0, 0, ...pdfSlides);
+    slides.splice(settings.pdfPagesAtEnd ? slides.length : slides.length ? 1 : 0, 0, ...pdfSlides);
     const scene = {
         theme: 'ivory', sourceHash: doc.sha256, documentMode: true, fullCopy: true,
         includeSpeakerNotes: settings.includeSpeakerNotes === true,

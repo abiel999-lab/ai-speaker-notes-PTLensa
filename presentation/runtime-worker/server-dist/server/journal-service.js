@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { digest,decodeJournalXml,parseJournalLayout,journalMetadata,inventoryJournal,journalSections,sentenceEvidence } from '../core/journal.js';
+import { findPdfVectorRegions, pdfEquationAt } from './pdf-vector-regions.js';
 const require=createRequire(import.meta.url);
 const pptxgen=require('pptxgenjs'), sharp=require('sharp'), JSZip=require('jszip');
 const W=13.333333,H=7.5;
@@ -60,13 +61,19 @@ function numericAttributes(tag) {
         .map(([,key,value])=>[key,Number(value)]));
 }
 
-async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, imageLayoutXml) {
-    const figures=[];
-    for (const visual of visuals) {
-        const page=pages[visual.page-1];
-        const data=await cropRegion(images.get(page.number),page,visual.region);
-        if(data)figures.push({page:page.number,caption:visual.caption,data});
+function pdfTextEvents(lines) {
+    const events=lines.map(line=>({y:line.yMin,x:line.xMin,text:line.text}));
+    const text=lines.map(line=>line.text);
+    for(let index=0;index+2<events.length;index++){
+        if(!pdfEquationAt(text,index))continue;
+        events[index].text='\\[';
+        events[index+2].text='\\]';
+        index+=2;
     }
+    return events;
+}
+
+async function readEmbeddedPdfImages(pdf, dir, pages, signal, imageLayoutXml) {
     let layout=imageLayoutXml;
     if(layout===undefined){
         layout='';
@@ -82,7 +89,8 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
     const regionsByPage=new Map();
     for(const [,tag,body] of layout.matchAll(/<page\s+([^>]+)>([\s\S]*?)<\/page>/g)){
         const page=numericAttributes(tag);
-        if(!images.has(page.number)||!page.width||!page.height)continue;
+        const original=pages[page.number-1];
+        if(!original||!page.width||!page.height)continue;
         const seen=new Set();
         const regions=[];
         for(const [imageTag] of body.matchAll(/<image\b[^>]+>/g)){
@@ -94,18 +102,39 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
             const key=[x,y,w,h,file].join(',');
             if(seen.has(key))continue;
             seen.add(key);
-            regions.push({x,y,w,h,file});
+            regions.push({ x:x/page.width*original.width, y:y/page.height*original.height,
+                w:w/page.width*original.width, h:h/page.height*original.height, file });
         }
-        regionsByPage.set(page.number,{page,regions:regions.sort((a,b)=>a.y-b.y||a.x-b.x)});
+        regionsByPage.set(page.number,regions.sort((a,b)=>a.y-b.y||a.x-b.x));
     }
+    return regionsByPage;
+}
+
+async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, imageLayoutXml) {
+    const figures=[];
+    for (const visual of visuals) {
+        const page=pages[visual.page-1];
+        const data=await cropRegion(images.get(page.number),page,visual.region);
+        if(data)figures.push({page:page.number,caption:visual.caption,data});
+    }
+    const regionsByPage=await readEmbeddedPdfImages(pdf,dir,pages,signal,imageLayoutXml);
     const fullCopyVisuals=[];
+    const embeddedCount=[...regionsByPage.values()].reduce((total, regions)=>total+regions.length,0);
+    let remainingVectors=Math.max(0,200-embeddedCount);
     let source='';
     const addText = text => { source += (source ? '\n' : '') + text; };
     for(const original of pages){
-        const layout=regionsByPage.get(original.number);
-        const events=original.lines.map(line=>({y:line.yMin,x:line.xMin,text:line.text}));
-        for(const region of layout?.regions || []){
-            events.push({y:region.y/layout.page.height*original.height,x:region.x/layout.page.width*original.width,region});
+        const events=pdfTextEvents(original.lines);
+        const embedded=regionsByPage.get(original.number)||[];
+        for(const region of embedded) events.push({y:region.y,x:region.x,region});
+        // Keep the existing image inventory intact when the document is at its asset limit.
+        if(remainingVectors && original.lines.length){
+            const pageImage=images.get(original.number);
+            const vectors=await findPdfVectorRegions(pageImage,original,embedded);
+            for(const region of vectors.slice(0,Math.min(remainingVectors,16))){
+                events.push({y:region.y+region.h/2,x:region.x,region,vector:true});
+                remainingVectors--;
+            }
         }
         for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
             if(event.text!==undefined){
@@ -118,12 +147,13 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
                 data=await sharp(await fs.readFile(path.join(dir,region.file)),{limitInputPixels:32e6})
                     .resize({width:2200,height:2200,fit:'inside',withoutEnlargement:true}).png().toBuffer();
             }else{
-                // Geometry supplied by the local verification fixture.
-                data=await cropRegion(images.get(original.number),layout.page,region);
+                data=await cropRegion(images.get(original.number),original,region);
             }
             if(fullCopyVisuals.length>=200)throw Error('DOCUMENT_IMAGE_LIMIT');
-            if(data)fullCopyVisuals.push({page:original.number,caption:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
-                visualKind:'inline',sourceOffset:source.length+(source?1:0),data});
+            if(data)fullCopyVisuals.push({page:original.number,
+                caption:event.vector?`Vector detail, PDF page ${original.number}`:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
+                visualKind:'inline',sourceOffset:source.length+(source?1:0),
+                ...(event.vector?{pdfRegionHeight:region.h}:{}),data});
         }
     }
     return {figures,fullCopyVisuals,source};

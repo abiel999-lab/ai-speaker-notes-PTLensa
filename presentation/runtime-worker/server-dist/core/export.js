@@ -1,5 +1,5 @@
 import {withoutSpeakerNotes} from './document-notes.js';
-import{fontForText}from'./script-fonts.js';
+import{fontForText as automaticFont}from'./script-fonts.js';
 import{fitEquationScene}from'./equation-layout.js';
 import sharp from'sharp';
 import{reserveStructuredChart}from'./chart-tables.js';
@@ -24,8 +24,13 @@ import { composeCreativeCover, marginGraphics } from "./editorial-stage.js";
 import { composeSourceInfographic } from "./source-infographics.js";
 import { auditDesignScene } from "./design-audit.js";
 import { searchSafeDesignCandidates } from "./design-candidate-search.js";
-function preferredFont(text,doc,family) { const font=fontForText(text,doc.raw,doc.presentationLanguage); return font==='Arial'&&family ? family : font; }
-export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", branding) {
+function preferredFont(text,doc,family) { const font=automaticFont(text,doc.raw,doc.presentationLanguage); return font==='Arial'&&family ? family : font; }
+export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", branding, fontFamily) {
+    const selectedFont = ["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"].includes(fontFamily) ? fontFamily : null;
+    const fontForText = (...args) => {
+        const font = automaticFont(...args);
+        return font === "Arial" && selectedFont ? selectedFont : font;
+    };
     const features = sceneFeatures(scene);
     const check = validateScene(doc, scene);
     if (!check.passed)
@@ -85,7 +90,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
         const s = prepared.slide;
         const slide = pptx.addSlide();
         slide.background = { color: s.background.slice(1) };
-        if(!scene.documentMode||scene.includeSpeakerNotes)slide.addNotes(speakerNotes[slideIndex]);
+        if(scene.includeSpeakerNotes??!scene.documentMode)slide.addNotes(speakerNotes[slideIndex]);
         if(s.sectionTitle&&s.objects[0]?.sourceId)slide.addText(technicalSectionTitle(doc,s.objects[0].sourceId),{x:.78,y:.13,w:11.78,h:.32,fontFace:fontForText(technicalSectionTitle(doc,s.objects[0].sourceId),doc.raw,doc.presentationLanguage),fontSize:14,color:t.muted.slice(1),margin:0,objectName:'np-section-title-'+s.objects[0].sourceId});
         if(s.id==='np-visual-cover'){
             slide.addText(visualCoverTitle(doc),{x:.86,y:1.65,w:7.25,h:2.4,fontFace:fontForText(visualCoverTitle(doc),doc.raw,doc.presentationLanguage),fontSize:46,bold:true,color:'FFFFFF',margin:0,objectName:'np-visual-cover-title'});
@@ -143,14 +148,14 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
                         objectName: `image-scrim-edge-${o.imageTextSide}-${o.imageTreatment}-${object}`,
                     });
             }
-            if(!scene.fullCopy&&o.type==="text"&&isEquation(o.text)){drawEquation(slide,pptx,o,name);continue;}
+            if(o.type==="text"&&(!scene.fullCopy||o.equation)&&isEquation(o.text)){drawEquation(slide,pptx,o,name);continue;}
             if (o.type === "text")
                 slide.addText(o.text || "", {
                     x: o.x,
                     y: o.y,
                     w: o.w,
                     h: o.h,
-                    fontFace: preferredFont(o.text||o.rows?.flat().join(" ")||"",doc,o.fontFamily),
+                    fontFace: preferredFont(o.text||o.rows?.flat().join(" ")||"",doc,selectedFont||o.fontFamily),
                     fontSize: o.fontSize,
                     bold: o.bold,
                     align: o.align || "left",
@@ -168,13 +173,13 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
                 slide.addTable(o.rows.map((row, index) => row.map((text) => {
                     const rowIndex=(o.firstRow??0)+index;
                     const style=scene.fullCopy?{bold:rowIndex===0,color:rowIndex===0?'FFFFFF':'20332B',fill:{color:rowIndex===0?'153D34':rowIndex%2?'FFFDF9':'EBE8DE'}}:{};
-                    return {text, options:{fontFace:preferredFont(text,doc,o.fontFamily),...style}};
+                    return {text, options:{fontFace:preferredFont(text,doc,selectedFont||o.fontFamily),...style}};
                 })), {
                     x: o.x,
                     y: o.y,
                     w: o.w,
                     h: o.h,
-                    fontFace: preferredFont(o.text||o.rows?.flat().join(" ")||"",doc,o.fontFamily),
+                    fontFace: preferredFont(o.text||o.rows?.flat().join(" ")||"",doc,selectedFont||o.fontFamily),
                     fontSize: o.fontSize,
                     color: o.color.slice(1),
                     fill: { color: o.fill.slice(1) },
@@ -245,7 +250,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
     if (motionResult)
         bytes = motionResult.bytes;
     bytes = await finalizePptxPackage(bytes);
-    if(scene.documentMode&&!scene.includeSpeakerNotes)bytes=await withoutSpeakerNotes(bytes);
+    if(!(scene.includeSpeakerNotes??!scene.documentMode))bytes=await withoutSpeakerNotes(bytes);
     await verifyInternalSlideLinks(bytes);
     const pdfPictures = new Map();
     for (const [index, slide] of exportScene.slides.entries()) {

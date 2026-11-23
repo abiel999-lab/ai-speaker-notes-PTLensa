@@ -1,6 +1,7 @@
 import { parseSource } from './source.js';
 import { textHeight, wrapText } from './layout.js';
 import { validateScene } from './fidelity.js';
+import { equationParts } from './native-equations.js';
 
 export function parseFullCopySource(source) {
     const doc = parseSource(source, 'markdown', { tolerateMalformedMarkup: true });
@@ -46,7 +47,9 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
             const asset=inlineAssets[nextImage++];
             const ratio=asset.width/asset.height;
             if(!Number.isFinite(ratio)||ratio<=0)throw Error('DOCUMENT_IMAGE_EXTRACTION_FAILED');
-            const desiredHeight=Math.min(5.4,w/ratio);
+            const desiredHeight=asset.pdfRegionHeight
+                ?Math.min(1.7,w/ratio,Math.max(.34,asset.pdfRegionHeight/33))
+                :Math.min(5.4,w/ratio);
             if(!slide||maxY-y-.6<Math.min(desiredHeight,Math.max(2.5,desiredHeight*.7))) startSlide();
             const h=Math.min(desiredHeight,maxY-y-.6);
             const width=h*ratio;
@@ -60,6 +63,22 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         addImagesThrough(block.start);
         const heading = block.kind === 'heading';
         if (!slide || (heading && (block.level <= 2 || y > 5.55) && slide.blockIds.length)) startSlide(!slides.length && heading && block.level === 1);
+        if (block.equation) {
+            let parts;
+            try {
+                parts = equationParts(block.text, { x: 0, y: 0, w, h: 5 });
+            } catch (error) {
+                // Invalid or unsupported source markup remains visible as supplied.
+                if (!['MATH_SYNTAX','MATH_UNSUPPORTED','MATH_LAYOUT_SPACE'].includes(error.message)) throw error;
+            }
+            if (parts?.length) {
+                const h = Math.max(...parts.map(part => part.y + part.h)) + .15;
+                if (y + h > maxY) startSlide();
+                add(block, { type:'text', text:block.text, equation:true, h,
+                    color:slide.layout === 'cover' ? '#F8F5EF' : '#24332D' });
+                continue;
+            }
+        }
         if (block.kind === 'table') {
             const columns = block.cells[0].length;
             const weights = block.cells[0].map((_, column) => Math.sqrt(Math.max(3, ...block.cells.map(row => Math.min(80, row[column].length)))));
