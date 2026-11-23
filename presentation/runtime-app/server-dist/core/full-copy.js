@@ -35,6 +35,15 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         y = cover ? 1.12 : 0.71;
         slide.objects.push({ type: 'shape', shape: 'rect', x, y: y - 0.24, w: 0.66, h: 0.045, fill: '#188679' });
     };
+    const equationHeight = block => {
+        try {
+            const parts = equationParts(block.text, { x: 0, y: 0, w, h: 5 });
+            return parts.length ? Math.max(...parts.map(part => part.y + part.h)) + .15 : undefined;
+        } catch (error) {
+            // Unsupported source markup remains visible as supplied.
+            if (!['MATH_SYNTAX','MATH_UNSUPPORTED','MATH_LAYOUT_SPACE'].includes(error.message)) throw error;
+        }
+    };
     const add = (block, object) => {
         if (slide.blockIds.at(-1) !== block.id) slide.blockIds.push(block.id);
         slide.objects.push({ ...object, sourceId: block.id, x, y, w });
@@ -126,15 +135,8 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         const heading = block.kind === 'heading';
         if (!slide || (heading && (block.level <= 2 || y > 5.55) && slide.blockIds.length)) startSlide(!slides.length && heading && block.level === 1);
         if (block.equation) {
-            let parts;
-            try {
-                parts = equationParts(block.text, { x: 0, y: 0, w, h: 5 });
-            } catch (error) {
-                // Invalid or unsupported source markup remains visible as supplied.
-                if (!['MATH_SYNTAX','MATH_UNSUPPORTED','MATH_LAYOUT_SPACE'].includes(error.message)) throw error;
-            }
-            if (parts?.length) {
-                const h = Math.max(...parts.map(part => part.y + part.h)) + .15;
+            const h = equationHeight(block);
+            if (h) {
                 if (y + h > maxY) startSlide();
                 const equationPreview=equationParts(block.text,{x,y,w,h});
                 const panelWidth=Math.min(w+.26,Math.max(1.3,...equationPreview.map(part=>part.x+part.w-x))+.42);
@@ -182,6 +184,13 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         const contentWidth = w * (settings.fontFamily && settings.fontFamily !== 'Arial' ? 0.81 : 0.9);
         const lines = block.text.split('\n').flatMap((line, i) => wrapText(line, contentWidth, fontSize, bold).map((part, j) => ({ part, lineBreak: i > 0 && j === 0 })));
         const lineSpacing = fontSize * (settings.density === 'compact' ? 1.17 : 1.24);
+        const following = doc.blocks[index + 1];
+        if (lines.length === 1 && block.text.trimEnd().endsWith(':') && following?.equation &&
+            slide.blockIds.length && !(inlineAssets[nextImage]?.sourceOffset <= following.start)) {
+            const equation = equationHeight(following);
+            const pairHeight = lineSpacing / 72 + .08 + gap + (equation || 0);
+            if (equation && y + pairHeight > maxY && .71 + pairHeight <= maxY) startSlide();
+        }
         let from = 0;
         while (from < lines.length) {
             let count = Math.floor((maxY - y - 0.12) * 72 / lineSpacing);

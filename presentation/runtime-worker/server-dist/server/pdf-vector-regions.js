@@ -26,10 +26,21 @@ export function pdfMultilineEquationAt(lines, start) {
         if (text === close) {
             if (rows.length < 2 || !rows.some(row => /\\[a-zA-Z]+/.test(row))) return;
             if (rows.some(row => /\\(?:begin|end)\s*\{|\\\\/.test(row))) return;
-            return {
-                end: index,
-                text: ['\\[', '\\begin{gathered}', rows.map(formatPdfMath).join(' \\\\\n'), '\\end{gathered}', '\\]'].join('\n'),
-            };
+            // A PDF may wrap immediately before or after a visible operator.
+            // Preserve all tokens and keep other rows separate.
+            const grouped = [];
+            for (const row of rows.map(formatPdfMath)) {
+                const previous = grouped.at(-1);
+                if (previous && (/(?:[=+−-]|\\(?:times|cdot|approx))$/.test(previous) ||
+                    /^\\(?:times|cdot)(?![A-Za-z])/.test(row))) {
+                    grouped[grouped.length - 1] += ' ' + row;
+                } else {
+                    grouped.push(row);
+                }
+            }
+            const body = grouped.length === 1 ? grouped[0] :
+                ['\\begin{gathered}', grouped.join(' \\\\n'), '\\end{gathered}'].join('\n');
+            return { end: index, text: ['\\[', body, '\\]'].join('\n') };
         }
         if (!text || /^\s*(?:\\\[|\$\$|\[|\\\]|\])\s*$/.test(text)) return;
         rows.push(text);
