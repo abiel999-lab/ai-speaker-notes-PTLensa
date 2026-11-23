@@ -35,6 +35,30 @@ export function pdfMultilineEquationAt(lines, start) {
 
 const numericCell = /^[−+-]?\d+(?:[.,]\d+)*(?:\s*[–−-]\s*\d+(?:[.,]\d+)*)?$/u;
 
+export function pdfShortNumericGridAt(lines, start, visuals) {
+    const cells = lines.slice(start, start + 4);
+    if (cells.length !== 4 || cells.some(cell => !numericCell.test(cell.text))) return;
+    const first = cells.slice(0, 2).sort((a,b)=>a.xMin-b.xMin);
+    const second = cells.slice(2).sort((a,b)=>a.xMin-b.xMin);
+    const spacing = second[0].yMin - first[0].yMin;
+    if (spacing < 12 || spacing > 32 || first[1].xMin-first[0].xMax < 24 ||
+        Math.abs(first[0].yMin-first[1].yMin)>1.4 || Math.abs(second[0].yMin-second[1].yMin)>1.4 ||
+        second.some((cell,column)=>Math.abs(cell.xMax-first[column].xMax)>3)) return;
+    const previous=lines[start-1], next=lines[start+4];
+    if ((previous && first[0].yMin-previous.yMin < spacing+4) ||
+        (next && next.yMin-second[0].yMin < spacing+4)) return;
+    const left=first[0].xMin-24, right=first[1].xMax+20;
+    const nearby=visuals.filter(({region})=>region.x < right && region.x+region.w > left);
+    const headers=nearby.filter(({region})=>region.y+region.h <= first[0].yMin &&
+        first[0].yMin-region.y < 32);
+    if (headers.length < 2 || nearby.some(({region})=>region.y < second[0].yMax &&
+        region.y+region.h > first[0].yMin)) return;
+    return {
+        end:start+3,
+        text:[first,second].map(row=>row.map(cell=>cell.text).join('    ')).join('\n'),
+    };
+}
+
 export function pdfNumericTables(lines, visuals = []) {
     const bands = [];
     for (const [index, line] of lines.entries()) {

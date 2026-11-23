@@ -43,6 +43,7 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
         .sort((first,second)=>first.sourceOffset-second.sourceOffset);
     let nextImage=0;
     function addImagesThrough(offset){
+        let punctuationAnchor;
         while(nextImage<inlineAssets.length&&inlineAssets[nextImage].sourceOffset<=offset){
             const asset=inlineAssets[nextImage++];
             const ratio=asset.width/asset.height;
@@ -52,15 +53,27 @@ export function buildFullCopyScene(doc, assets, settings = {}) {
                 :Math.min(5.4,w/ratio);
             if(!slide||maxY-y-.6<Math.min(desiredHeight,Math.max(2.5,desiredHeight*.7))) startSlide();
             const h=Math.min(desiredHeight,maxY-y-.6);
-            const width=h*ratio;
-            slide.objects.push({type:'image',asset:asset.assetId,x:x+(w-width)/2,y,w:width,h,fit:'contain',
-                imageTreatment:'none',altText:asset.caption,originalPdfHash:asset.hash,inlineSourceImage:true});
+            const reserve=asset.trailingPunctuation ? .34 : 0;
+            const width=Math.min(h*ratio,w-reserve), height=width/ratio;
+            const graphic={type:'image',asset:asset.assetId,x:x+(w-reserve-width)/2,y,w:width,h:height,fit:'contain',
+                imageTreatment:'none',altText:asset.caption,originalPdfHash:asset.hash,inlineSourceImage:true};
+            slide.objects.push(graphic);
+            punctuationAnchor=asset.trailingPunctuation && asset.sourceOffset===offset ? {asset,graphic} : undefined;
             slide.documentCaption ||= asset.caption;
-            y+=h+gap;
+            y += Math.max(height,reserve) + gap;
         }
+        return punctuationAnchor;
     }
     for (const block of doc.blocks) {
-        addImagesThrough(block.start);
+        const anchor=addImagesThrough(block.start);
+        if(anchor?.asset.trailingPunctuation===block.text){
+            const icon=anchor.graphic, h=.32;
+            slide.blockIds.push(block.id);
+            slide.objects.push({type:'text',sourceId:block.id,text:block.text,
+                x:icon.x+icon.w+.02,y:icon.y+Math.max(0,icon.h-h),w:.28,h,
+                fontSize:17,fontFamily:settings.fontFamily,color:slide.layout==='cover'?'#F8F5EF':'#24332D'});
+            continue;
+        }
         const heading = block.kind === 'heading';
         if (!slide || (heading && (block.level <= 2 || y > 5.55) && slide.blockIds.length)) startSlide(!slides.length && heading && block.level === 1);
         if (block.equation) {

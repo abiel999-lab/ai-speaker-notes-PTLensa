@@ -1,4 +1,4 @@
-import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables } from './pdf-vector-regions.js';
+import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt, pdfNumericTables, pdfShortNumericGridAt } from './pdf-vector-regions.js';
 import { equationParts } from '../core/native-equations.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -101,6 +101,12 @@ function pdfTextEvents(lines, visuals, tableBudget) {
             index=table.end;
             continue;
         }
+        const shortGrid=pdfShortNumericGridAt(lines,index,visuals);
+        if(shortGrid){
+            events.push({y:line.yMin,x:line.xMin,text:shortGrid.text});
+            index=shortGrid.end;
+            continue;
+        }
         const multiline=pdfMultilineEquationAt(text,index);
         if(multiline){
             const last=lines[multiline.end];
@@ -196,6 +202,17 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
         const textEvents=pdfTextEvents(original.lines,events,remainingVectors);
         remainingVectors-=textEvents.filter(event=>event.sourceTable).length;
         events.push(...textEvents);
+        for(const event of textEvents.filter(item=>/^[.!?]$/.test(item.text))){
+            const matches=events.filter(({vector,region})=>vector &&
+                Math.abs(event.y-region.y)<=6 &&
+                event.x-region.x-region.w>=-1 &&
+                event.x-region.x-region.w<=6);
+            if(matches.length===1){
+                matches[0].trailingPunctuation=event.text;
+                event.y=matches[0].y;
+                event.x=matches[0].x+.01;
+            }
+        }
         for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
             if(event.text!==undefined){
                 addText(event.text);
@@ -210,10 +227,14 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
                 data=await cropRegion(images.get(original.number),original,region);
             }
             if(fullCopyVisuals.length>=200)throw Error('DOCUMENT_IMAGE_LIMIT');
-            if(data)fullCopyVisuals.push({page:original.number,
+            if(data){
+              const asset={page:original.number,
                 caption:event.sourceTable?`Original table, PDF page ${original.number}`:event.vector?`Vector detail, PDF page ${original.number}`:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
                 visualKind:'inline',sourceOffset:source.length+(source?1:0),
-                ...(event.vector?{pdfRegionHeight:region.h}:{}),data});
+                 ...(event.vector?{pdfRegionHeight:region.h}:{}),data};
+              fullCopyVisuals.push(asset);
+              if(event.trailingPunctuation)asset.trailingPunctuation=event.trailingPunctuation;
+            }
         }
     }
     return {figures,fullCopyVisuals,source};
