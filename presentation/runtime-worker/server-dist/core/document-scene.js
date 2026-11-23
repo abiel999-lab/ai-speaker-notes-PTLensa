@@ -11,6 +11,7 @@ export function buildDocumentScene(doc,plan,settings={}){
  const assets=new Map(plan.assets.map(a=>[a.assetId,a])),seen=new Set();
  const slides=groups.map((blocks,i)=>{
   const p=plan.slides[i],cover=i===0,visual=p.visualIds[0],asset=visual&&assets.get(visual),objects=[];
+  let layout=cover?'cover':'editorial';
   if(visual&&(!asset||seen.has(visual)||!p.sourceIds.includes(asset.sourceId)))throw Error('DOCUMENT_PLAN_VISUAL_SOURCE');
   if(visual)seen.add(visual);
   function text(b,x,y,w,h,font,bold=false,color='#142E4C'){
@@ -26,6 +27,7 @@ export function buildDocumentScene(doc,plan,settings={}){
   text(blocks[0],.65,cover?1.55:.6,12.03,titleHeight,titleFont,true);
   const points=blocks.slice(1,-1),citation=blocks.at(-1);
   if(asset){
+   layout='photo';
    // Wide scientific charts need width; tall diagrams need height. In both
    // cases the entire evidence panel is contained, never cropped or redrawn.
    const wide=asset.width/asset.height>=1.8&&points.length<=2&&points.every(b=>wrapText(b.text,points.length===1?11.8:5.72,17).length<=2);
@@ -37,14 +39,23 @@ export function buildDocumentScene(doc,plan,settings={}){
     let y=2.1;for(const b of points){const h=textHeight(wrapText(b.text,3.4,18).length,18)*1.32+.14;text(b,9.15,y,3.4,h,18);y+=h+.28;}
     if(y>6.75)throw Error('DOCUMENT_CONTENT_TOO_DENSE');
    }
+  }else if(p.kind==='content'&&points.length===2&&points.every(b=>wrapText(b.text,5.1,22*scale).length<=5)){
+   layout='columns';
+   points.forEach((b,index)=>{
+    const x=.72+index*6.09;
+    objects.push({type:'shape',shape:'roundRect',x,y:2.12,w:5.78,h:3.66,fill:'#F2F7FC'});
+    text(b,x+.29,2.46,5.18,2.93,22*scale);
+   });
   }else{
    const width=customCover?7.05:11.8,font=(customCover?20:cover?23:24)*scale;
    let y=cover?3.55:2.17;for(const b of points){const h=textHeight(wrapText(b.text,width,font).length,font)*1.32+.16;text(b,.72,y,width,h,font);y+=h+gap;}
    if(y>6.6)throw Error('DOCUMENT_CONTENT_TOO_DENSE');
    if(customCover)objects.push({type:'image',asset:customCover,x:8.15,y:3.45,w:4.5,h:3.2,fit:'contain',imageTreatment:'none'});
   }
-  text(citation,.65,6.94,12.03,.44,11,false,'#54677C');
-  return {id:'document-slide-'+i,layout:cover?'cover':'editorial',documentVisual:!!asset,documentSourceIds:p.sourceIds,documentAssetIds:p.visualIds,background:'#FFFFFF',blockIds:blocks.map(b=>b.id),objects};
+  const citationFont=[11,10,9].find(font=>textHeight(wrapText(citation.text,12.03,font).length,font)*1.16+.08<=.44);
+  if(!citationFont)throw Error('DOCUMENT_CONTENT_TOO_DENSE');
+  text(citation,.65,6.94,12.03,.44,citationFont,false,'#54677C');
+  return {id:'document-slide-'+i,layout,documentVisual:!!asset,documentSourceIds:p.sourceIds,documentAssetIds:p.visualIds,background:'#FFFFFF',blockIds:blocks.map(b=>b.id),objects};
  });
  if(seen.size!==assets.size)throw Error('DOCUMENT_PLAN_INCOMPLETE');
  const scene={theme:'ivory',sourceHash:doc.sha256,documentMode:true,includeSpeakerNotes:settings.includeSpeakerNotes===true,documentCoverage:{expected:assets.size,included:seen.size,sourceBound:true},slides};

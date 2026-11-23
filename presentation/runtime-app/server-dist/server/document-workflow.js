@@ -13,12 +13,12 @@ export async function documentManifest(root,owner,id){
  return {dir,manifest:JSON.parse(await fs.readFile(path.join(dir,'manifest.json'),'utf8'))};
 }
 export function visualsForResource(manifest, role) {
- return role === 'full-copy' && manifest.fullCopyVisuals ? manifest.fullCopyVisuals : manifest.visuals;
+ return (role === 'full-copy'||role === 'slide-content') && manifest.fullCopyVisuals ? manifest.fullCopyVisuals : manifest.visuals;
 }
 export async function snapshotDocumentAssets(project,root){
  if(project.workspace?.kind!=='document')return [];
  const result=[];
- for(const resource of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role))){
+ for(const resource of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy','slide-content'].includes(r.role))){
   const {dir,manifest}=await documentManifest(root,project.ownerId,resource.documentId);
   for(const v of visualsForResource(manifest,resource.role)){
    const target=path.join(root,'assets',project.id);await fs.mkdir(target,{recursive:true});
@@ -32,7 +32,7 @@ export async function snapshotDocumentAssets(project,root){
 }
 export async function documentVisualCount(project,root){
  let count=0;if(project.workspace?.kind!=='document')return 0;
- for(const r of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy'].includes(r.role)))count+=visualsForResource((await documentManifest(root,project.ownerId,r.documentId)).manifest,r.role).length;
+ for(const r of project.workspace.resources.filter(r=>r.documentId&&['content','full-copy','slide-content'].includes(r.role)))count+=visualsForResource((await documentManifest(root,project.ownerId,r.documentId)).manifest,r.role).length;
  return count;
 }
 export function appendDocumentVisuals(scene,assets){
@@ -47,11 +47,11 @@ export function appendDocumentVisuals(scene,assets){
 }
 export function registerDocumentRoutes(app,{auth,cfg}){
  let busy=false;
- app.post('/api/document/import',{preHandler:auth,bodyLimit:14*1024*1024,config:{rateLimit:false}},async(req,reply)=>{
+ app.post('/api/document/import',{preHandler:auth,bodyLimit:68*1024*1024,config:{rateLimit:false}},async(req,reply)=>{
   if(busy)return reply.code(429).send({error:'JOURNAL_BUSY'});
   const body=req.body;
-  if(!body||typeof body.name!=='string'||body.name.length>120||typeof body.base64!=='string'||body.base64.length>14*1024*1024||!/\.(pdf|docx|md|txt)$/i.test(body.name))return reply.code(400).send({error:'DOCUMENT_INVALID'});
-  const bytes=Buffer.from(body.base64,'base64');if(bytes.length>10*1024*1024||bytes.toString('base64')!==body.base64)return reply.code(400).send({error:'DOCUMENT_SIZE_LIMIT'});
+  if(!body||typeof body.name!=='string'||body.name.length>120||typeof body.base64!=='string'||body.base64.length>68*1024*1024||!/\.(pdf|docx|md|txt)$/i.test(body.name))return reply.code(400).send({error:'DOCUMENT_INVALID'});
+  const bytes=Buffer.from(body.base64,'base64');if(bytes.length>50*1024*1024||bytes.toString('base64')!==body.base64)return reply.code(400).send({error:'DOCUMENT_SIZE_LIMIT'});
   busy=true;
   try{
    let source,fullCopyVisuals,title=body.name.replace(/\.[^.]+$/,''),visuals=[],images=[],pdfPages;
@@ -62,7 +62,8 @@ export function registerDocumentRoutes(app,{auth,cfg}){
    };
    if(/\.pdf$/i.test(body.name)){
     decodeJournal({name:body.name,base64:body.base64});
-    const result=await createJournalDeck(bytes,body.name,{signal:AbortSignal.timeout(240000),capturePdfVisuals:true});
+    const result=await createJournalDeck(bytes,body.name,{signal:AbortSignal.timeout(240000),capturePdfVisuals:true,allowSourcePageCopy:true});
+    if(result.sourcePageCopy)return {sourcePageCopy:result.sourcePageCopy};
     source=result.extractedSource;title=result.title;
     pdfPages=result.pageCount;
     visuals=result.figures.map(storeVisual);
@@ -87,6 +88,17 @@ export function registerDocumentRoutes(app,{auth,cfg}){
    const orderedVisuals=fullCopyVisuals!==undefined;
    await fs.writeFile(path.join(dir,'manifest.json'),JSON.stringify({title,visuals,fullCopyVisuals,orderedVisuals,sourceHash:createHash('sha256').update(bytes).digest('hex')}),{mode:0o600});
    return {source,title,documentId,visuals:visuals.length,pdfPages,orderedVisuals,inlineImageCount:fullCopyVisuals?.length};
-  }catch(e){const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
+  }catch(e){
+    if (/\.pdf$/i.test(body.name) && ['JOURNAL_PAGE_LIMIT','JOURNAL_TEXT_LIMIT','JOURNAL_LAYOUT_LIMIT','JOURNAL_PDF_UNREADABLE','DOCUMENT_TEXT_LIMIT','DOCUMENT_IMAGE_LIMIT','DOCUMENT_IMAGE_EXTRACTION_FAILED'].includes(e.message)) {
+      try {
+        const {manifest}=await createJournalDeck(bytes,body.name,{
+          sourcePagesOnly:true,inspectOnly:true,signal:AbortSignal.timeout(90000),
+        });
+        return {sourcePageCopy:manifest};
+      } catch (fallbackError) {
+        e=fallbackError;
+      }
+    }
+    const code=/^(JOURNAL_|DOCUMENT_)/.test(e.message)?e.message:'DOCUMENT_INVALID';console.warn(JSON.stringify({event:'document_import_failed',code,requestId:req.id}));return reply.code(422).send({error:code,requestId:req.id});}finally{busy=false;}
  });
 }
