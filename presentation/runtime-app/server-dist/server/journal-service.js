@@ -1,4 +1,5 @@
-import { findPdfVectorRegions, pdfEquationAt } from './pdf-vector-regions.js';
+import { findPdfVectorRegions, pdfEquationAt, pdfMultilineEquationAt } from './pdf-vector-regions.js';
+import { equationParts } from '../core/native-equations.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -84,14 +85,36 @@ function numericAttributes(tag) {
         .map(([,key,value])=>[key,Number(value)]));
 }
 
-function pdfTextEvents(lines) {
-    const events=lines.map(line=>({y:line.yMin,x:line.xMin,text:line.text}));
+function pdfTextEvents(lines, visuals) {
     const text=lines.map(line=>line.text);
-    for(let index=0;index+2<events.length;index++){
-        if(!pdfEquationAt(text,index))continue;
-        events[index].text='\\[';
-        events[index+2].text='\\]';
-        index+=2;
+    const events=[];
+    for(let index=0;index<lines.length;index++){
+        const line=lines[index];
+        const multiline=pdfMultilineEquationAt(text,index);
+        if(multiline){
+            const last=lines[multiline.end];
+            // A glyph or image between formula rows can carry a missing operator.
+            // Keep the original reading order unless all visible content is text.
+            const interrupted=visuals.some(event=>event.y>=line.yMin && event.y<=last.yMax);
+            if(!interrupted){
+                try{
+                    equationParts(multiline.text,{x:0,y:0,w:11.69,h:5});
+                    events.push({y:line.yMin,x:line.xMin,text:multiline.text});
+                    index=multiline.end;
+                    continue;
+                }catch(error){
+                    if(!['MATH_SYNTAX','MATH_UNSUPPORTED','MATH_LAYOUT_SPACE'].includes(error.message))throw error;
+                }
+            }
+        }
+        if(pdfEquationAt(text,index)){
+            events.push({y:line.yMin,x:line.xMin,text:'\\['},
+                {y:lines[index+1].yMin,x:lines[index+1].xMin,text:text[index+1]},
+                {y:lines[index+2].yMin,x:lines[index+2].xMin,text:'\\]'});
+            index+=2;
+            continue;
+        }
+        events.push({y:line.yMin,x:line.xMin,text:line.text});
     }
     return events;
 }
@@ -147,7 +170,7 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
     let source='';
     const addText = text => { source += (source ? '\n' : '') + text; };
     for(const original of pages){
-        const events=pdfTextEvents(original.lines);
+        const events=[];
         const embedded=regionsByPage.get(original.number)||[];
         for(const region of embedded) events.push({y:region.y,x:region.x,region});
         // Keep the existing image inventory intact when the document is at its asset limit.
@@ -159,6 +182,7 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
                 remainingVectors--;
             }
         }
+        events.push(...pdfTextEvents(original.lines,events));
         for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
             if(event.text!==undefined){
                 addText(event.text);

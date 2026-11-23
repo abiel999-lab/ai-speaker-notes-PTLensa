@@ -1,5 +1,7 @@
 import sharp from 'sharp';
 
+const equationDelimiters = new Map([['\\[', '\\]'], ['$$', '$$'], ['[', ']']]);
+
 export function pdfEquationAt(lines, index) {
     const delimiter = lines[index]?.trim();
     const formula = lines[index + 1]?.trim();
@@ -8,6 +10,26 @@ export function pdfEquationAt(lines, index) {
     if (delimiter === '\\[' && closing === '\\]' || delimiter === '$$' && closing === '$$' ||
         delimiter === '[' && closing === ']' && /\\[a-zA-Z]+/.test(formula)) {
         return `\\[\n${formula}\n\\]`;
+    }
+}
+
+export function pdfMultilineEquationAt(lines, start) {
+    const open = lines[start]?.trim();
+    const close = equationDelimiters.get(open);
+    if (!close) return;
+    const rows = [];
+    for (let index = start + 1; index < Math.min(lines.length, start + 14); index++) {
+        const text = lines[index].trim();
+        if (text === close) {
+            if (rows.length < 2 || !rows.some(row => /\\[a-zA-Z]+/.test(row))) return;
+            if (rows.some(row => /\\(?:begin|end)\s*\{|\\\\/.test(row))) return;
+            return {
+                end: index,
+                text: ['\\[', '\\begin{gathered}', rows.join(' \\\\\n'), '\\end{gathered}', '\\]'].join('\n'),
+            };
+        }
+        if (!text || /^\s*(?:\\\[|\$\$|\[|\\\]|\])\s*$/.test(text)) return;
+        rows.push(text);
     }
 }
 

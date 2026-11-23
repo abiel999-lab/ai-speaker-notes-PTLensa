@@ -11,6 +11,7 @@ function syntax(source){
  const result=seq(null);if(i!==s.length)throw Error('MATH_SYNTAX');return result;
 }
 function box(n,pt){
+ if(n.t==='rows')return rowBox(n,pt);
  if(n.t==='text'){let h=pt/72;return{w:Math.max(.008,textWidth(n.s,pt)),up:h*.82,down:h*.30,parts:[{t:'text',s:n.s,x:0,y:-h*.82,w:Math.max(.012,textWidth(n.s,pt)+.035),h:h*1.25,pt}]};}
  if(n.t==='seq'){let x=0,up=0,down=0,parts=[];for(let child of n.nodes){const b=box(child,pt);parts.push(...b.parts.map(p=>({...p,x:p.x+x})));x+=b.w;up=Math.max(up,b.up);down=Math.max(down,b.down);}return{w:x,up,down,parts};}
  if(n.t==='frac'){const a=box(n.a,pt*.83),b=box(n.b,pt*.83),gap=pt/72*.12,w=Math.max(a.w,b.w)+.18,ay=-gap-a.down-.035,by=gap+b.up+.035;return{w,up:a.up-ay,down:b.down+by,parts:[...a.parts.map(p=>({...p,x:p.x+(w-a.w)/2,y:p.y+ay})),{t:'line',x:0,y:0,w,h:.002},...b.parts.map(p=>({...p,x:p.x+(w-b.w)/2,y:p.y+by}))]};}
@@ -28,8 +29,76 @@ function box(n,pt){
  }
  return {w:base.w+w,up,down,parts};
 }
+function displaySyntax(source) {
+ const display = source.trim().slice(2, -2).trim();
+ const match = /^\\begin\{(aligned|gathered|split)\}([\s\S]*?)\\end\{\1\}$/.exec(display);
+ if (!match) return syntax(source);
+ const [, environment, body] = match;
+ if (body.length > 6000) throw Error('MATH_SYNTAX');
+ const rows = [[]];
+ let start = 0;
+ let depth = 0;
+ for (let i = 0; i < body.length; i++) {
+  const char = body[i];
+  if (char === '\\') {
+   if (body[i + 1] === '\\' && depth === 0) {
+    rows.at(-1).push(body.slice(start, i).trim());
+    rows.push([]);
+    start = i + 2;
+   }
+   i++;
+  } else if (char === '{') {
+   depth++;
+  } else if (char === '}') {
+   if (--depth < 0) throw Error('MATH_SYNTAX');
+  } else if (char === '&' && depth === 0) {
+   if (environment === 'gathered') throw Error('MATH_SYNTAX');
+   rows.at(-1).push(body.slice(start, i).trim());
+   start = i + 1;
+  }
+ }
+ rows.at(-1).push(body.slice(start).trim());
+ if (depth || rows.length > 40 || rows.some(row => row.length > 12 || row.every(cell => !cell))) {
+  throw Error('MATH_SYNTAX');
+ }
+ return {
+  t: 'rows',
+  centered: environment === 'gathered',
+  rows: rows.map(row => row.map(cell => cell ? syntax('\\[' + cell + '\\]') : { t: 'seq', nodes: [] })),
+ };
+}
+
+function rowBox(equation, pt) {
+ const rows = equation.rows.map(row => row.map(cell => box(cell, pt)));
+ const columnWidths = [];
+ for (const row of rows) {
+  for (const [index, cell] of row.entries()) {
+   columnWidths[index] = Math.max(columnWidths[index] ?? 0, cell.w);
+  }
+ }
+ const width = columnWidths.reduce((sum, column) => sum + column, 0);
+ const gap = pt / 72 * 0.28;
+ const parts = [];
+ let y = 0;
+ for (const row of rows) {
+  const up = Math.max(...row.map(cell => cell.up));
+  const down = Math.max(...row.map(cell => cell.down));
+  let x = 0;
+  for (const [index, cell] of row.entries()) {
+   const spare = columnWidths[index] - cell.w;
+   const inset = equation.centered ? spare / 2 : index % 2 === 0 ? spare : 0;
+   for (const part of cell.parts) {
+    parts.push({ ...part, x: x + inset + part.x, y: y + up + part.y });
+   }
+   x += columnWidths[index];
+  }
+  y += up + down + gap;
+ }
+ return { w: width, up: 0, down: y - gap, parts };
+}
+
 export function equationParts(source,region){
- const ast=syntax(source);for(const pt of [28,26,24,22,20,18,16,14]){const b=box(ast,pt);if(b.w<=region.w-.12&&b.up+b.down<=region.h-.04)return b.parts.filter(p=>p.t==='line'||p.s.trim()).map(p=>({...p,x:region.x+p.x+.04,y:region.y+p.y+b.up+.02}));}throw Error('MATH_LAYOUT_SPACE');
+ const ast=displaySyntax(source);for(const pt of [28,26,24,22,20,18,16,14]){const b=box(ast,pt);if(b.w<=region.w-.12&&b.up+b.down<=region.h-.04)return b.parts.filter(p=>p.t==='line'||p.s.trim()).map(p=>({...p,x:region.x+p.x+.04,y:region.y+p.y+b.up+.02}));}throw Error('MATH_LAYOUT_SPACE');
 }
 export function drawEquation(slide,pptx,o,name){
  const id=name.replace(/^vb-/,'');const parts=equationParts(o.text,o);
