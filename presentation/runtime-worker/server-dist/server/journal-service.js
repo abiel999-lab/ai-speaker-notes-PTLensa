@@ -62,14 +62,18 @@ function numericAttributes(tag) {
         .map(([,key,value])=>[key,Number(value)]));
 }
 
-function pdfTextEvents(lines, visuals) {
+function pdfTextEvents(lines, visuals, tableBudget) {
     const text=lines.map(line=>line.text);
     const events=[];
     const tables=pdfNumericTables(lines,visuals);
     for(let index=0;index<lines.length;index++){
         const line=lines[index];
         const table=tables.get(index);
-        if(table){
+        if(table&&(!table.sourceRegion||tableBudget>0)){
+            if(table.sourceRegion){
+                events.push({y:line.yMin,x:line.xMin-1,region:table.sourceRegion,sourceTable:true});
+                tableBudget--;
+            }
             events.push({y:line.yMin,x:line.xMin,text:table.text});
             index=table.end;
             continue;
@@ -166,7 +170,9 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
                 remainingVectors--;
             }
         }
-        events.push(...pdfTextEvents(original.lines,events));
+        const textEvents=pdfTextEvents(original.lines,events,remainingVectors);
+        remainingVectors-=textEvents.filter(event=>event.sourceTable).length;
+        events.push(...textEvents);
         for(const event of events.sort((a,b)=>a.y-b.y||a.x-b.x)){
             if(event.text!==undefined){
                 addText(event.text);
@@ -182,7 +188,7 @@ async function collectPdfVisuals(pdf, dir, pages, images, visuals, signal, image
             }
             if(fullCopyVisuals.length>=200)throw Error('DOCUMENT_IMAGE_LIMIT');
             if(data)fullCopyVisuals.push({page:original.number,
-                caption:event.vector?`Vector detail, PDF page ${original.number}`:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
+                caption:event.sourceTable?`Original table, PDF page ${original.number}`:event.vector?`Vector detail, PDF page ${original.number}`:`Image ${fullCopyVisuals.length+1}, PDF page ${original.number}`,
                 visualKind:'inline',sourceOffset:source.length+(source?1:0),
                 ...(event.vector?{pdfRegionHeight:region.h}:{}),data});
         }

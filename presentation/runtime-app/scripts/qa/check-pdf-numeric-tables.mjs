@@ -19,6 +19,18 @@ assert.equal(grid.end, lines.length - 1);
 assert.equal(pdfNumericTables(lines.slice(0, 6)).size, 0);
 assert.equal(pdfNumericTables(lines, [{ region: { x: 191, y: 83, w: 3, h: 3 } }]).size, 0);
 assert.equal(pdfNumericTables(lines.map((item, i) => i === 5 ? line('14', 280, 84) : item)).size, 0);
+const mixed = lines.map((item, i) => i === 1 ? line('( )', 300, 40) : item);
+const mixedGrid = pdfNumericTables(mixed).get(0);
+assert.ok(mixedGrid.sourceRegion.w > 100 && mixedGrid.sourceRegion.h > 68);
+assert.equal(pdfNumericTables(mixed.map((item, i) => i === 0 ? line('( )', 185, 40) : item)).size, 0);
+assert.deepEqual(parseFullCopySource(mixedGrid.text).blocks[0].cells.slice(1), [['0','10'], ['1','14'], ['2','18']]);
+const imageLines = [lines[0], line('Rumus', 242, 40), ...lines.slice(1)];
+const cellImages = [62, 84, 106].map(y => ({ region: { x: 213, y: y + 1, w: 25, h: 10 } }));
+const withImageColumn = pdfNumericTables(imageLines, cellImages).get(0);
+assert.ok(withImageColumn.sourceRegion);
+assert.deepEqual(parseFullCopySource(withImageColumn.text).blocks[0].cells,
+    [['Waktu (jam)', 'Rumus', 'Debit (L/s)'], ['0', '', '10'], ['1', '', '14'], ['2', '', '18']]);
+assert.equal(pdfNumericTables(imageLines, cellImages.slice(0, 2)).size, 0);
 const expected = [['Waktu (jam)', 'Debit (L/s)'], ['0','10'], ['1','14'], ['2','18']];
 const doc = parseFullCopySource('# Data debit\n' + grid.text);
 assert.deepEqual(doc.blocks.find(block => block.kind === 'table').cells, expected);

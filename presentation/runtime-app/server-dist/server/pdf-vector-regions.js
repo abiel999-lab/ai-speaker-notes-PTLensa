@@ -64,23 +64,65 @@ export function pdfNumericTables(lines, visuals = []) {
         if (rows.length < 3) continue;
         const header = bands[i - 1];
         if (Math.abs(first.top - header.top - spacing) > 5) continue;
-        const headerCells = anchors.map(() => []);
         const words = header.items.flatMap(({ line }) => line.words).sort((a, b) => a.xMin - b.xMin);
+        const left = Math.min(...words.map(word => word.xMin), cells[0].line.xMin);
+        const right = anchors.at(-1) + 4;
+        const bottom = Math.max(...bands[next - 1].items.map(({ line }) => line.yMax));
+        const rowVisuals = visuals.map(({ region }) => region).filter(region =>
+            region.x < right && region.x + region.w > left && region.y < bottom && region.y + region.h > first.top);
+        let visualColumn = false;
+        let headerEdges = anchors;
+        if (rowVisuals.length) {
+            // Recognize a single image-only column only when every row contains
+            // exactly one similarly positioned image between the same text columns.
+            if (rowVisuals.length !== rows.length) continue;
+            const images = [...rowVisuals].sort((a, b) => a.y - b.y);
+            const imageRight = Math.max(...images.map(image => image.x + image.w));
+            const imageLeft = Math.min(...images.map(image => image.x));
+            const column = anchors.findIndex(anchor => anchor > imageRight);
+            if (column <= 0 || imageLeft <= anchors[column - 1] + 3 || images.some((image, row) =>
+                Math.abs(image.x - images[0].x) > 5 ||
+                Math.abs(image.w - images[0].w) > 7 ||
+                !bands[i + row].items.some(({ line }) =>
+                    image.y + image.h / 2 >= line.yMin - 2 && image.y + image.h / 2 <= line.yMax + 2) ||
+                bands[i + row].items.some(({ line }) => line.xMin < imageRight + 2 && line.xMax > imageLeft - 2))) continue;
+            const nextCellLeft = Math.min(...bands.slice(i, next).flatMap(band => band.items)
+                .filter(({ line }) => line.xMin > imageRight).map(({ line }) => line.xMin));
+            if (!Number.isFinite(nextCellLeft) || nextCellLeft - imageRight < 12) continue;
+            headerEdges = [...anchors];
+            headerEdges[column - 1] = (anchors[column - 1] + imageLeft) / 2;
+            headerEdges.splice(column, 0, (imageRight + nextCellLeft) / 2);
+            anchors.splice(column, 0, (imageRight + nextCellLeft) / 2);
+            for (const row of rows) row.splice(column, 0, '');
+            visualColumn = true;
+        }
+        const headerCells = anchors.map(() => []);
         for (const word of words) {
-            const column = anchors.findIndex(edge => word.xMax <= edge + 4);
+            const column = headerEdges.findIndex(edge => word.xMax <= edge + 4);
             if (column >= 0) headerCells[column].push(word);
         }
         const headings = headerCells.map(group => group.map(word => word.text).join(' '));
-        if (headerCells.flat().length !== words.length || headings.some(cell => !/\p{L}{2}/u.test(cell) || /[|\\]/.test(cell))) continue;
-        const left = Math.min(...words.map(word => word.xMin));
-        const right = anchors.at(-1) + 4;
-        const bottom = Math.max(...bands[next - 1].items.map(({ line }) => line.yMax));
-        if (visuals.some(({ region }) => region.x < right && region.x + region.w > left &&
-            region.y < bottom && region.y + region.h > first.top)) continue;
+        if (headerCells.flat().length !== words.length || headings.some(cell => !cell || /[|\\]/.test(cell))) continue;
+        const headerBottom = Math.max(...header.items.map(({ line }) => line.yMax));
+        const headerVisuals = visuals.map(({ region }) => region).filter(region =>
+            region.y < headerBottom && region.y + region.h > header.top &&
+            region.x < right && region.x + region.w > left - 18);
+        const incomplete = headings.map(cell => !/\p{L}{2}/u.test(cell));
+        const mixed = visualColumn || incomplete.some(Boolean);
+        if (mixed && headings.some((cell, column) => incomplete[column] &&
+            (!/^\(\s*\)$/u.test(cell) || (visualColumn && !headerVisuals.some(region =>
+                region.x < anchors[column] + 4 && region.x + region.w > (anchors[column - 1] ?? left - 18)))))) continue;
+        if (!visualColumn && incomplete.filter(Boolean).length > headings.length / 2) continue;
+        const sourceLeft = Math.min(left, ...headerVisuals.map(region => region.x));
+        const sourceTop = Math.min(header.top, ...headerVisuals.map(region => region.y));
+        const sourceRegion = mixed ? {
+            x: Math.max(0, sourceLeft - 4), y: Math.max(0, sourceTop - 4),
+            w: right - Math.max(0, sourceLeft - 4) + 4, h: bottom - Math.max(0, sourceTop - 4) + 4,
+        } : undefined;
         const wrap = row => '| ' + row.join(' | ') + ' |';
         const start = header.items[0].index;
         const end = bands[next - 1].items.at(-1).index;
-        grids.set(start, { end, text: ['', wrap(headings), wrap(anchors.map(() => '---')), ...rows.map(wrap), ''].join('\n') });
+        grids.set(start, { end, sourceRegion, text: ['', wrap(headings), wrap(anchors.map(() => '---')), ...rows.map(wrap), ''].join('\n') });
         i = next - 1;
     }
     return grids;
