@@ -74,14 +74,7 @@ export function isReferenceDocument(workspace) {
     workspace.resources.every(resource=>resource.role==='reference');
 }
 
-function outlineForPlan(plan, scene) {
- return plan.slides.map((slide, index) => ({
-    title:slide.title, points:slide.points, kind:slide.kind,
-    layout:scene.slides[index].layout, citation:slide.citation,
- }));
-}
-
-export async function saveDocumentPlan(root,owner,workspace,context,output,{keepSlideCount=false}={}){
+export async function saveDocumentPlan(root,owner,workspace,context,output){
  const data=z.object({slides:z.array(slideSchema).min(4).max(79)}).strict().parse(output);
  // Counts are a target, not a reason to discard an otherwise complete plan.
  const paged=[];
@@ -98,7 +91,6 @@ export async function saveDocumentPlan(root,owner,workspace,context,output,{keep
   if(batch.length)chunks.push(batch);
   for(const [i,points]of chunks.entries())paged.push({...slide,kind:slide.kind==='cover'?(i===0?'cover':'content'):slide.kind==='references'?(i===chunks.length-1?'references':'content'):'content',points,visualIds:i===0?slide.visualIds:[]});
  }
- if(keepSlideCount&&paged.length!==data.slides.length)throw Error('DOCUMENT_PLAN_REVISION_TOO_LONG');
  data.slides=paged;if(data.slides.length>79)throw Error('DOCUMENT_SLIDE_LIMIT');
  const all=new Map(context.visuals.map(v=>[v.assetId,v])),seen=new Set(),sources=new Map(context.documents.map(d=>[d.sourceId,d]));
  const primary=context.documents.filter(d=>d.role==='content'||isReferenceDocument(workspace)).map(d=>d.sourceId);
@@ -123,31 +115,10 @@ export async function saveDocumentPlan(root,owner,workspace,context,output,{keep
  }
  if(source.length>60000)throw Error('DOCUMENT_PLAN_TEXT_LIMIT');
  const doc=parseSource(source,'markdown'),plan={version:1,sourceHash:doc.sha256,resourcesKey:resourcesKey(workspace),slides:mapped,assets:context.visuals.map(({hash:sha,...a})=>({...a,hash:sha}))};
- const scene=buildDocumentScene(doc,plan); // Fail before quoting or charging if text cannot fit.
+ buildDocumentScene(doc,plan); // Fail before quoting or charging if text cannot fit.
  const file=fileFor(root,owner,source,workspace);await fs.mkdir(path.dirname(file),{recursive:true,mode:0o700});
  const temporary=file+'.'+randomUUID()+'.tmp';await fs.writeFile(temporary,JSON.stringify(plan),{mode:0o600});await fs.rename(temporary,file);
- return {source,slideCount:plan.slides.length,visualCount:seen.size,outline:outlineForPlan(plan,scene),revisable:true};
-}
-
-export async function reviseDocumentSlide(root, owner, workspace, source, index, replacement) {
- const plan = await loadDocumentPlan({ownerId:owner, workspace, source}, root);
- if (plan?.version!==1 || !plan.slides[index]) throw Error('DOCUMENT_PLAN_REVISION_UNAVAILABLE');
- const slides = plan.slides.map(({citation, ...slide}, current) =>
-    current===index ? {...slide, title:replacement.title, points:replacement.points} : slide);
- const context = await documentDraftContext(root,owner,{workspace,sections:plan.slides.length-1});
- return saveDocumentPlan(root,owner,workspace,context,{slides},{keepSlideCount:true});
-}
-
-export async function documentRevisionContext(root,owner,workspace,source,index) {
- const plan=await loadDocumentPlan({ownerId:owner,workspace,source},root);
- if(plan?.version!==1||!plan.slides[index])throw Error('DOCUMENT_PLAN_REVISION_UNAVAILABLE');
- const target=plan.slides[index];
- const {documents}=await documentDraftContext(root,owner,{workspace,sections:plan.slides.length-1});
- return {
-    slide:{title:target.title,points:target.points,kind:target.kind,citation:target.citation},
-    previousTitle:plan.slides[index-1]?.title,nextTitle:plan.slides[index+1]?.title,
-    documents:documents.filter(document=>target.sourceIds.includes(document.sourceId)),
- };
+ return {source,slideCount:plan.slides.length,visualCount:seen.size};
 }
 
 export const fullCopySettingsSchema = z.object({
@@ -191,12 +162,7 @@ export async function saveFullCopyPlan(root, owner, workspace, settings, recover
  const temporary = file + '.' + randomUUID() + '.tmp';
  await fs.writeFile(temporary, JSON.stringify(plan), {mode:0o600});
  await fs.rename(temporary,file);
- const blocks = new Map(doc.blocks.map(block=>[block.id,block]));
- const outline = scene.slides.map((slide,index)=>{
-  const heading=slide.blockIds.map(id=>blocks.get(id)).find(block=>block?.kind==='heading');
-  return {title:heading?.text||slide.documentCaption||('Slide '+(index+1)),kind:slide.layout==='cover'?'cover':'content',layout:slide.layout,points:[]};
- });
- return {source,slideCount:scene.slides.length,visualCount:scene.documentCoverage.included,outline,...(recoveryCode?{recovery:true}:{})};
+ return {source,slideCount:scene.slides.length,visualCount:scene.documentCoverage.included,...(recoveryCode?{recovery:true}:{})};
 }
 
 export async function loadDocumentPlan(project,root,settings={}){

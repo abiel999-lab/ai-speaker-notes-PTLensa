@@ -42,12 +42,3 @@
 .np-document-workspace [hidden]{display:none!important}
 
 .np-workflow-alert{background:#fff1f0;border:1px solid #c43d4b;border-left-width:4px;border-radius:8px;color:#7f2430;padding:14px 18px;font-size:15px;font-weight:600;overflow-wrap:anywhere}.np-paste-content{margin:16px 0;padding:14px;border:1px solid #b6c9df;border-radius:10px}.np-paste-content summary,.np-advanced>summary{font-size:16px;font-weight:700;cursor:pointer}.np-paste-content .field{margin-top:14px}.np-output-summary .np-typography{width:100%;flex:0 0 100%;margin-block:12px}.np-typography .np-check-field{align-self:end}
-
-.np-outline{margin:0 0 20px;max-width:100%}
-.np-outline>ol{display:grid;gap:10px;max-height:65vh;overflow:auto;padding:0 0 0 28px}
-.np-outline>ol>li{padding:9px 12px;border-bottom:1px solid #D7E4F1;overflow-wrap:anywhere}
-.np-outline>ol>li>small{display:block;color:#52657B}
-.np-outline ul{list-style:disc;padding-inline-start:20px}
-.np-outline button+button{margin-inline-start:8px}
-.np-outline-editor{display:grid;gap:10px;padding-block:8px}
-.np-outline-editor button{justify-self:start}

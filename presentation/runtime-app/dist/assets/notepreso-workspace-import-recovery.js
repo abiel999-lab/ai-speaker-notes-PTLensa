@@ -176,8 +176,6 @@ function NotePresoWorkspace({ studio: e, lang }) {
   if(!e.draft.workspace&&new URLSearchParams(location.search).has("author"))sessionStorage.setItem("np-workflow-intent","brief");
   const H = T.createElement, [panel, setPanel] = T.useState("input"), [prep, setPrep] = T.useState(false), [pending, setPending] = T.useState(null), [localError, setLocalError] = T.useState("");
   const [pasteText, setPasteText] = T.useState("");
-  const [outlineHistory,setOutlineHistory]=T.useState([]);
-  const [outlineEdit,setOutlineEdit]=T.useState(null);
   const [fileProgress,setFileProgress]=T.useState(null);
   const [uploadError, setUploadError] = T.useState(""), [uploading, setUploading] = T.useState(false);
   const executed = T.useRef(null), latest = T.useRef(e);
@@ -308,7 +306,6 @@ function NotePresoWorkspace({ studio: e, lang }) {
         setJournalRole(saved.journalRole||"full-copy");
         setJournalContext(saved.journalContext||"");
         setPasteText(saved.pasteText||"");
-        if(Array.isArray(saved.outlineHistory))setOutlineHistory(saved.outlineHistory.slice(-12));
         if(!e.draft.id && saved.draft) e.edit(saved.draft);
         if(saved.settings)e.setSettings(saved.settings);
         if(saved.format && saved.format!==documentFormat)updateDocumentFormat(saved.format);
@@ -323,13 +320,13 @@ function NotePresoWorkspace({ studio: e, lang }) {
        /^(Untitled(?: presentation)?|New presentation|)$/i.test(e.draft.name))) return;
     const version=++storageVersion.current;
     const key=owner+":"+(e.draft.id||draftId);
-    const snapshot={draft:e.draft,settings:e.settings,format:documentFormat,assets,reportRole,journalRole,journalContext,pasteText,outlineHistory};
+    const snapshot={draft:e.draft,settings:e.settings,format:documentFormat,assets,reportRole,journalRole,journalContext,pasteText};
     // Queue each changed snapshot in the order it was entered, including
     // when a new draft receives a server project ID during the write.
     saveDocumentDraft(key,snapshot).then(()=>{
       if(version===storageVersion.current)setDraftStorage("saved");
     }).catch(()=>{if(version===storageVersion.current)setDraftStorage("error");});
-  },[documentMode,owner,draftStorage==="loading",e.draft,e.settings,draftId,documentFormat,assets,reportRole,journalRole,journalContext,pasteText,outlineHistory]);
+  },[documentMode,owner,draftStorage==="loading",e.draft,e.settings,draftId,documentFormat,assets,reportRole,journalRole,journalContext,pasteText]);
   T.useEffect(()=>{
     if(!documentMode || disabled || e.loading || e.draft.id || !e.draft.source.trim()) return;
     const timer=setTimeout(()=>e.save().catch(()=>{}),1000);
@@ -420,7 +417,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
         }
         if (latest.current.draft.id !== owner && owner || latest.current.draft.source !== original) throw Error("Project changed during upload");
         if (next.reduce((count, resource) => count + resource.text.length, result.source.length) > 480000) throw Error("Your attached documents exceed 480,000 characters in total.");
-        next.push({ id: crypto.randomUUID(), name: documentImportName(file.name), role: fullCopy ? copyRole : documentMode||ws.policy === "preserve" ? "content" : "reference", text: result.source,...(result.documentId?{documentId:result.documentId,visuals:result.visuals,...(result.pdfPages?{pdfPages:result.pdfPages}:{}),orderedVisuals:result.orderedVisuals,inlineImageCount:result.inlineImageCount}:{}) });
+        next.push({ id: crypto.randomUUID(), name: documentImportName(file.name), role: fullCopy ? copyRole : documentMode||ws.policy === "preserve" ? "content" : "reference", text: result.source,...(result.documentId?{documentId:result.documentId,visuals:result.visuals,...(result.layoutRevision?{layoutRevision:result.layoutRevision}:{}),...(result.pdfPages?{pdfPages:result.pdfPages}:{}),orderedVisuals:result.orderedVisuals,inlineImageCount:result.inlineImageCount}:{}) });
        } catch (error) {
         if (error.message === "Project changed during upload") throw error;
         const stage = error.phase === "upload" ? "Upload failed" : error.phase === "analysis" ? "Analysis failed" : "File check";
@@ -596,7 +593,6 @@ function NotePresoWorkspace({ studio: e, lang }) {
       H("p", {role: "status"}, prep ? "Creating PowerPoint…" : journalReady ? "PowerPoint ready to download." : journalOutput ? "Settings changed. Generate again to download the updated PowerPoint." : ""),
       journalReady && H("button", {className: "button primary", type: "button", disabled: prep, onClick: downloadJournal}, "Download PowerPoint"));
   }
-  const outline = outlineHistory.at(-1);
   function launchPrepared(source, plannedSlides) {
     e.setSettings(s=>({...s,creationMode:"creative",documentMode,
       ...(documentMode?{theme:"ivory",...(plannedSlides&&plannedSlides<=40?{creativeSlideCount:plannedSlides}:{})}:{}),
@@ -607,76 +603,8 @@ function NotePresoWorkspace({ studio: e, lang }) {
     e.edit({source,mode:"markdown"});
     setPending({run:crypto.randomUUID(),source});
     setPanel("result");
-    setOutlineHistory([]);
-    setOutlineEdit(null);
   }
-  function isCurrentOutline(item) {
-    return item && JSON.stringify(latest.current.draft)===item.snapshot &&
-      JSON.stringify(latest.current.settings)===item.settingsSnapshot;
-  }
-  async function saveOutlineRevision() {
-    if(!isCurrentOutline(outline)||!outlineEdit)return;
-    setLocalError("");
-    setPrep(true);
-    try {
-      const result=await P("/workspace/outline/revise","POST",{
-        workspace:outline.workspace,source:outline.source,index:outlineEdit.index,
-        title:outlineEdit.title,points:outlineEdit.points.split(/\r?\n/).map(point=>point.trim()).filter(Boolean),
-      });
-      if(!isCurrentOutline(outline))throw Error("Your brief or settings changed. Review the outline again.");
-      setOutlineHistory(history=>[...history.slice(-11),{...outline,...result}]);
-      setOutlineEdit(null);
-    } catch(error) {
-      setLocalError(error.code==="DOCUMENT_PLAN_REVISION_TOO_LONG"?
-        "The revised content needs more space. Shorten the points to keep this as one slide.":
-        error.code?"Outline revision failed: "+error.code:error.message);
-    } finally { setPrep(false); }
-  }
-  async function suggestOutlineRevision() {
-    if(!isCurrentOutline(outline)||!outlineEdit?.instruction.trim())return;
-    setLocalError("");
-    setPrep(true);
-    try {
-      const result=await P("/workspace/outline/suggest","POST",{
-        workspace:outline.workspace,source:outline.source,index:outlineEdit.index,
-        instruction:outlineEdit.instruction,model:e.settings.model||"gpt-6-luna",reasoningEffort:e.settings.reasoningEffort||"xhigh",
-      });
-      if(!isCurrentOutline(outline))throw Error("Your brief or settings changed. Review the outline again.");
-      setOutlineEdit(edit=>({...edit,title:result.title,points:result.points.join("\n")}));
-    } catch(error) {
-      setLocalError(error.code?"Could not suggest a revision: "+error.code:error.message);
-    } finally { setPrep(false); }
-  }
-  function renderOutline() {
-    if(!isCurrentOutline(outline))return null;
-    return H("section",{className:"np-workspace-card np-outline", "aria-label":"Review presentation outline"},
-      H("h2",null,"Review outline"),
-      H("p",null,outline.slideCount+" planned slides"+(outline.recovery?" · Preserved source layout":"")),
-      H("ol",null,outline.outline.map((slide,index)=>H("li",{key:index},
-        H("strong",null,slide.title),
-        H("small",null,slide.layout.replace(/-/g," ")),
-        slide.points.length>0&&H("ul",null,slide.points.map((point,i)=>H("li",{key:i},point))),
-        slide.citation&&H("p",{className:"help-text"},slide.citation),
-        outline.revisable&&H("button",{type:"button",disabled,className:"text-button",
-          onClick:()=>setOutlineEdit({index,title:slide.title,points:slide.points.join("\n"),instruction:""})},"Edit slide "+(index+1)),
-        outlineEdit?.index===index&&H("div",{className:"np-outline-editor"},
-          H("label",{className:"field"},"Describe a change",H("input",{value:outlineEdit.instruction,maxLength:1500,disabled,
-            placeholder:"Make the comparison easier to understand",
-            onChange:event=>setOutlineEdit({...outlineEdit,instruction:event.target.value})})),
-          H("button",{type:"button",disabled:disabled||!outlineEdit.instruction.trim(),onClick:suggestOutlineRevision},"Suggest revision with AI"),
-          H("label",{className:"field"},"Slide title",H("input",{value:outlineEdit.title,maxLength:100,disabled,
-            onChange:event=>setOutlineEdit({...outlineEdit,title:event.target.value})})),
-          H("label",{className:"field"},"One point per line",H("textarea",{value:outlineEdit.points,rows:4,disabled,
-            onChange:event=>setOutlineEdit({...outlineEdit,points:event.target.value})})),
-          H("button",{type:"button",disabled,onClick:saveOutlineRevision},"Save slide revision"),
-          H("button",{type:"button",disabled,onClick:()=>setOutlineEdit(null)},"Cancel revision"))))),
-      H("button",{type:"button",className:"button primary",disabled:disabled||!!outlineEdit,
-        onClick:()=>{if(isCurrentOutline(outline))launchPrepared(outline.source,fullCopy?undefined:outline.slideCount);}},"Generate from outline"),
-      outlineHistory.length>1&&H("button",{type:"button",disabled,onClick:()=>{
-        setOutlineHistory(history=>history.slice(0,-1));setOutlineEdit(null);
-      }},"Undo last slide revision"));
-  }
-  async function generate(review) {
+  async function generate() {
     if(journalExportMode)return exportJournal();
     setLocalError("");
     setPrep(true);
@@ -689,21 +617,15 @@ function NotePresoWorkspace({ studio: e, lang }) {
       if(documentMode&&inputResources.every(r=>r.role==="reference")&&!ws.brief.trim())throw Error("Add a brief explaining what your references should support.");
       if(fullCopy&&inputResources.some(r=>r.role!==copyRole&&r.role!=="reference"))throw Error("Use the same exact-content mode for every document to copy. Any other attachments can be Reference only.");
       const workspace={...ws,resources:inputResources,kind:documentMode?"document":"brief"};
-      let source = e.draft.source, plannedSlides, prepared;
+      let source = e.draft.source, plannedSlides;
       if (ws.policy === "draft" || documentMode) {
         if (!ws.brief.trim()&&!documentMode) throw Error("Explain the presentation you want to create");
         const result = await P("/workspace/draft", "POST", { workspace, model: e.settings.model || "gpt-6-luna", language: e.settings.presentationLanguage || "English", reasoningEffort: e.settings.reasoningEffort || "xhigh", ...(fullCopy?{typography:{fontFamily:e.settings.fontFamily,fontScale:e.settings.fontScale,density:e.settings.density,includeSpeakerNotes:e.settings.includeSpeakerNotes}}:{}), sections: Math.max(3, Math.min(30, (e.settings.creativeSlideCount || 12) - 1)) });
-        prepared=result;
         source = result.source;
         if(documentMode&&!fullCopy)plannedSlides=result.slideCount;
       }
       if (!source?.trim()) throw Error("Attach a content file or add your exact content below");
       if (JSON.stringify(latest.current.draft) !== snapshot || JSON.stringify(latest.current.settings) !== settingsSnapshot) throw Error("Your brief or settings changed during preparation; generate again");
-      if(review===true&&prepared?.outline){
-        setOutlineHistory([{...prepared,workspace,snapshot,settingsSnapshot}]);
-        setOutlineEdit(null);
-        return;
-      }
       launchPrepared(source,plannedSlides);
     } catch (err) {
       setLocalError(err.code==="DOCUMENT_SLIDE_HEADINGS_REQUIRED"?"For Slide Content, start with a Markdown heading (# title), then use ## for each slide title.":err.code==="DOCUMENT_REUPLOAD_REQUIRED"?"Remove the old attachment and upload it again to place images in source order.":err.code?.startsWith("DOCUMENT_PLAN_") || err.code === "DOCUMENT_CONTENT_TOO_DENSE" ? "Document preparation needs review ("+err.code+"). Your draft and uploads are preserved. No presentation credits have been charged." : err.code === "DOCUMENT_SLIDE_LIMIT" || err.code === "SLIDE_LIMIT" ? "This would exceed 80 slides. Try a more compact layout or split the source document. Full copy keeps embedded images." : err.code ? "Content preparation failed: " + err.code : err.message);
@@ -742,7 +664,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
   const fontControl=()=>H("label", {className:"field"}, "PowerPoint font", H("select", {disabled,"aria-label":"PowerPoint font",
       value:e.settings.fontFamily||"Arial",onChange:event=>setting("fontFamily",event.target.value)},
       ["Arial", "Aptos", "Calibri", "Cambria", "Century Gothic", "Comic Sans MS", "Garamond", "Georgia", "Helvetica", "Inter", "Lato", "Montserrat", "Open Sans", "Poppins", "Roboto", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"].map(font=>H("option", {key:font,value:font}, font))));
-  return /* @__PURE__ */ T.createElement("section", { className: "np-workspace"+(documentMode?" np-document-workspace":""), "aria-label": "Presentation workspace" }, /* @__PURE__ */ T.createElement("div", { className: "np-workspace-heading" }, /* @__PURE__ */ T.createElement("div", null, /* @__PURE__ */ T.createElement("p", { className: "eyebrow" }, "PRESENTATION WORKSPACE"), /* @__PURE__ */ T.createElement("h1", null, documentMode?"Create from a document":"Create from a brief"), /* @__PURE__ */ T.createElement("p", null, "Explain what you need, attach your material, and review the result here")), /* @__PURE__ */ T.createElement("button", { className: "button primary", disabled: disabled || (journalExportMode && (uploading || !journalFile)), onClick: generate }, journalExportMode ? (prep ? "Creating PowerPoint…" : "Generate PowerPoint") : prep ? "Preparing content\u2026" : e.active ? "Generating\u2026" : "Generate presentation"), documentMode&&!journalExportMode&&!reportMode&&H("button",{className:"button",type:"button",disabled:disabled||uploading,onClick:()=>generate(true)},"Review outline")), currentError && H("p", { className: "np-workflow-alert", role: "alert", ref:alertRef }, currentError), renderOutline(), /* @__PURE__ */ T.createElement("div", { className: "np-workspace-grid" }, /* @__PURE__ */ T.createElement("div", { className: "np-workspace-input" },
+  return /* @__PURE__ */ T.createElement("section", { className: "np-workspace"+(documentMode?" np-document-workspace":""), "aria-label": "Presentation workspace" }, /* @__PURE__ */ T.createElement("div", { className: "np-workspace-heading" }, /* @__PURE__ */ T.createElement("div", null, /* @__PURE__ */ T.createElement("p", { className: "eyebrow" }, "PRESENTATION WORKSPACE"), /* @__PURE__ */ T.createElement("h1", null, documentMode?"Create from a document":"Create from a brief"), /* @__PURE__ */ T.createElement("p", null, "Explain what you need, attach your material, and review the result here")), /* @__PURE__ */ T.createElement("button", { className: "button primary", disabled: disabled || (journalExportMode && (uploading || !journalFile)), onClick: generate }, journalExportMode ? (prep ? "Creating PowerPoint…" : "Generate PowerPoint") : prep ? "Preparing content\u2026" : e.active ? "Generating\u2026" : "Generate presentation")), currentError && H("p", { className: "np-workflow-alert", role: "alert", ref:alertRef }, currentError), /* @__PURE__ */ T.createElement("div", { className: "np-workspace-grid" }, /* @__PURE__ */ T.createElement("div", { className: "np-workspace-input" },
     /* @__PURE__ */ T.createElement("section", { className: "np-workspace-card" }, documentMode&&formatControl(), /* @__PURE__ */ T.createElement("label", { className: "field" }, /* @__PURE__ */ T.createElement("span", null, "Project name"), /* @__PURE__ */ T.createElement("input", { value: e.draft.name, disabled, onChange: (v) => e.edit({ name: v.target.value }), maxLength: 120 })), /* @__PURE__ */ T.createElement("label", { className: "field" }, /* @__PURE__ */ T.createElement("span", null, journalMode ? "Presenter context (optional)" : "Explain your presentation"), /* @__PURE__ */ T.createElement("textarea", { rows: 7, maxLength: journalMode ? 3000 : 12e3, disabled, value: journalMode ? journalContext : ws.brief, onChange: (v) => journalMode ? setJournalContext(v.target.value) : brief(v.target.value), placeholder: journalMode ? "Add context for the cover’s speaker notes" : "Describe the audience, purpose, key ideas, and visual direction" })), /* @__PURE__ */ T.createElement("p", { className: "help-text" }, journalMode ? (journalOptions.includeSpeakerNotes ? "Added to the cover speaker notes." : "Enable speaker notes in Advanced options to include this context.") : ws.brief.length.toLocaleString() + " / 12,000 characters"), /* @__PURE__ */ T.createElement("label", { className: "field", hidden:documentMode }, /* @__PURE__ */ T.createElement("span", null, documentMode?"Document processing":"How to use your material"), /* @__PURE__ */ T.createElement("select", { disabled, value: ws.policy, onChange: (v) => policy(v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "preserve" }, "Keep exact slide content"), /* @__PURE__ */ T.createElement("option", { value: "draft" }, "Use brief and references"))), /* @__PURE__ */ T.createElement("p", { className: "help-text" }, journalMode ? "Choose how to use the journal after uploading. Full copy includes original pages and editable source text." : fullCopy ? "Full copy keeps text and embedded images in document order. Images are placed on slides alongside the surrounding text." : ws.policy === "preserve" ? "Your content stays intact while AI designs the slides" : "AI prepares new content using your selected model before the credit confirmation"), /* @__PURE__ */ T.createElement("label", { className: "np-attach" }, /* @__PURE__ */ T.createElement("strong", null, documentMode?"Upload your document":"Attach documents"), /* @__PURE__ */ T.createElement("span", { id: "np-attach-help" }, journalMode ? "One research journal PDF · up to 50 MB and 40 pages" : documentMode?"PDF, Word, TXT or Markdown. Up to 50 MB. Long PDFs can be copied page by page. Choose Full copy to keep embedded images in their original order.":"Text-based PDF, Word (.docx), TXT, or Markdown (.md). Up to 10 MB and 60,000 characters per file."), /* @__PURE__ */ T.createElement("input", { type: "file", multiple: !journalMode, accept: journalMode ? ".pdf,application/pdf" : ".pdf,.docx,.txt,.md", disabled: disabled || uploading, "aria-describedby": "np-attach-help", onChange: (v) => {
     const files = Array.from(v.target.files);
     v.target.value = "";
@@ -788,7 +710,7 @@ function NotePresoWorkspace({ studio: e, lang }) {
     H("label", {className:"field"}, "Paste Markdown, Word or Google Docs text",
       H("textarea", {rows:7,disabled,value:pasteText,onPaste:pasteDocument,onChange:event=>setPasteText(event.target.value)})),
     H("p", {className:"help-text"}, "Upload a Word or PDF file to include its original visuals. Markdown tables become editable PowerPoint tables."),
-    H("button", {className:"button",type:"button",disabled:disabled||!pasteText.trim(),onClick:()=>attachPaste("full-copy")}, "Add to Full Copy"), H("button",{type:"button",disabled:disabled||!pasteText.trim(),onClick:()=>attachPaste("slide-content")},"Add as Slide Content")), /* @__PURE__ */ T.createElement("div", { className: "np-resource-list" }, !journalMode && resources.map((r) => /* @__PURE__ */ T.createElement("div", { className: "np-resource", key: r.id }, /* @__PURE__ */ T.createElement("strong", null, r.name),r.documentId&&T.createElement("p",{className:"help-text"},r.role==="full-copy"&&r.orderedVisuals?r.inlineImageCount+" embedded "+(r.inlineImageCount===1?"image":"images")+" in source order":r.role==="full-copy"&&/\.(pdf|docx)$/i.test(r.name)?"Re-upload this document to place images in source order.":r.text.length.toLocaleString()+" characters · "+r.visuals+" detected original visuals"), /* @__PURE__ */ T.createElement("select", { "aria-label": "Role for " + r.name, value: r.role, disabled, onChange: (v) => resourceRole(r.id, v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "content" }, documentMode?"Summarize document":"Slide content"), documentMode&&H("option",{value:"slide-content"},"Slide Content — keep headings"), /* @__PURE__ */ T.createElement("option", { value: "reference" }, "Reference only"), documentMode && H("option", {value:"full-copy"}, "Full copy — no summarizing")), /* @__PURE__ */ T.createElement("button", { className: "text-button", disabled, onClick: () => remove(r.id) }, "Remove"), /* @__PURE__ */ T.createElement("details", null, /* @__PURE__ */ T.createElement("summary", null, "Read extracted material"), /* @__PURE__ */ T.createElement("pre", null, r.text))))), /* @__PURE__ */ T.createElement("details", { className: "np-content-preview",hidden:documentMode }, /* @__PURE__ */ T.createElement("summary", null, resources.length ? "Content preview and exact text" : "Or paste exact slide content"), /* @__PURE__ */ T.createElement("p", { className: "help-text" }, "Review extracted tables and equations before generating, especially PDF imports"), /* @__PURE__ */ T.createElement("textarea", { "aria-label": "Exact slide content", rows: 12, maxLength: 6e4, disabled, value: e.draft.source, onChange: (v) => e.edit({ source: v.target.value, mode: "markdown" }) }))), /* @__PURE__ */ T.createElement("section", { className: "np-workspace-card" }, /* @__PURE__ */ T.createElement("h2", null, "Presentation settings"), /* @__PURE__ */ T.createElement("div", { className: "np-setting-grid" }, /* @__PURE__ */ T.createElement("label", { className: "field" }, "AI model", /* @__PURE__ */ T.createElement("select", { value: fullCopy ? "gpt-6-luna" : e.settings.model || "gpt-6-luna", disabled:documentSettingsDisabled||fullCopy, onChange: (v) => setting("model", v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "gpt-6-luna" }, "GPT-6 Luna"), /* @__PURE__ */ T.createElement("option", { value: "gpt-6.1-terra" }, "GPT-6.1 Terra")), /* @__PURE__ */ !journalMode && T.createElement("span", { className: "help-text" }, e.settings.model === "gpt-6.1-terra" ? "3 credits per slide" : "1 credit per slide")), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Depth", /* @__PURE__ */ T.createElement("select", { disabled:documentSettingsDisabled||fullCopy, value: e.settings.reasoningEffort || "xhigh", onChange: (v) => setting("reasoningEffort", v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "low" }, "Low"), /* @__PURE__ */ T.createElement("option", { value: "medium" }, "Medium"), /* @__PURE__ */ T.createElement("option", { value: "high" }, "High"), H("option",{value:"xhigh"},"Extra High"))), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Presentation language", /* @__PURE__ */ T.createElement("select", { disabled:documentSettingsDisabled||fullCopy, value: e.settings.presentationLanguage || "English", onChange: (v) => setting("presentationLanguage", v.target.value) }, NOTE_PRESO_LANGUAGES.map((s) => /* @__PURE__ */ T.createElement("option", { key: s, value: s }, s)))), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Slide count", /* @__PURE__ */ T.createElement("input", { type: "number", min: 1, max: 40, placeholder: "Automatic", disabled:documentSettingsDisabled||fullCopy, value: fullCopy ? "" : e.settings.creativeSlideCount ?? "", onChange: (v) => setting("creativeSlideCount", v.target.value ? Math.max(1, Math.min(40, Number(v.target.value))) : null) })), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Transitions and animations", /* @__PURE__ */ T.createElement("select", { disabled, value: e.settings.motion || "none", onChange: (v) => setting("motion", v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "none" }, "Off"), /* @__PURE__ */ T.createElement("option", { value: "keynote" }, "On"))), /* @__PURE__ */ T.createElement("label", { className: "field", hidden:documentMode }, "Color theme", /* @__PURE__ */ T.createElement("select", { disabled, value: e.settings.theme || "midnight", onChange: (v) => setting("theme", v.target.value) }, ["midnight", "ivory", "solar", "cobalt", "sage", "graphite"].map((s) => /* @__PURE__ */ T.createElement("option", { key: s, value: s }, s.charAt(0).toUpperCase() + s.slice(1)))))), /* @__PURE__ */ T.createElement("p", { className: "help-text" }, journalMode ? "Journal slides follow the language and structure of the PDF. AI settings apply to general documents." : fullCopy?"Slide count adjusts automatically. Your source language stays as written.":documentMode?"Model and depth apply to source-based content and layout. Original visual labels remain unchanged. Mandatory visual slides are included in the credit confirmation.":"Slides use your selected language. High depth allows more planning time. The cover counts as one slide.")), /* @__PURE__ */ T.createElement("details", { className: "np-workspace-card",open:!documentMode }, /* @__PURE__ */ T.createElement("summary", null, "Visual design and images"), journalMode && H("div",null,
+    H("button", {className:"button",type:"button",disabled:disabled||!pasteText.trim(),onClick:()=>attachPaste("full-copy")}, "Add to Full Copy"), H("button",{type:"button",disabled:disabled||!pasteText.trim(),onClick:()=>attachPaste("slide-content")},"Add as Slide Content")), /* @__PURE__ */ T.createElement("div", { className: "np-resource-list" }, !journalMode && resources.map((r) => /* @__PURE__ */ T.createElement("div", { className: "np-resource", key: r.id }, /* @__PURE__ */ T.createElement("strong", null, r.name),r.documentId&&T.createElement("p",{className:"help-text"},r.role==="full-copy"&&r.orderedVisuals?r.inlineImageCount+" embedded "+(r.inlineImageCount===1?"image":"images")+" in source order":r.role==="full-copy"&&/\.(pdf|docx)$/i.test(r.name)?"Re-upload this document to place images in source order.":r.text.length.toLocaleString()+" characters · "+r.visuals+" detected original visuals"), /* @__PURE__ */ (r.role==="full-copy"||r.role==="slide-content")&&r.documentId&&/\.pdf$/i.test(r.name)&&!r.layoutRevision&&H("p",{className:"help-text",role:"note"},"Remove and upload this PDF again to use the updated layout and equation importer."), T.createElement("select", { "aria-label": "Role for " + r.name, value: r.role, disabled, onChange: (v) => resourceRole(r.id, v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "content" }, documentMode?"Summarize document":"Slide content"), documentMode&&H("option",{value:"slide-content"},"Slide Content — keep headings"), /* @__PURE__ */ T.createElement("option", { value: "reference" }, "Reference only"), documentMode && H("option", {value:"full-copy"}, "Full copy — no summarizing")), /* @__PURE__ */ T.createElement("button", { className: "text-button", disabled, onClick: () => remove(r.id) }, "Remove"), /* @__PURE__ */ T.createElement("details", null, /* @__PURE__ */ T.createElement("summary", null, "Read extracted material"), /* @__PURE__ */ T.createElement("pre", null, r.text))))), /* @__PURE__ */ T.createElement("details", { className: "np-content-preview",hidden:documentMode }, /* @__PURE__ */ T.createElement("summary", null, resources.length ? "Content preview and exact text" : "Or paste exact slide content"), /* @__PURE__ */ T.createElement("p", { className: "help-text" }, "Review extracted tables and equations before generating, especially PDF imports"), /* @__PURE__ */ T.createElement("textarea", { "aria-label": "Exact slide content", rows: 12, maxLength: 6e4, disabled, value: e.draft.source, onChange: (v) => e.edit({ source: v.target.value, mode: "markdown" }) }))), /* @__PURE__ */ T.createElement("section", { className: "np-workspace-card" }, /* @__PURE__ */ T.createElement("h2", null, "Presentation settings"), /* @__PURE__ */ T.createElement("div", { className: "np-setting-grid" }, /* @__PURE__ */ T.createElement("label", { className: "field" }, "AI model", /* @__PURE__ */ T.createElement("select", { value: fullCopy ? "gpt-6-luna" : e.settings.model || "gpt-6-luna", disabled:documentSettingsDisabled||fullCopy, onChange: (v) => setting("model", v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "gpt-6-luna" }, "GPT-6 Luna"), /* @__PURE__ */ T.createElement("option", { value: "gpt-6.1-terra" }, "GPT-6.1 Terra")), /* @__PURE__ */ !journalMode && T.createElement("span", { className: "help-text" }, e.settings.model === "gpt-6.1-terra" ? "3 credits per slide" : "1 credit per slide")), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Depth", /* @__PURE__ */ T.createElement("select", { disabled:documentSettingsDisabled||fullCopy, value: e.settings.reasoningEffort || "xhigh", onChange: (v) => setting("reasoningEffort", v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "low" }, "Low"), /* @__PURE__ */ T.createElement("option", { value: "medium" }, "Medium"), /* @__PURE__ */ T.createElement("option", { value: "high" }, "High"), H("option",{value:"xhigh"},"Extra High"))), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Presentation language", /* @__PURE__ */ T.createElement("select", { disabled:documentSettingsDisabled||fullCopy, value: e.settings.presentationLanguage || "English", onChange: (v) => setting("presentationLanguage", v.target.value) }, NOTE_PRESO_LANGUAGES.map((s) => /* @__PURE__ */ T.createElement("option", { key: s, value: s }, s)))), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Slide count", /* @__PURE__ */ T.createElement("input", { type: "number", min: 1, max: 40, placeholder: "Automatic", disabled:documentSettingsDisabled||fullCopy, value: fullCopy ? "" : e.settings.creativeSlideCount ?? "", onChange: (v) => setting("creativeSlideCount", v.target.value ? Math.max(1, Math.min(40, Number(v.target.value))) : null) })), /* @__PURE__ */ T.createElement("label", { className: "field" }, "Transitions and animations", /* @__PURE__ */ T.createElement("select", { disabled, value: e.settings.motion || "none", onChange: (v) => setting("motion", v.target.value) }, /* @__PURE__ */ T.createElement("option", { value: "none" }, "Off"), /* @__PURE__ */ T.createElement("option", { value: "keynote" }, "On"))), /* @__PURE__ */ T.createElement("label", { className: "field", hidden:documentMode }, "Color theme", /* @__PURE__ */ T.createElement("select", { disabled, value: e.settings.theme || "midnight", onChange: (v) => setting("theme", v.target.value) }, ["midnight", "ivory", "solar", "cobalt", "sage", "graphite"].map((s) => /* @__PURE__ */ T.createElement("option", { key: s, value: s }, s.charAt(0).toUpperCase() + s.slice(1)))))), /* @__PURE__ */ T.createElement("p", { className: "help-text" }, journalMode ? "Journal slides follow the language and structure of the PDF. AI settings apply to general documents." : fullCopy?"Slide count adjusts automatically. Your source language stays as written.":documentMode?"Model and depth apply to source-based content and layout. Original visual labels remain unchanged. Mandatory visual slides are included in the credit confirmation.":"Slides use your selected language. High depth allows more planning time. The cover counts as one slide.")), /* @__PURE__ */ T.createElement("details", { className: "np-workspace-card",open:!documentMode }, /* @__PURE__ */ T.createElement("summary", null, "Visual design and images"), journalMode && H("div",null,
       H("label",{className:"field"},"Journal cover artwork",
         H("select",{disabled:disabled||journalRole==="source-pages",value:e.settings.generateCoverArtwork===false?"none":"auto",
           onChange:event=>setting("generateCoverArtwork",event.target.value==="auto")},

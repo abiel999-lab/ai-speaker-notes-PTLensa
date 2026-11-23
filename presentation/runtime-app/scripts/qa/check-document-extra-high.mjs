@@ -26,15 +26,6 @@ globalThis.fetch = async (url, init) => {
   const request=JSON.parse(init.body), context=JSON.parse(request.input);
   calls.push({request,context});
   if(providerFailure)return Response.json({error:'fixture only'},{status:503});
-  if(request.text.format.name==='document_slide_revision'){
-    assert.equal(context.slide.title,'Two measured rates');
-    assert.equal(context.previousTitle,'Water treatment decision');
-    assert.equal(context.nextTitle,'Interpretation');
-    assert.equal(context.documents.length,1);
-    assert.equal(context.instruction,'Compare the two readings directly.');
-    const result={title:'Compare Tuesday and Wednesday',points:['Tuesday: 14 liters per second.','Wednesday: 18 liters per second.']};
-    return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(result)}]}]});
-  }
   const sourceIds=context.documents.map(d=>d.sourceId);
   const make=(kind,title,points)=>({kind,title,points,sourceIds,visualIds:[]});
   const slides=[
@@ -58,7 +49,8 @@ try {
   const exact=workspace('slide-content',exactSource);
   const draftExact=okay(await draft(exact));
   assert.equal(draftExact.source,exactSource);
-  assert.deepEqual(draftExact.outline.map(s=>s.title),['Treatment plant','Tuesday','Wednesday']);
+  assert.equal(draftExact.slideCount,3);
+  assert.equal(draftExact.outline,undefined);
   assert.equal(calls.length,0);
   const {project}=okay(await request('/api/projects',{name:'Exact',workspace:exact,mode:'markdown',source:exactSource}));
   const exactPlan=await loadDocumentPlan(project,root);
@@ -79,7 +71,8 @@ try {
   assert.equal(calls.at(-1).request.max_output_tokens,64000);
   assert.equal(calls.at(-1).context.documents[0].role,'reference');
   assert.equal(calls.at(-1).request.text.format.schema.properties.slides.items.properties.visualIds.maxItems,0);
-  assert.equal(original.outline[1].layout,'columns');
+  assert.equal(original.slideCount,4);
+  assert.equal(original.outline,undefined);
   bad(await draft({...ref,brief:''}),400,'BRIEF_REQUIRED');
   const general=workspace('content',ref.resources[0].text,'Explain the source.');
   const generalResponse=okay(await draft(general));
@@ -93,34 +86,26 @@ try {
   assert.equal(okay(await draft(general)).recovery,true);
   providerFailure=false;
 
-  const suggestion=okay(await request('/api/workspace/outline/suggest',{
-    workspace:ref,source:original.source,index:1,instruction:'Compare the two readings directly.',model:'gpt-6.1-terra',
+  for (const endpoint of ['/api/workspace/outline/suggest','/api/workspace/outline/revise']) {
+    assert.equal((await request(endpoint,{})).statusCode,404);
+  }
+  const {project:referenceProject}=okay(await request('/api/projects',{
+    name:'Reference',source:original.source,workspace:ref,mode:'markdown',
   }));
-  assert.deepEqual(Object.keys(suggestion).sort(),['points','title']);
-  const revised=okay(await request('/api/workspace/outline/revise',{
-    workspace:ref,source:original.source,index:1,...suggestion,
-  }));
-  assert.equal(revised.slideCount,original.slideCount);
-  assert.equal(revised.outline[1].title,'Compare Tuesday and Wednesday');
-  assert.equal(revised.outline[1].citation,original.outline[1].citation);
-  for (const index of [0,2,3]) assert.deepEqual(revised.outline[index],original.outline[index]);
-  const {project:revisedProject}=okay(await request('/api/projects',{
-    name:'Revised',source:revised.source,workspace:ref,mode:'markdown',
-  }));
-  assert.ok(await loadDocumentPlan({...revisedProject,source:original.source},root));
-  await assert.rejects(loadDocumentPlan({...revisedProject,ownerId:'different-owner'},root),/DOCUMENT_PLAN_REQUIRED/);
-  const revisedDoc=parseSource(revised.source,'markdown'), revisedPlan=await loadDocumentPlan(revisedProject,root);
-  const exported=await exportPptx(revisedDoc,buildDocumentScene(revisedDoc,revisedPlan));
+  await assert.rejects(loadDocumentPlan({...referenceProject,ownerId:'different-owner'},root),/DOCUMENT_PLAN_REQUIRED/);
+  const referenceDoc=parseSource(original.source,'markdown'), referencePlan=await loadDocumentPlan(referenceProject,root);
+  assert.equal(buildDocumentScene(referenceDoc,referencePlan).slides[1].layout,'columns');
+  const exported=await exportPptx(referenceDoc,buildDocumentScene(referenceDoc,referencePlan));
   assert.ok(exported.report.exportVerified);
-  const pptx=path.join(root,'revised.pptx'), pdf=path.join(root,'revised.pdf');
+  const pptx=path.join(root,'reference.pptx'), pdf=path.join(root,'reference.pdf');
   await writeFile(pptx,exported.bytes);
   execFileSync('soffice',['-env:UserInstallation=file://'+root+'/office','--headless','--convert-to','pdf','--outdir',root,pptx],{timeout:90000});
   const text=execFileSync('pdftotext',[pdf,'-'],{encoding:'utf8',timeout:10000});
-  assert.match(text,/Compare Tuesday and Wednesday/);
-  assert.match(text,/14 liters per second/);
-  assert.match(text,/18 liters per second/);
+  assert.match(text,/Two measured rates/);
+  assert.match(text,/14\s+liters\s+per\s+second/);
+  assert.match(text,/18\s+liters\s+per\s+second/);
   console.log(JSON.stringify({slideContent:true,fullCopy:true,generalDocument:true,referenceOnly:true,
-    outline:true,naturalLanguageSuggestion:true,targetedRevision:true,originalPreserved:true,ownerIsolation:true,editablePowerPoint:true,renderedPdf:true,paidCalls:0}));
+    directGeneration:true,ownerIsolation:true,editablePowerPoint:true,renderedPdf:true,paidCalls:0}));
 } finally {
   await app.close();
   await rm(root,{recursive:true,force:true});
