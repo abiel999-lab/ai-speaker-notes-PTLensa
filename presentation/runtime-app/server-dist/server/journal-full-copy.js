@@ -392,7 +392,7 @@ export async function buildJournalFullCopy(pages, images, manifest, options) {
         try {
             const design=await artDirection(doc,scene,dir);
             scene=design.scene;
-            if(design.artwork) imagePaths[design.artwork.id]=design.artwork.imagePath;
+            Object.assign(imagePaths,design.artworkPaths);
             manifest.deckArt=design.summary;
         } catch {
             signal?.throwIfAborted();

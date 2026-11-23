@@ -43,10 +43,27 @@ try {
   assert.ok(report.passed && report.exportVerified);
   const pptx=await JSZip.loadAsync(bytes);
   assert.match(await pptx.file('ppt/slides/slide1.xml').async('string'),/<p:transition\b/);
+  assert.doesNotMatch(await pptx.file('ppt/slides/slide1.xml').async('string'),/name="navigation-/);
   assert.ok(pptx.file(/^ppt\/media\//).length);
   await designDeckArt(doc,scene,settings);
   assert.equal(designCalls,1);
   assert.equal(imageCalls,1);
+  const sectionDoc=parseFullCopySource('# River quality\n\n## Fieldwork\n\nDocument the sampling area.\n\n## Process\n\nRecord the water samples.\n\n## Interpretation\n\nCompare readings taken at the same location.');
+  const sectionScene=buildFullCopyScene(sectionDoc,[]);
+  const resultWithSection=await designDeckArt(sectionDoc,sectionScene,{
+    ...settings,jobId:'section',directory:path.join(root,'section'),generateCoverArtwork:false,
+    fetchDesign:async(_url,request)=>{
+      const context=JSON.parse(JSON.parse(request.body).input);
+      assert.ok(context.sectionImageCandidates.some(candidate=>candidate.slide===2));
+      return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({
+        palette:'ocean',motif:'arc',coverImagePrompt:'A wide depiction of a river landscape',
+        sectionArt:{slide:2,prompt:'An editorial illustration of river sampling fieldwork'},
+      })}]}]});
+    },
+  });
+  assert.equal(resultWithSection.summary.generatedSection,2);
+  assert.ok(resultWithSection.scene.slides[1].objects.some(object=>object.altText==='AI-generated decorative section illustration'));
+  assert.ok((await exportPptx(sectionDoc,resultWithSection.scene,resultWithSection.artworkPaths,'keynote')).report.exportVerified);
   const fallback=await designDeckArt(doc,scene,{...settings,jobId:'fallback',directory:path.join(root,'fallback'),key:undefined});
   assert.equal(fallback.summary.direction,'fallback');
   assert.equal(fallback.summary.generatedCover,false);
@@ -58,7 +75,7 @@ try {
   });
   assert.equal(uploaded.scene.slides[0].objects.find(object=>object.backgroundImage).asset,'31313131-3131-4131-8131-313131313131');
   assert.equal(uploaded.summary.generatedCover,false);
-  assert.equal(imageCalls,1);
+  assert.equal(imageCalls,2);
   console.log('Art direction, generated cover, native transition, fidelity and retry reuse verified');
 } finally {
   await fs.rm(root,{recursive:true,force:true});

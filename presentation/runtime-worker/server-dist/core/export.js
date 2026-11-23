@@ -224,7 +224,7 @@ export async function exportPptx(doc, scene, imagePaths = {}, motion = "none", b
         if(prepared.graph)drawSemanticGraph(slide,pptx,prepared.graph,doc,t);
         if (slideIndex === 0 && branding)
             drawCoverBranding(slide, pptx, { ...branding, background: s.background },coverBrandingLayout(branding));
-        if (motion === "keynote") {
+        if (motion === "keynote" && scene.showMotionControls !== false) {
             const position = navigationPosition(s);
             if (position) {
                 const controls = [{ shape: pptx.ShapeType.actionButtonBackPrevious, to: slideIndex, label: "Previous slide" },

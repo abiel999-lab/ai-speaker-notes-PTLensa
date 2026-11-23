@@ -11,11 +11,12 @@ export function journalArtDesigner({key,repo,ownerId,jobId,generateCoverArtwork,
         const fetcher=trackedFetch(repo,ownerId,phase,id,provider);
         return (url,init)=>fetcher(url,{...init,signal:AbortSignal.any([init.signal,timeLimit])});
     };
-    return (doc,scene,directory)=>{
+    return (doc,scene,directory,options={})=>{
         timeLimit ||= AbortSignal.any([signal,AbortSignal.timeout(120000)].filter(Boolean));
         return designDeckArt(doc,scene,{
             jobId:id,directory,assetDirectory:path.join(directory,'journal-art'),key,model,effort:'xhigh',
-            generateCoverArtwork,fetchDesign:request('journal-art-direction',model),
+            generateCoverArtwork,allowSectionArtwork:options.allowSectionArtwork,
+            fetchDesign:request('journal-art-direction',model),
             fetchImage:request('journal-cover-image','gpt-image-2.5-sunburst'),
         });
     };
@@ -27,7 +28,7 @@ export async function journalNativeTheme(artDirection, meta, sections, directory
         .map(paragraph=>paragraph.text).join(' ').replace(/[\r\n]+/g,' ').slice(0,1600);
     try{
         const doc=parseFullCopySource('# '+(title||'Research presentation')+'\n\n'+context);
-        return await artDirection(doc,buildFullCopyScene(doc,[]),directory);
+        return await artDirection(doc,buildFullCopyScene(doc,[]),directory,{allowSectionArtwork:false});
     }catch{return undefined;}
 }
 
