@@ -1,3 +1,4 @@
+import {designDeckArt} from './deck-art-direction.js';
 import{applyCoverRole}from'../core/cover-role.js';
 import{resolvePresentationSource}from'../core/source-language.js';
 import {buildFullCopyScene,parseFullCopySource} from '../core/full-copy.js';
@@ -20,6 +21,8 @@ import { parseSource } from "../core/source.js";
 import { rulesPlan } from "../core/planner.js";
 import { aiPlan } from "../core/ai.js";
 import { buildScene } from "../core/layout.js";
+import { recordPresentationFailure } from './job-failure-events.js';
+import { applyTypography } from '../core/typography.js';
 import { exportPptx } from "../core/export.js";
 import { renderPptx } from "./render.js";
 import { auditRenderedPresentation, unavailableRenderQuality } from "./render-quality.js";
@@ -224,6 +227,22 @@ export async function processJob(repo, cfg, id) {
             scene = enriched.scene; visualSummary = enriched.summary;
             Object.assign(imagePaths, photos.paths);
         }
+        let deckArtSummary;
+        if (job.settings.documentMode || job.settings.creationMode==="creative") {
+            await persist("building", 58, "Designing the visual theme and cover artwork");
+            const decorated=await designDeckArt(doc,scene,{
+                jobId:id,directory:dir,assetDirectory:path.join(cfg.root,"assets",job.projectId),
+                key:cfg.key,model,effort:job.settings.reasoningEffort,
+                fetchDesign:trackedFetch(repo,job.ownerId,"deck-art-direction",id,model),
+                fetchImage:trackedFetch(repo,job.ownerId,"deck-cover-image",id,"gpt-image-2.5-sunburst"),
+            });
+            scene=decorated.scene;
+            deckArtSummary=decorated.summary;
+        }
+        if (!fullCopy && (job.settings.documentMode || job.settings.creationMode === "creative"))
+            scene = applyTypography(scene, job.settings);
+        if (job.settings.includeSpeakerNotes !== undefined)
+            scene = { ...scene, includeSpeakerNotes: job.settings.includeSpeakerNotes };
         job = { ...job, plan, scene, ...(job.settings.creationMode === "creative" ? {visualsProcessed: true} : {}) };
         for (const s of scene.slides) for (const o of s.objects)
             if(o.type === 'image' && /^[0-9a-f-]{36}$/i.test(o.asset || ''))
@@ -232,9 +251,10 @@ export async function processJob(repo, cfg, id) {
         await persist("verifying", 65, "Checking every source block");
         const branding = job.coverBranding ? { ...job.coverBranding,
             paths: Object.fromEntries((job.coverBranding.logos || []).map(logo => [logo.id, path.join(cfg.root, "assets", job.projectId, logo.id + ".png")])) } : undefined;
-        const { bytes, report } = await exportPptx(doc, scene, imagePaths, job.settings.motion, branding);
+        const { bytes, report } = await exportPptx(doc, scene, imagePaths, job.settings.motion, branding, job.settings.fontFamily);
         if(job.documentPlan?.recoveryCode) report.recovery={code:job.documentPlan.recoveryCode,retainedSource:true};
         if (visualSummary) report.automaticVisuals = visualSummary;
+        if (deckArtSummary) report.deckArt = deckArtSummary;
         await fs.mkdir(dir, { recursive: true });
         const file = path.join(dir, "presentation.pptx");
         await fs.writeFile(file, bytes, { mode: 0o600 });
@@ -308,7 +328,7 @@ export async function processJob(repo, cfg, id) {
                 async function attempt(visuals) {
                     const scene=buildFullCopyScene(doc,visuals,recoverySettings);
                     if(job.billing&&scene.slides.length>job.billing.maxSlides)throw Error('BILLING_SLIDE_COUNT_EXCEEDED');
-                    return {...await exportPptx(doc,scene,imagePaths),scene};
+                    return {...await exportPptx(doc,scene,imagePaths,"none",undefined,job.settings.fontFamily),scene};
                 }
                 let artifact;
                 try {artifact=await attempt(retained);}
@@ -330,6 +350,11 @@ export async function processJob(repo, cfg, id) {
                     job=await settleJobBilling(repo,cfg,job);
                 }
                 await persist('ready',100,'Recovered PowerPoint ready to export');
+                await recordPresentationFailure(cfg.root, {
+                    id: job.id, owner: job.ownerId, project: job.projectId,
+                    code: safeErrorCode(e), stage: 'Recovery export', status: 'recovered',
+                    durationMs: job.durationMs, model: job.settings?.model,
+                }, e);
                 if(job.billing)await repo.completeBillingRefund(job.id);
                 await repo.recordJobEvent(job).catch(() => {});
                 return;
@@ -339,7 +364,7 @@ export async function processJob(repo, cfg, id) {
             }
         }
         const current = await repo.job(id);
-        if (current && !["cancelled", "ready", "failed"].includes(current.status))
+        const failed = current && !["cancelled", "ready", "failed"].includes(current.status) &&
             await repo.saveLeasedJob(current, {
                 ...current,
                 status: "failed",
@@ -348,6 +373,13 @@ export async function processJob(repo, cfg, id) {
                 error: safeErrorCode(e),
                 durationMs: Date.now() - started,
             }, leaseToken);
+        if (failed) {
+            await recordPresentationFailure(cfg.root, {
+                id: current.id, owner: current.ownerId, project: current.projectId,
+                code: safeErrorCode(e), stage: current.stage, status: "failed",
+                durationMs: Date.now() - started, model: current.settings?.model,
+            }, e);
+        }
         if(job.billing){const latest=await repo.job(id);if(['failed','cancelled'].includes(latest?.status))try{await refundJobBilling(repo,cfg,job);}catch{console.error(JSON.stringify({event:'platform_refund_pending',code:'PLATFORM_UNAVAILABLE'}));}else if(latest?.status!=='ready')throw e;}
         // Retain failed artifacts; the durable refund outbox is reconciled separately.
         const final = await repo.job(id);
