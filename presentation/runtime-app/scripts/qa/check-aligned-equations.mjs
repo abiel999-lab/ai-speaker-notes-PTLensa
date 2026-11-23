@@ -7,6 +7,7 @@ import JSZip from 'jszip';
 import { buildFullCopyScene, parseFullCopySource } from '../../server-dist/core/full-copy.js';
 import { equationParts } from '../../server-dist/core/native-equations.js';
 import { exportPptx } from '../../server-dist/core/export.js';
+import { assessRenderedText } from '../../server-dist/server/render-quality.js';
 import { pdfMultilineEquationAt } from '../../server-dist/server/pdf-vector-regions.js';
 
 const aligned = String.raw`\[
@@ -21,6 +22,14 @@ const gathered = String.raw`\[
 = [x^2/2+x]_{0}^{2} = 4
 \end{gathered}
 \]`;
+// The PDF text layer contains equation glyphs, while the scene retains TeX.
+const prose='Measure changes across intervals before calculating cumulative mass.';
+const renderAuditScene={slides:[{objects:[
+  {sourceId:'formula',type:'text',equation:true,text:gathered},
+  {sourceId:'prose',type:'text',text:prose},
+]}]};
+assert.equal(assessRenderedText(renderAuditScene,[prose+' ∫x dx']).status,'verified');
+assert.equal(assessRenderedText(renderAuditScene,['∫x dx']).lowTextSlides,1);
 const region = { x: 1, y: 1, w: 11, h: 3 };
 const parts = equationParts(aligned, region);
 const importedBlock = pdfMultilineEquationAt(['[', String.raw`\int_{0}^{2}(x+1)\,dx`, '= 4', ']'], 0);

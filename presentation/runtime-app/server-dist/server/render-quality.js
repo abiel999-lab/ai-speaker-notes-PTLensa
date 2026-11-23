@@ -10,11 +10,12 @@ const MAX_PDF_TEXT_BYTES = 2_000_000;
 const REPORT_LIMIT = 24;
 const TEXT_COVERAGE_FLOOR = 0.6;
 const EXPECTED_MIN_TERMS = 7;
-/** Accept only source-bearing text; diagrams, notes, decorative text and
- * native chart labels do not substitute for the original slide wording. */
+/** Compare source prose and table cells against the PDF text layer.
+ * Native equations are verified during PPTX export. Their source syntax
+ * differs from the glyphs emitted by the equation renderer. */
 function expectedSourceText(scene, slideIndex) {
     return scene.slides[slideIndex].objects
-        .filter(object => object.sourceId && (object.type === "text" || object.type === "table"))
+        .filter(object => object.sourceId && (object.type === "table" || (object.type === "text" && !object.equation)))
         .map(object => object.type === "table" ? (object.rows || []).flat().join(" ") : object.text || "")
         .join(" ");
 }
