@@ -50,6 +50,15 @@ try {
   const fallback=await designDeckArt(doc,scene,{...settings,jobId:'fallback',directory:path.join(root,'fallback'),key:undefined});
   assert.equal(fallback.summary.direction,'fallback');
   assert.equal(fallback.summary.generatedCover,false);
+  const disabled=await designDeckArt(doc,scene,{...settings,jobId:'disabled',directory:path.join(root,'disabled'),generateCoverArtwork:false});
+  assert.equal(disabled.summary.generatedCover,false);
+  assert.ok(!disabled.scene.slides[0].objects.some(object=>object.backgroundImage));
+  const uploaded=await designDeckArt(doc,scene,{
+    ...settings,jobId:'upload',directory:path.join(root,'upload'),coverAssetId:'31313131-3131-4131-8131-313131313131',
+  });
+  assert.equal(uploaded.scene.slides[0].objects.find(object=>object.backgroundImage).asset,'31313131-3131-4131-8131-313131313131');
+  assert.equal(uploaded.summary.generatedCover,false);
+  assert.equal(imageCalls,1);
   console.log('Art direction, generated cover, native transition, fidelity and retry reuse verified');
 } finally {
   await fs.rm(root,{recursive:true,force:true});

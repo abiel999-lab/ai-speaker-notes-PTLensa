@@ -233,6 +233,8 @@ export async function processJob(repo, cfg, id) {
             const decorated=await designDeckArt(doc,scene,{
                 jobId:id,directory:dir,assetDirectory:path.join(cfg.root,"assets",job.projectId),
                 key:cfg.key,model,effort:job.settings.reasoningEffort,
+                generateCoverArtwork:job.settings.generateCoverArtwork,
+                coverAssetId:job.settings.coverAssetId,referenceImages:job.settings.creativeAssets,
                 fetchDesign:trackedFetch(repo,job.ownerId,"deck-art-direction",id,model),
                 fetchImage:trackedFetch(repo,job.ownerId,"deck-cover-image",id,"gpt-image-2.5-sunburst"),
             });
